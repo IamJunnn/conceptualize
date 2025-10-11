@@ -41,7 +41,11 @@
       "Bash(git checkout:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit: MicroGrid knowledge management app\n\nFeatures implemented:\n- Context menu with New Note, New Folder, Refresh, and Reveal in File Explorer\n- Clickable links with Ctrl+Click for both external URLs and wiki-links [[note]]\n- Markdown formatting shortcuts (Ctrl+B for bold, Ctrl+I for italic)\n- Markdown heading styles (# to ######)\n- Line wrapping in editor\n- File tree with drag & drop\n- Graph view for note relationships\n- Auto-save functionality\n- Tauri-based desktop app with React frontend\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

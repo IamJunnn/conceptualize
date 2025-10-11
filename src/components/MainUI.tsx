@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
 import GraphView from './GraphView'
-import EditorTab from './EditorTab'
+import EditorTab from './EditorTabMilkdown'
 import ContextMenu from './ContextMenu'
 import './MainUI.css'
 
@@ -55,6 +55,27 @@ function MainUI({ rootPath }: MainUIProps) {
   useEffect(() => {
     loadFileTree()
   }, [loadFileTree])
+
+  // Keyboard shortcut: Ctrl+W to close active tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+W or Cmd+W (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault() // Prevent browser from closing tab/window
+
+        // Only close if active tab is a file (not Graph or Timeline)
+        if (activeTab !== 'graph' && activeTab !== 'timeline') {
+          handleCloseFile(activeTab)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [activeTab]) // Re-bind when active tab changes
 
   const handleSelectFile = (filePath: string, fileName: string) => {
     // Check if file is already open
@@ -265,12 +286,14 @@ function MainUI({ rootPath }: MainUIProps) {
           <button
             className={`tab ${activeTab === 'graph' ? 'active' : ''}`}
             onClick={() => setActiveTab('graph')}
+            title="Graph"
           >
             Graph
           </button>
           <button
             className={`tab ${activeTab === 'timeline' ? 'active' : ''}`}
             onClick={() => setActiveTab('timeline')}
+            title="Timeline"
           >
             Timeline
           </button>
@@ -282,6 +305,7 @@ function MainUI({ rootPath }: MainUIProps) {
                 key={file.path}
                 className={`tab file-tab ${activeTab === file.path ? 'active' : ''}`}
                 onClick={() => setActiveTab(file.path)}
+                title={displayName}
               >
                 <span className="tab-name">
                   {displayName}
@@ -292,6 +316,7 @@ function MainUI({ rootPath }: MainUIProps) {
                     e.stopPropagation()
                     handleCloseFile(file.path)
                   }}
+                  title="Close"
                 >
                   ×
                 </button>
@@ -316,6 +341,12 @@ function MainUI({ rootPath }: MainUIProps) {
                 fileName={file.name}
                 rootPath={rootPath}
                 onOpenFile={handleSelectFile}
+                onFileCreated={() => {
+                  // Refresh file tree when new file is created via wiki-link
+                  loadFileTree()
+                  // Refresh graph to include new note
+                  setGraphKey(prev => prev + 1)
+                }}
                 onFileRenamed={(oldPath, newPath, newName) => {
                   // Update open files list
                   const updatedOpenFiles = openFiles.map(f =>

@@ -1,0 +1,303 @@
+/* Milkdown Editor Styles */
+.milkdown {
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+
+/* Custom scrollbar to match dark theme */
+.milkdown::-webkit-scrollbar,
+.milkdown *::-webkit-scrollbar,
+.editor-content::-webkit-scrollbar {
+  width: 12px;
+}
+
+.milkdown::-webkit-scrollbar-track,
+.milkdown *::-webkit-scrollbar-track,
+.editor-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-left: 1px solid #2d2d2d;
+}
+
+.milkdown::-webkit-scrollbar-thumb,
+.milkdown *::-webkit-scrollbar-thumb,
+.editor-content::-webkit-scrollbar-thumb {
+  background: #3e3e3e;
+  border-radius: 6px;
+  border: 2px solid #1e1e1e;
+}
+
+.milkdown::-webkit-scrollbar-thumb:hover,
+.milkdown *::-webkit-scrollbar-thumb:hover,
+.editor-content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+.milkdown::-webkit-scrollbar-thumb:active,
+.milkdown *::-webkit-scrollbar-thumb:active,
+.editor-content::-webkit-scrollbar-thumb:active {
+  background: #5e5e5e;
+}
+
+/* Editor content area */
+.milkdown .editor {
+  min-height: 100%;
+  outline: none;
+}
+
+/* Headings with larger font sizes */
+.milkdown h1 {
+  font-size: 2em;
+  font-weight: bold;
+  color: #e0e0e0;
+  margin: 0.67em 0;
+  line-height: 1.3;
+}
+
+.milkdown h2 {
+  font-size: 1.75em;
+  font-weight: bold;
+  color: #d4d4d4;
+  margin: 0.75em 0;
+  line-height: 1.3;
+}
+
+.milkdown h3 {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #cccccc;
+  margin: 0.83em 0;
+  line-height: 1.3;
+}
+
+.milkdown h4 {
+  font-size: 1.25em;
+  font-weight: bold;
+  color: #c0c0c0;
+  margin: 1em 0;
+  line-height: 1.3;
+}
+
+.milkdown h5 {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #b0b0b0;
+  margin: 1.17em 0;
+  line-height: 1.3;
+}
+
+.milkdown h6 {
+  font-size: 1em;
+  font-weight: bold;
+  color: #a0a0a0;
+  margin: 1.33em 0;
+  line-height: 1.3;
+}
+
+/* Paragraphs */
+.milkdown p {
+  margin: 0.5em 0;
+  line-height: 1.6;
+}
+
+/* Links */
+.milkdown a {
+  color: #007acc;
+  text-decoration: underline;
+  cursor: pointer;
+  position: relative;
+}
+
+.milkdown a:hover {
+  color: #40a6ff;
+}
+
+/* Tooltip for external links */
+.milkdown a::before {
+  content: 'Follow link (ctrl + click)';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  border: 1px solid #3e3e3e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.milkdown a:hover::before {
+  opacity: 1;
+}
+
+/* Wiki-links - Complete */
+.wiki-link {
+  color: #007acc;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dotted #007acc;
+  padding: 0 2px;
+  position: relative;
+}
+
+.wiki-link:hover {
+  background-color: rgba(0, 122, 204, 0.1);
+  border-bottom: 1px solid #007acc;
+}
+
+/* Tooltip for wiki-links */
+.wiki-link::before {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  border: 1px solid #3e3e3e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.wiki-link:hover::before {
+  opacity: 1;
+}
+
+/* Wiki-links - Incomplete (typing in progress) */
+.wiki-link-incomplete {
+  color: #007acc;
+  background-color: rgba(0, 122, 204, 0.1);
+  border-bottom: 1px dotted #007acc;
+  padding: 0 2px;
+}
+
+/* Wiki-links - Non-existent (will be created on click) */
+.wiki-link-nonexistent {
+  color: #ce9178;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dashed #ce9178;
+  padding: 0 2px;
+  position: relative;
+}
+
+.wiki-link-nonexistent:hover {
+  background-color: rgba(206, 145, 120, 0.1);
+  border-bottom: 1px solid #ce9178;
+}
+
+/* Tooltip for non-existent wiki-links */
+.wiki-link-nonexistent::before {
+  content: 'Create note (ctrl + click)';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  border: 1px solid #3e3e3e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.wiki-link-nonexistent:hover::before {
+  opacity: 1;
+}
+
+/* Bold and italic */
+.milkdown strong {
+  font-weight: bold;
+}
+
+.milkdown em {
+  font-style: italic;
+}
+
+/* Code blocks */
+.milkdown code {
+  background-color: #2d2d2d;
+  color: #ce9178;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.milkdown pre {
+  background-color: #2d2d2d;
+  padding: 12px;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.milkdown pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Lists */
+.milkdown ul,
+.milkdown ol {
+  margin: 0.5em 0;
+  padding-left: 2em;
+}
+
+.milkdown li {
+  margin: 0.25em 0;
+}
+
+/* Blockquotes */
+.milkdown blockquote {
+  border-left: 4px solid #6a6a6a;
+  margin: 0.5em 0;
+  padding-left: 1em;
+  color: #b0b0b0;
+}
+
+/* Tables */
+.milkdown table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+}
+
+.milkdown th,
+.milkdown td {
+  border: 1px solid #3e3e3e;
+  padding: 8px 12px;
+}
+
+.milkdown th {
+  background-color: #2d2d2d;
+  font-weight: bold;
+}
+
+/* Horizontal rule */
+.milkdown hr {
+  border: none;
+  border-top: 1px solid #3e3e3e;
+  margin: 1em 0;
+}
