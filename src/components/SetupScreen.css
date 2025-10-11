@@ -1,0 +1,63 @@
+.setup-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #1e1e1e;
+}
+
+.setup-content {
+  text-align: center;
+  max-width: 500px;
+  padding: 40px;
+}
+
+.setup-logo {
+  width: 200px;
+  height: auto;
+  margin-bottom: 30px;
+}
+
+.setup-title {
+  font-size: 32px;
+  font-weight: 600;
+  color: #d4d4d4;
+  margin-bottom: 20px;
+  letter-spacing: 0.5px;
+}
+
+.setup-description {
+  font-size: 16px;
+  color: #9b9b9b;
+  line-height: 1.6;
+  margin-bottom: 40px;
+}
+
+.setup-button {
+  background: linear-gradient(180deg, rgba(62, 81, 122, 0.14), rgba(62, 81, 122, 0.08));
+  border: 1px solid rgba(76, 103, 168, 0.18);
+  border-radius: 10px;
+  box-shadow:
+    0 6px 14px rgba(15, 15, 15, 0.6) inset,
+    0 1px 0 rgba(255, 255, 255, 0.02);
+  color: #d4d4d4;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 14px 32px;
+  cursor: pointer;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.setup-button:hover {
+  transform: scale(1.03);
+  border-color: #4c67a8;
+  box-shadow:
+    0 6px 14px rgba(15, 15, 15, 0.6) inset,
+    0 1px 0 rgba(255, 255, 255, 0.02),
+    0 0 20px rgba(76, 103, 168, 0.3);
+}
+
+.setup-button:active {
+  transform: translateY(1px);
+}

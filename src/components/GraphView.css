@@ -1,0 +1,182 @@
+/* GraphView.css - Main graph view container and states */
+
+.graph-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Loading State */
+.graph-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #333;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.graph-loading p {
+  font-size: 14px;
+  color: #999;
+}
+
+/* Error State */
+.graph-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+  text-align: center;
+  padding: 40px;
+}
+
+.error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.graph-error h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #ef4444;
+}
+
+.graph-error p {
+  font-size: 14px;
+  color: #999;
+  margin-bottom: 20px;
+  max-width: 400px;
+}
+
+.retry-button {
+  padding: 8px 16px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.retry-button:hover {
+  background-color: #2563eb;
+}
+
+/* Empty State */
+.graph-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  text-align: center;
+  padding: 40px;
+}
+
+.graph-empty-icon {
+  font-size: 64px;
+  margin-bottom: 24px;
+  opacity: 0.5;
+}
+
+.graph-empty-icon img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+}
+
+.graph-empty-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #888;
+}
+
+.graph-empty-description {
+  font-size: 14px;
+  color: #666;
+  max-width: 500px;
+  line-height: 1.6;
+}
+
+.graph-empty-description code {
+  background-color: #2a2a2a;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  color: #3b82f6;
+}
+
+/* Graph Stats Bar */
+.graph-stats {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: rgba(37, 37, 37, 0.95);
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #999;
+  z-index: 10;
+}
+
+.stat strong {
+  color: #ccc;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.stat-divider {
+  color: #555;
+}
+
+.refresh-graph-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #999;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refresh-graph-button:hover {
+  background-color: #2a2d2e;
+  color: #ccc;
+  transform: rotate(90deg);
+}

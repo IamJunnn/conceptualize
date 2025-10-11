@@ -1,0 +1,41 @@
+{
+  "name": "microgrid",
+  "version": "1.0.0",
+  "description": "MicroGrid - An intelligent knowledge-shaping tool",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+  },
+  "keywords": [
+    "tauri",
+    "vite",
+    "react",
+    "typescript",
+    "knowledge-management"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/cli": "^2.8.4",
+    "@types/node": "^24.7.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.4.0",
+    "@heroicons/react": "^2.2.0",
+    "@tauri-apps/plugin-shell": "^2.3.1",
+    "@types/d3": "^7.4.3",
+    "@uiw/react-codemirror": "^4.25.2",
+    "d3": "^7.9.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
