@@ -1,0 +1,157 @@
+import { FolderIcon, DocumentIcon } from '@heroicons/react/24/outline';
+import React from 'react';
+
+// Define the UnifiedSidebarProps interface
+interface UnifiedSidebarProps {
+  fileTree: FileTreeNode[];
+  onSelectFile: (filePath: string, fileName: string) => void;
+  getRootPath: () => string;
+  editing: EditingState | null;
+  onStartEditing: (path: string, type: 'rename' | 'new-note' | 'new-folder') => void;
+  onFinishEditing: (newName?: string) => void;
+  refreshFileTree: () => Promise<void>;
+}
+
+// Ensure TreeNodeProps is defined
+interface TreeNodeProps {
+  node: FileTreeNode;
+  onSelectFile: (filePath: string, fileName: string) => void;
+  level: number;
+  editing: EditingState | null;
+  onFinishEditing: (newName?: string) => void;
+}
+
+// Define FileTreeNode and EditingState types
+interface FileTreeNode {
+  path: string;
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileTreeNode[];
+}
+
+interface EditingState {
+  path: string;
+  type: 'rename' | 'new-note' | 'new-folder';
+}
+
+// Corrected the import path for EditInput
+import EditInput from './EditInput';
+
+// Ensure window.electron is typed
+interface ElectronAPI {
+  showContextMenu: (args: { itemPath: string; itemType: string }) => void;
+}
+declare global {
+  interface Window {
+    electron: ElectronAPI;
+  }
+}
+
+const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing }) => {
+  const [isOpen, setIsOpen] = React.useState(true);
+
+  const isCurrentlyEditing = editing?.type === 'rename' && editing.path === node.path;
+  const isAddingChild = isOpen && (editing?.type === 'new-note' || editing?.type === 'new-folder') && editing.path === node.path;
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.electron.showContextMenu({ itemPath: node.path, itemType: node.type });
+  };
+
+  return (
+    <div>
+      <div
+        className="p-1 hover:bg-[#2a2d2e] cursor-pointer flex items-center rounded transition-transform duration-200"
+        style={{ paddingLeft: `${level * 1}rem` }}
+        onClick={() => node.type === 'folder' ? setIsOpen(!isOpen) : onSelectFile(node.path, node.name)}
+        onContextMenu={handleContextMenu}
+      >
+        {node.type === 'folder' ? (
+          <FolderIcon className={`h-5 w-5 ${isOpen ? 'text-blue-500' : 'text-gray-500'}`} />
+        ) : (
+          <DocumentIcon className="h-5 w-5 text-green-500" />
+        )}
+        {isCurrentlyEditing ? (
+          <EditInput initialValue={node.name} onSave={onFinishEditing} onCancel={() => onFinishEditing()} />
+        ) : (
+          <span className="ml-2 text-[#d4d4d4]">{node.name}</span>
+        )}
+      </div>
+      {isOpen && (
+        <div>
+          {node.children?.map((child: FileTreeNode) => (
+            <TreeNode
+              key={child.path}
+              node={child}
+              onSelectFile={onSelectFile}
+              level={level + 1}
+              editing={editing}
+              onFinishEditing={onFinishEditing}
+            />
+          ))}
+          {isAddingChild && (
+            <div style={{ paddingLeft: `${(level + 1) * 1}rem` }} className="p-1 flex items-center">
+              {editing?.type === 'new-note' ? (
+                <DocumentIcon className="h-5 w-5 text-green-500" />
+              ) : (
+                <FolderIcon className="h-5 w-5 text-blue-500" />
+              )}
+              <EditInput initialValue="" onSave={onFinishEditing} onCancel={() => onFinishEditing()} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, refreshFileTree } = props;
+
+  const folderName = getRootPath().split(/\\|\//).pop(); // Extract folder name from path
+  const rootPath = getRootPath();
+
+  const handleCreateNew = (type: 'new-note' | 'new-folder') => {
+    onStartEditing(rootPath, type);
+  };
+
+  const isCreatingAtRoot = editing && (editing.type === 'new-note' || editing.type === 'new-folder') && editing.path === rootPath;
+
+  return (
+    <div className="w-80 bg-gray-900 text-white p-4 flex flex-col">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-bold">{folderName}</h2>
+        <div>
+          <button onClick={() => handleCreateNew('new-note')} className="mr-2 p-1 hover:bg-[#2a2d2e] rounded">📄+</button>
+          <button onClick={() => handleCreateNew('new-folder')} className="p-1 hover:bg-[#2a2d2e] rounded">📁+</button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        {isCreatingAtRoot && (
+          <div className="p-1 flex items-center">
+            {editing.type === 'new-note' ? (
+              <DocumentIcon className="h-5 w-5 text-green-500" />
+            ) : (
+              <FolderIcon className="h-5 w-5 text-blue-500" />
+            )}
+            <EditInput initialValue="" onSave={onFinishEditing} onCancel={() => onFinishEditing()} />
+          </div>
+        )}
+        {fileTree.map((node: FileTreeNode) => (
+          <TreeNode
+            key={node.path}
+            node={node}
+            onSelectFile={onSelectFile}
+            level={0}
+            editing={editing}
+            onFinishEditing={onFinishEditing}
+          />
+        ))}
+      </div>
+      <button onClick={refreshFileTree} className="mt-4 p-2 bg-blue-500 hover:bg-blue-700 text-white rounded">Refresh</button>
+    </div>
+  );
+};
+
+export { TreeNode, UnifiedSidebar };
