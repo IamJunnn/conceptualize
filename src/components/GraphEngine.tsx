@@ -108,17 +108,16 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, onNodeClick, onNodeDoub
         return Math.min(baseSize + conceptualConnections * 1.5, maxSize);
       })
       .attr('fill', d => {
-        // Folders (root and subfolders) are pastel purple
+        // Folders (root and subfolders) are purple
         if (d.type === 'root' || d.type === 'folder') {
           return '#c4b5fd'; // pastel purple
         }
 
-        // Files: color based on conceptual connections
-        const conceptualConnections = getConceptualConnections(d.id);
-        if (conceptualConnections === 0) return '#6b7280'; // gray
-        if (conceptualConnections <= 2) return '#3b82f6'; // blue
-        if (conceptualConnections <= 5) return '#8b5cf6'; // purple
-        return '#ec4899'; // pink
+        // Files: blue for markdown, gray for other file types
+        if (d.fileType === 'markdown') {
+          return '#3b82f6'; // blue
+        }
+        return '#6b7280'; // gray
       })
       .attr('stroke', '#1a1a1a')
       .attr('stroke-width', 2)

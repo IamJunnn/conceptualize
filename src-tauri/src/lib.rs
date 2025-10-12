@@ -127,16 +127,25 @@ fn get_markdown_files(root_path: String) -> Result<MarkdownFilesResult, String> 
             if path.is_dir() {
                 folders.push(path.to_string_lossy().to_string());
                 collect_markdown_files_and_folders(&path, files, folders)?;
-            } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                match fs::read_to_string(&path) {
-                    Ok(content) => {
-                        eprintln!("📖 Reading file: {:?}", path);
-                        eprintln!("   Content length: {} bytes", content.len());
-                        eprintln!("   First 200 chars: {:?}", &content.chars().take(200).collect::<String>());
-                        files.push(MarkdownFile { path: path.to_string_lossy().to_string(), content })
-                    },
-                    Err(e) => eprintln!("Failed to read file {:?}: {}", path, e)
-                }
+            } else if path.is_file() {
+                // Include all files, but only read content for markdown files
+                let content = if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    match fs::read_to_string(&path) {
+                        Ok(content) => {
+                            eprintln!("📖 Reading markdown file: {:?}", path);
+                            eprintln!("   Content length: {} bytes", content.len());
+                            content
+                        },
+                        Err(e) => {
+                            eprintln!("Failed to read file {:?}: {}", path, e);
+                            String::new()
+                        }
+                    }
+                } else {
+                    // For non-markdown files, store empty content
+                    String::new()
+                };
+                files.push(MarkdownFile { path: path.to_string_lossy().to_string(), content });
             }
         }
         Ok(())
