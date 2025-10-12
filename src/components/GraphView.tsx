@@ -6,6 +6,7 @@ import './GraphView.css';
 
 interface GraphViewProps {
   rootPath: string;
+  onFileOpen?: (filePath: string, fileName: string) => void;
 }
 
 interface MarkdownFile {
@@ -18,7 +19,7 @@ interface MarkdownFilesResult {
   folders: string[];
 }
 
-function GraphView({ rootPath }: GraphViewProps) {
+function GraphView({ rootPath, onFileOpen }: GraphViewProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +62,12 @@ function GraphView({ rootPath }: GraphViewProps) {
 
   const handleNodeDoubleClick = (node: any) => {
     console.log('Node double-clicked:', node);
-    // TODO: Open the note in an editor tab
+    // Open file nodes (not folders or root)
+    if (node.type === 'file' && onFileOpen) {
+      // Extract file name from path
+      const fileName = node.path.split(/[\\\/]/).pop() || node.name;
+      onFileOpen(node.path, fileName);
+    }
   };
 
   if (loading) {
@@ -121,7 +127,7 @@ function GraphView({ rootPath }: GraphViewProps) {
         </span>
         <span className="stat-divider">•</span>
         <span className="stat">
-          <strong>{graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length}</strong> folders
+          <strong>{graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length - 1}</strong> folders
         </span>
         <span className="stat-divider">•</span>
         <span className="stat">

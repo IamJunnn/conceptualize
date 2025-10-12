@@ -150,9 +150,15 @@
   padding: 0;
 }
 
-.tab-content > :not(.editor-container) {
+.tab-content > :not(.editor-container):not(.graph-view) {
   padding: 20px;
   overflow: auto;
+  flex: 1;
+}
+
+.tab-content > .graph-view {
+  padding: 0;
+  overflow: hidden;
   flex: 1;
 }
 
