@@ -53,6 +53,14 @@ function MainUI({ rootPath }: MainUIProps) {
   const [leftPaneFiles, setLeftPaneFiles] = useState<OpenFile[]>([])
   const [rightPaneFiles, setRightPaneFiles] = useState<OpenFile[]>([])
 
+  // Resizable split view
+  const [leftPaneWidth, setLeftPaneWidth] = useState(50) // Percentage
+  const [isResizingPane, setIsResizingPane] = useState(false)
+
+  // Resizable sidebar
+  const [sidebarWidth, setSidebarWidth] = useState(250) // Pixels
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false)
+
   // Debug: Log split view state changes
   useEffect(() => {
     console.log('Split view state changed:', {
@@ -108,6 +116,81 @@ function MainUI({ rootPath }: MainUIProps) {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [activeTab, splitView]) // Re-bind when active tab or splitView changes
+
+  // Handle pane resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingPane && mainContentRef.current) {
+        const container = mainContentRef.current
+        const containerRect = container.getBoundingClientRect()
+        const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100
+
+        // Clamp between 20% and 80% to prevent panels from getting too small
+        const clampedWidth = Math.min(Math.max(newLeftWidth, 20), 80)
+        setLeftPaneWidth(clampedWidth)
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (isResizingPane) {
+        setIsResizingPane(false)
+      }
+    }
+
+    if (isResizingPane) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizingPane])
+
+  const handleDividerMouseDown = () => {
+    setIsResizingPane(true)
+  }
+
+  // Handle sidebar resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingSidebar) {
+        const newWidth = e.clientX
+        // Clamp between 200px and 500px
+        const clampedWidth = Math.min(Math.max(newWidth, 200), 500)
+        setSidebarWidth(clampedWidth)
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (isResizingSidebar) {
+        setIsResizingSidebar(false)
+      }
+    }
+
+    if (isResizingSidebar) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizingSidebar])
+
+  const handleSidebarDividerMouseDown = () => {
+    setIsResizingSidebar(true)
+  }
 
   // Global mouse listeners for tab dragging
   useEffect(() => {
@@ -480,7 +563,7 @@ function MainUI({ rootPath }: MainUIProps) {
 
       <div className="main-ui-content">
         {/* Left Sidebar - Explorer */}
-        <div className="explorer-sidebar">
+        <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
           <UnifiedSidebar
             fileTree={fileTree}
             onSelectFile={handleSelectFile}
@@ -493,6 +576,9 @@ function MainUI({ rootPath }: MainUIProps) {
             onMoveItem={handleMoveItem}
           />
         </div>
+
+        {/* Sidebar Divider */}
+        <div className="sidebar-divider" onMouseDown={handleSidebarDividerMouseDown}></div>
 
         {/* Main Content Area */}
         <div
@@ -557,7 +643,11 @@ function MainUI({ rootPath }: MainUIProps) {
           // Split view mode
           <div className="split-view-container">
             {/* Left Pane */}
-            <div className={`editor-pane ${activePane === 'left' ? 'active' : ''}`} onClick={() => setActivePane('left')}>
+            <div
+              className={`editor-pane ${activePane === 'left' ? 'active' : ''}`}
+              onClick={() => setActivePane('left')}
+              style={{ width: `${leftPaneWidth}%` }}
+            >
               <TabBar
                 activeTab={leftPaneTab}
                 openFiles={leftPaneFiles}
@@ -616,10 +706,14 @@ function MainUI({ rootPath }: MainUIProps) {
             </div>
 
             {/* Divider */}
-            <div className="pane-divider"></div>
+            <div className="pane-divider" onMouseDown={handleDividerMouseDown}></div>
 
             {/* Right Pane */}
-            <div className={`editor-pane ${activePane === 'right' ? 'active' : ''}`} onClick={() => setActivePane('right')}>
+            <div
+              className={`editor-pane ${activePane === 'right' ? 'active' : ''}`}
+              onClick={() => setActivePane('right')}
+              style={{ flex: 1 }}
+            >
               <TabBar
                 activeTab={rightPaneTab}
                 openFiles={rightPaneFiles}

@@ -115,6 +115,16 @@
   color: #40a6ff;
 }
 
+/* Remove default link styles for external links */
+.milkdown a.external-link {
+  text-decoration: none;
+  color: #C586C0;
+}
+
+.milkdown a.external-link:hover {
+  color: #C586C0;
+}
+
 /* Tooltip for external links */
 .milkdown a::before {
   content: 'Follow link (ctrl + click)';
@@ -138,6 +148,52 @@
 
 .milkdown a:hover::before {
   opacity: 1;
+}
+
+/* External links (URLs) */
+.external-link {
+  color: #C586C0;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 0 2px;
+  position: relative;
+  border-radius: 2px;
+  transition: background-color 0.15s;
+}
+
+.external-link:hover {
+  background-color: rgba(197, 134, 192, 0.15);
+}
+
+/* Tooltip for external links */
+.external-link::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease 1s;
+  border: 1px solid #3e3e3e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.external-link:hover::after {
+  opacity: 1;
+  transition: opacity 0.2s ease 1s;
+}
+
+.external-link:not(:hover)::after {
+  opacity: 0;
+  transition: opacity 0s;
 }
 
 /* Wiki-links - Complete */

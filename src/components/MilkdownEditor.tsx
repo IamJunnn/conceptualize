@@ -8,6 +8,7 @@ import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { history } from '@milkdown/plugin-history'
 import { clipboard } from '@milkdown/plugin-clipboard'
 import { wikiLinkPlugin } from '../utils/wikiLinkPlugin'
+import { urlLinkPlugin } from '../utils/urlLinkPlugin'
 import { keyboardShortcuts } from '../utils/keyboardShortcuts'
 import '@milkdown/theme-nord/style.css'
 import './MilkdownEditor.css'
@@ -40,6 +41,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath }: M
       .use(clipboard)
       .use(listener)
       .use(wikiLinkPlugin({ onWikiLinkClick, rootPath }))
+      .use(urlLinkPlugin())
       .use(keyboardShortcuts())
 
     editorRef.current = editor
