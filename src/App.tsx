@@ -39,6 +39,10 @@ function App() {
     }, 300)
   }
 
+  const handleRootPathChange = (newPath: string) => {
+    setRootPath(newPath)
+  }
+
   // Show loading state briefly
   if (isLoading) {
     return (
@@ -63,7 +67,7 @@ function App() {
   return (
     <DragDropProvider>
       <div className="app-transition fade-in">
-        <MainUI rootPath={rootPath} />
+        <MainUI rootPath={rootPath} onRootPathChange={handleRootPathChange} />
       </div>
     </DragDropProvider>
   )

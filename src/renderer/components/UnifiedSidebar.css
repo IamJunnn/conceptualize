@@ -30,6 +30,13 @@
   letter-spacing: 0.5px;
   color: #cccccc;
   margin: 0;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.sidebar-title:hover {
+  color: #ffffff;
+  text-decoration: underline;
 }
 
 .sidebar-actions {

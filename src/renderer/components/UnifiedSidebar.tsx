@@ -1,4 +1,4 @@
-import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon } from '@heroicons/react/24/outline';
+import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderSolidIcon } from '@heroicons/react/24/solid';
 import React from 'react';
 import './UnifiedSidebar.css';
@@ -14,6 +14,7 @@ interface UnifiedSidebarProps {
   refreshFileTree: () => Promise<void>;
   onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string) => void;
   onMoveItem?: (sourcePath: string, destinationPath: string) => Promise<void>;
+  onChangeFolderPath?: () => void;
 }
 
 // Ensure TreeNodeProps is defined
@@ -56,7 +57,22 @@ interface EditingState {
 import EditInput from './EditInput';
 
 const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState }) => {
-  const [isOpen, setIsOpen] = React.useState(true);
+  // Load saved folder state from localStorage, default to true (open) for first time
+  const getSavedFolderState = () => {
+    if (node.type !== 'folder') return true;
+    const savedStates = localStorage.getItem('folderStates');
+    if (savedStates) {
+      try {
+        const states = JSON.parse(savedStates);
+        return states[node.path] !== undefined ? states[node.path] : true;
+      } catch (e) {
+        return true;
+      }
+    }
+    return true;
+  };
+
+  const [isOpen, setIsOpen] = React.useState(getSavedFolderState());
   const [isHovered, setIsHovered] = React.useState(false);
   const [isDragOver, setIsDragOver] = React.useState(false);
 
@@ -66,6 +82,21 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   // Check if this node is being dragged
   const isDragging = dragState.isDragging && dragState.draggedPath === node.path;
 
+  // Save folder state to localStorage when it changes
+  const saveFolderState = (path: string, state: boolean) => {
+    const savedStates = localStorage.getItem('folderStates');
+    let states = {};
+    if (savedStates) {
+      try {
+        states = JSON.parse(savedStates);
+      } catch (e) {
+        states = {};
+      }
+    }
+    states[path] = state;
+    localStorage.setItem('folderStates', JSON.stringify(states));
+  };
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -74,7 +105,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 
   const handleClick = (e: React.MouseEvent) => {
     console.log('🖱️ Click:', node.name, 'isDragging:', isDragging);
-    
+
     // Don't handle click if we just finished dragging
     if (isDragging) {
       e.preventDefault();
@@ -83,8 +114,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
     }
 
     if (node.type === 'folder') {
-      setIsOpen(!isOpen);
-      console.log('📁 Folder toggled:', node.name, 'isOpen:', !isOpen);
+      const newState = !isOpen;
+      setIsOpen(newState);
+      saveFolderState(node.path, newState);
+      console.log('📁 Folder toggled:', node.name, 'isOpen:', newState);
     } else {
       console.log('📄 File selected:', node.name);
       onSelectFile(node.path, node.name);
@@ -93,7 +126,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
+    const newState = !isOpen;
+    setIsOpen(newState);
+    saveFolderState(node.path, newState);
   };
 
   // Mouse-based drag and drop handlers
@@ -238,7 +273,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 };
 
 const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, refreshFileTree, onContextMenu, onMoveItem } = props;
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
 
   // Shared drag state for all tree nodes
@@ -369,8 +404,23 @@ const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
     <div className="unified-sidebar">
       {/* Header */}
       <div className="sidebar-header">
-        <h2 className="sidebar-title">{folderName}</h2>
+        <h2
+          className="sidebar-title"
+          title={`Current folder: ${rootPath}\n\nClick to change the root folder`}
+          onClick={onChangeFolderPath}
+        >
+          {folderName}
+        </h2>
         <div className="sidebar-actions">
+          {onChangeFolderPath && (
+            <button
+              onClick={onChangeFolderPath}
+              className="action-button"
+              title="Change Root Folder"
+            >
+              <Cog6ToothIcon className="action-icon" />
+            </button>
+          )}
           <button
             onClick={() => handleCreateNew('new-note')}
             className="action-button"

@@ -12,6 +12,7 @@ import './MainUI.css'
 
 interface MainUIProps {
   rootPath: string
+  onRootPathChange?: (newPath: string) => void
 }
 
 interface FileTreeNode {
@@ -34,7 +35,7 @@ interface ContextMenuState {
   itemName: string;
 }
 
-function MainUI({ rootPath }: MainUIProps) {
+function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
   const mainContentRef = useRef<HTMLDivElement>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
@@ -413,6 +414,21 @@ function MainUI({ rootPath }: MainUIProps) {
     }
   }
 
+  const handleChangeFolderPath = async () => {
+    try {
+      const newFolder = await invoke<string | null>('select_folder')
+      if (newFolder && onRootPathChange) {
+        // Save the new root folder
+        await invoke('save_root_folder', { folderPath: newFolder })
+        // Notify parent to update the root path
+        onRootPathChange(newFolder)
+      }
+    } catch (error) {
+      console.error('Error selecting folder:', error)
+      alert('Failed to select folder')
+    }
+  }
+
   const handleMoveItem = async (sourcePath: string, destinationPath: string) => {
     try {
       console.log('🔄 Moving:', sourcePath, 'to:', destinationPath)
@@ -574,6 +590,7 @@ function MainUI({ rootPath }: MainUIProps) {
             refreshFileTree={loadFileTree}
             onContextMenu={handleContextMenu}
             onMoveItem={handleMoveItem}
+            onChangeFolderPath={handleChangeFolderPath}
           />
         </div>
 
