@@ -1,12 +1,14 @@
 // graphUtils.ts - Utilities for building knowledge graph from markdown files
 
 export type NodeType = 'root' | 'folder' | 'file';
+export type FileType = 'markdown' | 'other'; // markdown (.md) or other file types
 
 export interface GraphNode {
   id: string;          // File path or folder path
   name: string;        // Display name (file name without extension or folder name)
   path: string;        // Full file path or folder path
   type: NodeType;      // Node type: root, folder, or file
+  fileType?: FileType; // For files: markdown or other (undefined for folders)
   x?: number;
   y?: number;
   vx?: number;
@@ -211,15 +213,21 @@ export function buildGraphFromFiles(
   // Create file nodes
   files.forEach(file => {
     const nodeName = pathToNodeName(file.path);
+    const isMarkdown = file.path.toLowerCase().endsWith('.md');
     const fileNode: GraphNode = {
       id: file.path,
       name: nodeName,
       path: file.path,
-      type: 'file'
+      type: 'file',
+      fileType: isMarkdown ? 'markdown' : 'other'
     };
     nodes.push(fileNode);
     nodeMap.set(file.path, fileNode);
-    fileNodeMap.set(nodeName.toLowerCase(), fileNode);
+
+    // Only add markdown files to fileNodeMap for wiki-link resolution
+    if (isMarkdown) {
+      fileNodeMap.set(nodeName.toLowerCase(), fileNode);
+    }
 
     // Create structural edge from file to its parent folder
     const parentFolder = getParentFolder(file.path);
@@ -267,19 +275,19 @@ export function buildGraphFromFiles(
 }
 
 /**
- * Calculates node color based on node type and connections
+ * Calculates node color based on node type and file type
  */
-export function getNodeColor(nodeType: NodeType, connectionCount: number): string {
-  // Folders (root and subfolders) are always pastel purple
+export function getNodeColor(nodeType: NodeType, fileType?: FileType): string {
+  // Folders (root and subfolders) are always purple
   if (nodeType === 'root' || nodeType === 'folder') {
     return '#c4b5fd'; // pastel purple
   }
 
-  // Files: color based on conceptual connections
-  if (connectionCount === 0) return '#6b7280'; // gray
-  if (connectionCount <= 2) return '#3b82f6';  // blue
-  if (connectionCount <= 5) return '#8b5cf6';  // purple
-  return '#ec4899'; // pink (highly connected)
+  // Files: blue for markdown, gray for others
+  if (fileType === 'markdown') {
+    return '#3b82f6'; // blue
+  }
+  return '#6b7280'; // gray for other file types
 }
 
 /**
