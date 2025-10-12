@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
+import TitleBar from './TitleBar'
 import GraphView from './GraphView'
 import FileViewer from './FileViewer'
 import ContextMenu from './ContextMenu'
@@ -471,26 +472,33 @@ function MainUI({ rootPath }: MainUIProps) {
 
   return (
     <div className="main-ui">
-      {/* Left Sidebar - Explorer */}
-      <div className="explorer-sidebar">
-        <UnifiedSidebar
-          fileTree={fileTree}
-          onSelectFile={handleSelectFile}
-          getRootPath={() => rootPath}
-          editing={editing}
-          onStartEditing={handleStartEditing}
-          onFinishEditing={handleFinishEditing}
-          refreshFileTree={loadFileTree}
-          onContextMenu={handleContextMenu}
-          onMoveItem={handleMoveItem}
-        />
-      </div>
+      {/* Custom Title Bar */}
+      <TitleBar
+        onSearchResultClick={handleSelectFile}
+        rootPath={rootPath}
+      />
 
-      {/* Main Content Area */}
-      <div
-        className="main-content"
-        ref={mainContentRef}
-      >
+      <div className="main-ui-content">
+        {/* Left Sidebar - Explorer */}
+        <div className="explorer-sidebar">
+          <UnifiedSidebar
+            fileTree={fileTree}
+            onSelectFile={handleSelectFile}
+            getRootPath={() => rootPath}
+            editing={editing}
+            onStartEditing={handleStartEditing}
+            onFinishEditing={handleFinishEditing}
+            refreshFileTree={loadFileTree}
+            onContextMenu={handleContextMenu}
+            onMoveItem={handleMoveItem}
+          />
+        </div>
+
+        {/* Main Content Area */}
+        <div
+          className="main-content"
+          ref={mainContentRef}
+        >
         {isDragging && <DropZoneOverlay containerRef={mainContentRef} />}
 
         {!splitView ? (
@@ -673,6 +681,7 @@ function MainUI({ rootPath }: MainUIProps) {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Context Menu */}
