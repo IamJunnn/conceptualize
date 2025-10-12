@@ -36,6 +36,17 @@ struct MarkdownFilesResult {
     folders: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct SearchResult {
+    file_path: String,
+    file_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line_content: Option<String>,
+    match_type: String, // "filename" or "content"
+}
+
 #[tauri::command]
 fn get_root_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let config_path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("config.json");
@@ -505,6 +516,100 @@ fn find_file_by_name(root_path: String, file_name: String) -> CreateResult {
     }
 }
 
+#[tauri::command]
+fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, String> {
+    fn search_in_directory(
+        dir_path: &Path,
+        query: &str,
+        results: &mut Vec<SearchResult>,
+        root: &Path
+    ) -> Result<(), String> {
+        let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
+        let query_lower = query.to_lowercase();
+
+        for entry in entries {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            let file_name = entry.file_name().to_string_lossy().to_string();
+
+            // Skip hidden files and node_modules
+            if file_name.starts_with('.') || file_name == "node_modules" {
+                continue;
+            }
+
+            if path.is_dir() {
+                // Recursively search subdirectories
+                search_in_directory(&path, query, results, root)?;
+            } else if path.is_file() {
+                // Check if filename matches
+                if file_name.to_lowercase().contains(&query_lower) {
+                    let relative_path = path.strip_prefix(root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .to_string();
+
+                    results.push(SearchResult {
+                        file_path: relative_path,
+                        file_name: file_name.clone(),
+                        line: None,
+                        line_content: None,
+                        match_type: "filename".to_string(),
+                    });
+                }
+
+                // Search file content (only for text files)
+                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                    // Only search in text-based files
+                    if matches!(ext, "md" | "txt" | "json" | "toml" | "yaml" | "yml" | "rs" | "js" | "ts" | "tsx" | "jsx" | "css" | "html") {
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            let relative_path = path.strip_prefix(root)
+                                .unwrap_or(&path)
+                                .to_string_lossy()
+                                .to_string();
+
+                            for (line_num, line) in content.lines().enumerate() {
+                                if line.to_lowercase().contains(&query_lower) {
+                                    // Truncate long lines
+                                    let truncated_line = if line.len() > 100 {
+                                        format!("{}...", &line[..100])
+                                    } else {
+                                        line.to_string()
+                                    };
+
+                                    results.push(SearchResult {
+                                        file_path: relative_path.clone(),
+                                        file_name: file_name.clone(),
+                                        line: Some(line_num + 1),
+                                        line_content: Some(truncated_line),
+                                        match_type: "content".to_string(),
+                                    });
+
+                                    // Limit results per file to avoid too many matches
+                                    if results.iter().filter(|r| r.file_path == relative_path).count() >= 3 {
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Limit total results to prevent performance issues
+            if results.len() >= 100 {
+                return Ok(());
+            }
+        }
+
+        Ok(())
+    }
+
+    let mut results = Vec::new();
+    let root = Path::new(&root_path);
+    search_in_directory(root, &query, &mut results, root)?;
+    Ok(results)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -516,7 +621,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_root_folder, select_folder, save_root_folder, get_file_tree, create_file, create_folder, get_markdown_files, delete_item, rename_item, move_item, read_file, write_file, reveal_in_explorer, find_file_by_name])
+        .invoke_handler(tauri::generate_handler![get_root_folder, select_folder, save_root_folder, get_file_tree, create_file, create_folder, get_markdown_files, delete_item, rename_item, move_item, read_file, write_file, reveal_in_explorer, find_file_by_name, search_files])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
