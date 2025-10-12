@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
 import GraphView from './GraphView'
 import FileViewer from './FileViewer'
 import ContextMenu from './ContextMenu'
+import { TabBar, OpenFile } from './TabBar'
+import { DropZoneOverlay } from './DropZoneOverlay'
+import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import './MainUI.css'
 
 interface MainUIProps {
@@ -30,14 +33,10 @@ interface ContextMenuState {
   itemName: string;
 }
 
-interface OpenFile {
-  path: string;
-  name: string;
-}
-
-type EditorPane = 'left' | 'right'
-
 function MainUI({ rootPath }: MainUIProps) {
+  const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('graph') // 'graph' | 'timeline' | file path
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
   const [fileTree, setFileTree] = useState<FileTreeNode[]>([])
@@ -108,6 +107,49 @@ function MainUI({ rootPath }: MainUIProps) {
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [activeTab, splitView]) // Re-bind when active tab or splitView changes
+
+  // Global mouse listeners for tab dragging
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!dragStartPos || !draggedTab) {
+        return;
+      }
+
+      const dx = Math.abs(e.clientX - dragStartPos.x);
+      const dy = Math.abs(e.clientY - dragStartPos.y);
+
+      // Set dragging flag once threshold is exceeded
+      if ((dx > 5 || dy > 5) && !isDragging) {
+        console.log('🚀 DRAG START (tab):', draggedTab.fileName);
+        setIsDragging(true);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (dragStartPos || draggedTab) {
+        console.log('🏁 DRAG END (tab)');
+
+        // Handle drop if we're over a drop zone
+        if (isDragging) {
+          handleTabDrop();
+        }
+
+        // Reset all drag state
+        setDragStartPos(null);
+        setDraggedTab(null);
+        setDropZone(null);
+        setIsDragging(false);
+      }
+    };
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [dragStartPos, draggedTab, isDragging, dropZone]);
 
   const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
     console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
@@ -349,6 +391,80 @@ function MainUI({ rootPath }: MainUIProps) {
     setActivePane('left')
   }
 
+  // Handle tab drop
+  const handleTabDrop = useCallback(() => {
+    if (!draggedTab) return;
+
+    console.log('Handling tab drop:', { draggedTab, dropZone });
+
+    const { filePath, fileName, sourcePane } = draggedTab;
+
+    // Only handle if dropping on left or right edge
+    if (!dropZone || (dropZone !== 'left' && dropZone !== 'right')) {
+      console.log('No valid drop zone - ignoring drop');
+      setDraggedTab(null);
+      setDropZone(null);
+      return;
+    }
+
+    // Handle left/right edge drops - create new splits or move between panes
+    if (dropZone === 'left' || dropZone === 'right') {
+      if (!splitView) {
+        // Create new split view
+        console.log('Creating new split view');
+        setLeftPaneFiles(openFiles);
+        setLeftPaneTab(activeTab);
+        setSplitView(true);
+        setOpenFiles([]);
+        setActiveTab('graph');
+
+        // Add dragged file to right pane
+        setRightPaneFiles([{ path: filePath, name: fileName }]);
+        setRightPaneTab(filePath);
+        setActivePane('right');
+
+        // Remove from source if it was in openFiles
+        const newOpenFiles = openFiles.filter(f => f.path !== filePath);
+        setLeftPaneFiles(newOpenFiles);
+      } else {
+        // Already in split view - move tab to opposite pane
+        if (sourcePane === 'left') {
+          // Move from left to right
+          const newLeftFiles = leftPaneFiles.filter(f => f.path !== filePath);
+          setLeftPaneFiles(newLeftFiles);
+
+          const existingInRight = rightPaneFiles.find(f => f.path === filePath);
+          if (!existingInRight) {
+            setRightPaneFiles([...rightPaneFiles, { path: filePath, name: fileName }]);
+          }
+          setRightPaneTab(filePath);
+          setActivePane('right');
+        } else if (sourcePane === 'right') {
+          // Move from right to left
+          const newRightFiles = rightPaneFiles.filter(f => f.path !== filePath);
+          setRightPaneFiles(newRightFiles);
+
+          const existingInLeft = leftPaneFiles.find(f => f.path === filePath);
+          if (!existingInLeft) {
+            setLeftPaneFiles([...leftPaneFiles, { path: filePath, name: fileName }]);
+          }
+          setLeftPaneTab(filePath);
+          setActivePane('left');
+
+          // Close split if right pane is empty
+          if (newRightFiles.length === 0) {
+            handleCloseSplitView();
+          }
+        }
+      }
+    }
+
+    // Clear drag state
+    setDraggedTab(null);
+    setDropZone(null);
+  }, [draggedTab, dropZone, splitView, openFiles, activeTab, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab]);
+
+
   return (
     <div className="main-ui">
       {/* Left Sidebar - Explorer */}
@@ -367,49 +483,25 @@ function MainUI({ rootPath }: MainUIProps) {
       </div>
 
       {/* Main Content Area */}
-      <div className="main-content">
+      <div
+        className="main-content"
+        ref={mainContentRef}
+      >
+        {isDragging && <DropZoneOverlay containerRef={mainContentRef} />}
+
         {!splitView ? (
           // Single pane mode
           <>
-            <div className="tab-bar">
-              <button
-                className={`tab ${activeTab === 'graph' ? 'active' : ''}`}
-                onClick={() => setActiveTab('graph')}
-                title="Graph"
-              >
-                Graph
-              </button>
-              <button
-                className={`tab ${activeTab === 'timeline' ? 'active' : ''}`}
-                onClick={() => setActiveTab('timeline')}
-                title="Timeline"
-              >
-                Timeline
-              </button>
-              {openFiles.map((file) => {
-                const displayName = file.name.replace(/\.md$/, '')
-                return (
-                  <div
-                    key={file.path}
-                    className={`tab file-tab ${activeTab === file.path ? 'active' : ''}`}
-                    onClick={() => setActiveTab(file.path)}
-                    title={displayName}
-                  >
-                    <span className="tab-name">{displayName}</span>
-                    <button
-                      className="tab-close"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleCloseFile(file.path)
-                      }}
-                      title="Close"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
+            <TabBar
+              activeTab={activeTab}
+              openFiles={openFiles}
+              showGraphTab={true}
+              showTimelineTab={true}
+              onTabClick={setActiveTab}
+              onTabClose={handleCloseFile}
+              dragStartPos={dragStartPos}
+              setDragStartPos={setDragStartPos}
+            />
             <div className="tab-content">
               {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
               {activeTab === 'timeline' && (
@@ -460,49 +552,23 @@ function MainUI({ rootPath }: MainUIProps) {
           <div className="split-view-container">
             {/* Left Pane */}
             <div className={`editor-pane ${activePane === 'left' ? 'active' : ''}`} onClick={() => setActivePane('left')}>
-              <div className="tab-bar">
-                <button
-                  className={`tab ${leftPaneTab === 'graph' ? 'active' : ''}`}
-                  onClick={() => setLeftPaneTab('graph')}
-                  title="Graph"
-                >
-                  Graph
-                </button>
-                <button
-                  className={`tab ${leftPaneTab === 'timeline' ? 'active' : ''}`}
-                  onClick={() => setLeftPaneTab('timeline')}
-                  title="Timeline"
-                >
-                  Timeline
-                </button>
-                {leftPaneFiles.map((file) => {
-                  const displayName = file.name.replace(/\.md$/, '')
-                  return (
-                    <div
-                      key={file.path}
-                      className={`tab file-tab ${leftPaneTab === file.path ? 'active' : ''}`}
-                      onClick={() => setLeftPaneTab(file.path)}
-                      title={displayName}
-                    >
-                      <span className="tab-name">{displayName}</span>
-                      <button
-                        className="tab-close"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const newFiles = leftPaneFiles.filter(f => f.path !== file.path)
-                          setLeftPaneFiles(newFiles)
-                          if (leftPaneTab === file.path) {
-                            setLeftPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph')
-                          }
-                        }}
-                        title="Close"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+              <TabBar
+                activeTab={leftPaneTab}
+                openFiles={leftPaneFiles}
+                pane="left"
+                showGraphTab={true}
+                showTimelineTab={true}
+                onTabClick={setLeftPaneTab}
+                onTabClose={(filePath) => {
+                  const newFiles = leftPaneFiles.filter(f => f.path !== filePath);
+                  setLeftPaneFiles(newFiles);
+                  if (leftPaneTab === filePath) {
+                    setLeftPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph');
+                  }
+                }}
+                dragStartPos={dragStartPos}
+                setDragStartPos={setDragStartPos}
+              />
               <div className="tab-content">
                 {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
                 {leftPaneTab === 'timeline' && (
@@ -554,45 +620,28 @@ function MainUI({ rootPath }: MainUIProps) {
 
             {/* Right Pane */}
             <div className={`editor-pane ${activePane === 'right' ? 'active' : ''}`} onClick={() => setActivePane('right')}>
-              <div className="tab-bar">
-                <button
-                  className="close-split-btn"
-                  onClick={handleCloseSplitView}
-                  title="Close Split View"
-                >
-                  ×
-                </button>
-                {rightPaneFiles.map((file) => {
-                  const displayName = file.name.replace(/\.md$/, '')
-                  return (
-                    <div
-                      key={file.path}
-                      className={`tab file-tab ${rightPaneTab === file.path ? 'active' : ''}`}
-                      onClick={() => setRightPaneTab(file.path)}
-                      title={displayName}
-                    >
-                      <span className="tab-name">{displayName}</span>
-                      <button
-                        className="tab-close"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const newFiles = rightPaneFiles.filter(f => f.path !== file.path)
-                          setRightPaneFiles(newFiles)
-                          if (rightPaneTab === file.path) {
-                            setRightPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph')
-                          }
-                          if (newFiles.length === 0) {
-                            handleCloseSplitView()
-                          }
-                        }}
-                        title="Close"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+              <TabBar
+                activeTab={rightPaneTab}
+                openFiles={rightPaneFiles}
+                pane="right"
+                showGraphTab={false}
+                showTimelineTab={false}
+                showCloseSplit={true}
+                onTabClick={setRightPaneTab}
+                onTabClose={(filePath) => {
+                  const newFiles = rightPaneFiles.filter(f => f.path !== filePath);
+                  setRightPaneFiles(newFiles);
+                  if (rightPaneTab === filePath) {
+                    setRightPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph');
+                  }
+                  if (newFiles.length === 0) {
+                    handleCloseSplitView();
+                  }
+                }}
+                onCloseSplit={handleCloseSplitView}
+                dragStartPos={dragStartPos}
+                setDragStartPos={setDragStartPos}
+              />
               <div className="tab-content">
                 {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
                 {rightPaneTab === 'timeline' && (
