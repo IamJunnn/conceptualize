@@ -1,0 +1,40 @@
+.drop-zone-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.drop-zone-indicator {
+  position: absolute;
+  background: rgba(59, 130, 246, 0.3);
+  border: 2px solid #3b82f6;
+  pointer-events: none;
+  animation: pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 0.6;
+  }
+}
+
+.drop-zone-indicator.left {
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+}
+
+.drop-zone-indicator.right {
+  top: 0;
+  right: 0;
+  width: 50%;
+  height: 100%;
+}

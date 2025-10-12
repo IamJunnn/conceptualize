@@ -1,0 +1,119 @@
+.tab-bar {
+  display: flex;
+  align-items: center;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 40px;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.2s;
+  border-radius: 4px 4px 0 0;
+  user-select: none;
+}
+
+.tab:hover {
+  background: #2a2a2a;
+  color: #ddd;
+}
+
+.tab.active {
+  background: #2a2a2a;
+  color: #fff;
+  border-bottom: 2px solid #3b82f6;
+}
+
+.file-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.2s;
+  border-radius: 4px 4px 0 0;
+  user-select: none;
+  position: relative;
+}
+
+.file-tab:hover {
+  background: #2a2a2a;
+  color: #ddd;
+}
+
+.file-tab.active {
+  background: #2a2a2a;
+  color: #fff;
+  border-bottom: 2px solid #3b82f6;
+}
+
+.file-tab.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.file-tab[draggable="true"] {
+  cursor: grab;
+}
+
+.file-tab[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.tab-name {
+  pointer-events: none;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 3px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.tab-close:hover {
+  background: #444;
+  color: #fff;
+}
+
+.close-split-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 20px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.close-split-btn:hover {
+  background: #2a2a2a;
+  color: #fff;
+}

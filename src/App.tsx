@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import SetupScreen from './components/SetupScreen'
 import MainUI from './components/MainUI'
+import { DragDropProvider } from './contexts/DragDropContext'
 import './App.css'
 
 function App() {
@@ -60,9 +61,11 @@ function App() {
 
   // Main application UI
   return (
-    <div className="app-transition fade-in">
-      <MainUI rootPath={rootPath} />
-    </div>
+    <DragDropProvider>
+      <div className="app-transition fade-in">
+        <MainUI rootPath={rootPath} />
+      </div>
+    </DragDropProvider>
   )
 }
 
