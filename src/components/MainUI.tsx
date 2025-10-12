@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
 import GraphView from './GraphView'
-import EditorTab from './EditorTabMilkdown'
+import FileViewer from './FileViewer'
 import ContextMenu from './ContextMenu'
 import './MainUI.css'
 
@@ -35,6 +35,8 @@ interface OpenFile {
   name: string;
 }
 
+type EditorPane = 'left' | 'right'
+
 function MainUI({ rootPath }: MainUIProps) {
   const [activeTab, setActiveTab] = useState<string>('graph') // 'graph' | 'timeline' | file path
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
@@ -42,6 +44,25 @@ function MainUI({ rootPath }: MainUIProps) {
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [graphKey, setGraphKey] = useState(0) // For forcing graph refresh
+
+  // Split view state
+  const [splitView, setSplitView] = useState(false)
+  const [activePane, setActivePane] = useState<EditorPane>('left')
+  const [leftPaneTab, setLeftPaneTab] = useState<string>('graph')
+  const [rightPaneTab, setRightPaneTab] = useState<string>('graph')
+  const [leftPaneFiles, setLeftPaneFiles] = useState<OpenFile[]>([])
+  const [rightPaneFiles, setRightPaneFiles] = useState<OpenFile[]>([])
+
+  // Debug: Log split view state changes
+  useEffect(() => {
+    console.log('Split view state changed:', {
+      splitView,
+      leftPaneFiles: leftPaneFiles.length,
+      rightPaneFiles: rightPaneFiles.length,
+      leftPaneTab,
+      rightPaneTab
+    })
+  }, [splitView, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab])
 
   const loadFileTree = useCallback(async () => {
     try {
@@ -56,16 +77,27 @@ function MainUI({ rootPath }: MainUIProps) {
     loadFileTree()
   }, [loadFileTree])
 
-  // Keyboard shortcut: Ctrl+W to close active tab
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+W or Cmd+W (Mac)
+      // Ctrl+W or Cmd+W (Mac) - Close active tab
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         e.preventDefault() // Prevent browser from closing tab/window
 
         // Only close if active tab is a file (not Graph or Timeline)
         if (activeTab !== 'graph' && activeTab !== 'timeline') {
           handleCloseFile(activeTab)
+        }
+      }
+
+      // Ctrl+\ or Cmd+\ (Mac) - Toggle split view
+      if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
+        e.preventDefault()
+        if (splitView) {
+          handleCloseSplitView()
+        } else {
+          // Open split view with Graph in right pane
+          handleOpenInSecondPane('graph', 'Graph')
         }
       }
     }
@@ -75,19 +107,34 @@ function MainUI({ rootPath }: MainUIProps) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [activeTab]) // Re-bind when active tab changes
+  }, [activeTab, splitView]) // Re-bind when active tab or splitView changes
 
-  const handleSelectFile = (filePath: string, fileName: string) => {
-    // Check if file is already open
-    const existingFile = openFiles.find(f => f.path === filePath)
+  const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
+    console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
 
-    if (existingFile) {
-      // Just switch to the existing tab
-      setActiveTab(filePath)
+    if (!splitView || !pane) {
+      // Single pane mode or no pane specified
+      const existingFile = openFiles.find(f => f.path === filePath)
+      if (existingFile) {
+        setActiveTab(filePath)
+      } else {
+        setOpenFiles([...openFiles, { path: filePath, name: fileName }])
+        setActiveTab(filePath)
+      }
     } else {
-      // Open new tab
-      setOpenFiles([...openFiles, { path: filePath, name: fileName }])
-      setActiveTab(filePath)
+      // Split view mode with pane specified
+      const targetFiles = pane === 'left' ? leftPaneFiles : rightPaneFiles
+      const setTargetFiles = pane === 'left' ? setLeftPaneFiles : setRightPaneFiles
+      const setTargetTab = pane === 'left' ? setLeftPaneTab : setRightPaneTab
+
+      const existingFile = targetFiles.find(f => f.path === filePath)
+      if (existingFile) {
+        setTargetTab(filePath)
+      } else {
+        setTargetFiles([...targetFiles, { path: filePath, name: fileName }])
+        setTargetTab(filePath)
+      }
+      setActivePane(pane)
     }
   }
 
@@ -262,6 +309,46 @@ function MainUI({ rootPath }: MainUIProps) {
     }
   }
 
+  const handleOpenInSecondPane = (filePath: string, fileName: string) => {
+    console.log('Opening in second pane:', filePath, fileName)
+    console.log('Current splitView state:', splitView)
+
+    if (!splitView) {
+      // Transfer current files to left pane
+      setLeftPaneFiles(openFiles)
+      setLeftPaneTab(activeTab)
+      setSplitView(true)
+
+      // Clear single pane state
+      setOpenFiles([])
+      setActiveTab('graph')
+    }
+
+    // Add file to right pane
+    const existingFile = rightPaneFiles.find(f => f.path === filePath)
+    if (!existingFile) {
+      setRightPaneFiles([...rightPaneFiles, { path: filePath, name: fileName }])
+    }
+    setRightPaneTab(filePath)
+    setActivePane('right')
+  }
+
+  const handleCloseSplitView = () => {
+    console.log('Closing split view')
+
+    // Transfer left pane files back to single pane
+    setOpenFiles(leftPaneFiles)
+    setActiveTab(leftPaneTab)
+
+    // Clear split view state
+    setSplitView(false)
+    setLeftPaneFiles([])
+    setLeftPaneTab('graph')
+    setRightPaneFiles([])
+    setRightPaneTab('graph')
+    setActivePane('left')
+  }
+
   return (
     <div className="main-ui">
       {/* Left Sidebar - Explorer */}
@@ -281,94 +368,278 @@ function MainUI({ rootPath }: MainUIProps) {
 
       {/* Main Content Area */}
       <div className="main-content">
-        {/* Tab Bar */}
-        <div className="tab-bar">
-          <button
-            className={`tab ${activeTab === 'graph' ? 'active' : ''}`}
-            onClick={() => setActiveTab('graph')}
-            title="Graph"
-          >
-            Graph
-          </button>
-          <button
-            className={`tab ${activeTab === 'timeline' ? 'active' : ''}`}
-            onClick={() => setActiveTab('timeline')}
-            title="Timeline"
-          >
-            Timeline
-          </button>
-          {openFiles.map((file) => {
-            const displayName = file.name.replace(/\.md$/, '') // Remove .md extension
-
-            return (
-              <div
-                key={file.path}
-                className={`tab file-tab ${activeTab === file.path ? 'active' : ''}`}
-                onClick={() => setActiveTab(file.path)}
-                title={displayName}
+        {!splitView ? (
+          // Single pane mode
+          <>
+            <div className="tab-bar">
+              <button
+                className={`tab ${activeTab === 'graph' ? 'active' : ''}`}
+                onClick={() => setActiveTab('graph')}
+                title="Graph"
               >
-                <span className="tab-name">
-                  {displayName}
-                </span>
+                Graph
+              </button>
+              <button
+                className={`tab ${activeTab === 'timeline' ? 'active' : ''}`}
+                onClick={() => setActiveTab('timeline')}
+                title="Timeline"
+              >
+                Timeline
+              </button>
+              {openFiles.map((file) => {
+                const displayName = file.name.replace(/\.md$/, '')
+                return (
+                  <div
+                    key={file.path}
+                    className={`tab file-tab ${activeTab === file.path ? 'active' : ''}`}
+                    onClick={() => setActiveTab(file.path)}
+                    title={displayName}
+                  >
+                    <span className="tab-name">{displayName}</span>
+                    <button
+                      className="tab-close"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCloseFile(file.path)
+                      }}
+                      title="Close"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="tab-content">
+              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
+              {activeTab === 'timeline' && (
+                <div className="timeline-placeholder">
+                  <p>Timeline view coming soon...</p>
+                </div>
+              )}
+              {openFiles.map((file) => {
+                const isMarkdown = file.name.toLowerCase().endsWith('.md')
+                return activeTab === file.path && (
+                  isMarkdown ? (
+                    <FileViewer
+                      key={file.path}
+                      filePath={file.path}
+                      fileName={file.name}
+                      rootPath={rootPath}
+                      onOpenFile={handleSelectFile}
+                      onFileCreated={() => {
+                        loadFileTree()
+                        setGraphKey(prev => prev + 1)
+                      }}
+                      onFileRenamed={(oldPath, newPath, newName) => {
+                        const updatedOpenFiles = openFiles.map(f =>
+                          f.path === oldPath ? { path: newPath, name: newName } : f
+                        )
+                        setOpenFiles(updatedOpenFiles)
+                        if (activeTab === oldPath) {
+                          setActiveTab(newPath)
+                        }
+                        loadFileTree()
+                        setGraphKey(prev => prev + 1)
+                      }}
+                    />
+                  ) : (
+                    <FileViewer
+                      key={file.path}
+                      filePath={file.path}
+                      fileName={file.name}
+                      rootPath={rootPath}
+                    />
+                  )
+                )
+              })}
+            </div>
+          </>
+        ) : (
+          // Split view mode
+          <div className="split-view-container">
+            {/* Left Pane */}
+            <div className={`editor-pane ${activePane === 'left' ? 'active' : ''}`} onClick={() => setActivePane('left')}>
+              <div className="tab-bar">
                 <button
-                  className="tab-close"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleCloseFile(file.path)
-                  }}
-                  title="Close"
+                  className={`tab ${leftPaneTab === 'graph' ? 'active' : ''}`}
+                  onClick={() => setLeftPaneTab('graph')}
+                  title="Graph"
+                >
+                  Graph
+                </button>
+                <button
+                  className={`tab ${leftPaneTab === 'timeline' ? 'active' : ''}`}
+                  onClick={() => setLeftPaneTab('timeline')}
+                  title="Timeline"
+                >
+                  Timeline
+                </button>
+                {leftPaneFiles.map((file) => {
+                  const displayName = file.name.replace(/\.md$/, '')
+                  return (
+                    <div
+                      key={file.path}
+                      className={`tab file-tab ${leftPaneTab === file.path ? 'active' : ''}`}
+                      onClick={() => setLeftPaneTab(file.path)}
+                      title={displayName}
+                    >
+                      <span className="tab-name">{displayName}</span>
+                      <button
+                        className="tab-close"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const newFiles = leftPaneFiles.filter(f => f.path !== file.path)
+                          setLeftPaneFiles(newFiles)
+                          if (leftPaneTab === file.path) {
+                            setLeftPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph')
+                          }
+                        }}
+                        title="Close"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="tab-content">
+                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
+                {leftPaneTab === 'timeline' && (
+                  <div className="timeline-placeholder">
+                    <p>Timeline view coming soon...</p>
+                  </div>
+                )}
+                {leftPaneFiles.map((file) => {
+                  const isMarkdown = file.name.toLowerCase().endsWith('.md')
+                  return leftPaneTab === file.path && (
+                    isMarkdown ? (
+                      <FileViewer
+                        key={file.path}
+                        filePath={file.path}
+                        fileName={file.name}
+                        rootPath={rootPath}
+                        onOpenFile={(path, name) => handleSelectFile(path, name, 'left')}
+                        onFileCreated={() => {
+                          loadFileTree()
+                          setGraphKey(prev => prev + 1)
+                        }}
+                        onFileRenamed={(oldPath, newPath, newName) => {
+                          const updatedFiles = leftPaneFiles.map(f =>
+                            f.path === oldPath ? { path: newPath, name: newName } : f
+                          )
+                          setLeftPaneFiles(updatedFiles)
+                          if (leftPaneTab === oldPath) {
+                            setLeftPaneTab(newPath)
+                          }
+                          loadFileTree()
+                          setGraphKey(prev => prev + 1)
+                        }}
+                      />
+                    ) : (
+                      <FileViewer
+                        key={file.path}
+                        filePath={file.path}
+                        fileName={file.name}
+                        rootPath={rootPath}
+                      />
+                    )
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="pane-divider"></div>
+
+            {/* Right Pane */}
+            <div className={`editor-pane ${activePane === 'right' ? 'active' : ''}`} onClick={() => setActivePane('right')}>
+              <div className="tab-bar">
+                <button
+                  className="close-split-btn"
+                  onClick={handleCloseSplitView}
+                  title="Close Split View"
                 >
                   ×
                 </button>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Tab Content */}
-        <div className="tab-content">
-          {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
-          {activeTab === 'timeline' && (
-            <div className="timeline-placeholder">
-              <p>Timeline view coming soon...</p>
-            </div>
-          )}
-          {openFiles.map((file) => (
-            activeTab === file.path && (
-              <EditorTab
-                key={file.path}
-                filePath={file.path}
-                fileName={file.name}
-                rootPath={rootPath}
-                onOpenFile={handleSelectFile}
-                onFileCreated={() => {
-                  // Refresh file tree when new file is created via wiki-link
-                  loadFileTree()
-                  // Refresh graph to include new note
-                  setGraphKey(prev => prev + 1)
-                }}
-                onFileRenamed={(oldPath, newPath, newName) => {
-                  // Update open files list
-                  const updatedOpenFiles = openFiles.map(f =>
-                    f.path === oldPath ? { path: newPath, name: newName } : f
+                {rightPaneFiles.map((file) => {
+                  const displayName = file.name.replace(/\.md$/, '')
+                  return (
+                    <div
+                      key={file.path}
+                      className={`tab file-tab ${rightPaneTab === file.path ? 'active' : ''}`}
+                      onClick={() => setRightPaneTab(file.path)}
+                      title={displayName}
+                    >
+                      <span className="tab-name">{displayName}</span>
+                      <button
+                        className="tab-close"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const newFiles = rightPaneFiles.filter(f => f.path !== file.path)
+                          setRightPaneFiles(newFiles)
+                          if (rightPaneTab === file.path) {
+                            setRightPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph')
+                          }
+                          if (newFiles.length === 0) {
+                            handleCloseSplitView()
+                          }
+                        }}
+                        title="Close"
+                      >
+                        ×
+                      </button>
+                    </div>
                   )
-                  setOpenFiles(updatedOpenFiles)
-
-                  // Update active tab
-                  if (activeTab === oldPath) {
-                    setActiveTab(newPath)
-                  }
-
-                  // Refresh file tree
-                  loadFileTree()
-
-                  // Refresh graph to reflect rename and updated wiki-links
-                  setGraphKey(prev => prev + 1)
-                }}
-              />
-            )
-          ))}
-        </div>
+                })}
+              </div>
+              <div className="tab-content">
+                {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
+                {rightPaneTab === 'timeline' && (
+                  <div className="timeline-placeholder">
+                    <p>Timeline view coming soon...</p>
+                  </div>
+                )}
+                {rightPaneFiles.map((file) => {
+                  const isMarkdown = file.name.toLowerCase().endsWith('.md')
+                  return rightPaneTab === file.path && (
+                    isMarkdown ? (
+                      <FileViewer
+                        key={file.path}
+                        filePath={file.path}
+                        fileName={file.name}
+                        rootPath={rootPath}
+                        onOpenFile={(path, name) => handleSelectFile(path, name, 'right')}
+                        onFileCreated={() => {
+                          loadFileTree()
+                          setGraphKey(prev => prev + 1)
+                        }}
+                        onFileRenamed={(oldPath, newPath, newName) => {
+                          const updatedFiles = rightPaneFiles.map(f =>
+                            f.path === oldPath ? { path: newPath, name: newName } : f
+                          )
+                          setRightPaneFiles(updatedFiles)
+                          if (rightPaneTab === oldPath) {
+                            setRightPaneTab(newPath)
+                          }
+                          loadFileTree()
+                          setGraphKey(prev => prev + 1)
+                        }}
+                      />
+                    ) : (
+                      <FileViewer
+                        key={file.path}
+                        filePath={file.path}
+                        fileName={file.name}
+                        rootPath={rootPath}
+                      />
+                    )
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Context Menu */}
@@ -386,6 +657,7 @@ function MainUI({ rootPath }: MainUIProps) {
           onCreateFolder={handleCreateFolder}
           onRefresh={handleRefresh}
           onRevealInExplorer={handleRevealInExplorer}
+          onOpenInSecondPane={handleOpenInSecondPane}
         />
       )}
     </div>

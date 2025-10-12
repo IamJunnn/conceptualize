@@ -22,6 +22,7 @@ interface ContextMenuProps {
   onCreateFolder: (parentPath: string) => void;
   onRefresh: () => void;
   onRevealInExplorer: (path: string) => void;
+  onOpenInSecondPane?: (path: string, name: string) => void;
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -37,6 +38,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onCreateFolder,
   onRefresh,
   onRevealInExplorer,
+  onOpenInSecondPane,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -73,6 +75,20 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       className="context-menu"
       style={{ left: `${x}px`, top: `${y}px` }}
     >
+      {itemType === 'file' && onOpenInSecondPane && (
+        <>
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onOpenInSecondPane(itemPath, itemName))}
+          >
+            <svg className="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4v16m6-16v16M4 8h16M4 16h16" />
+            </svg>
+            Open in Second Pane
+          </div>
+          <div className="context-menu-separator" />
+        </>
+      )}
       {itemType === 'folder' && (
         <>
           <div

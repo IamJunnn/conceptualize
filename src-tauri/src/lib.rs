@@ -129,7 +129,12 @@ fn get_markdown_files(root_path: String) -> Result<MarkdownFilesResult, String> 
                 collect_markdown_files_and_folders(&path, files, folders)?;
             } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
                 match fs::read_to_string(&path) {
-                    Ok(content) => files.push(MarkdownFile { path: path.to_string_lossy().to_string(), content }),
+                    Ok(content) => {
+                        eprintln!("📖 Reading file: {:?}", path);
+                        eprintln!("   Content length: {} bytes", content.len());
+                        eprintln!("   First 200 chars: {:?}", &content.chars().take(200).collect::<String>());
+                        files.push(MarkdownFile { path: path.to_string_lossy().to_string(), content })
+                    },
                     Err(e) => eprintln!("Failed to read file {:?}: {}", path, e)
                 }
             }

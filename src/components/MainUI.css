@@ -163,3 +163,60 @@
   color: #666;
   font-size: 16px;
 }
+
+/* Split View Styles */
+.split-view-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  gap: 0;
+}
+
+.editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  position: relative;
+}
+
+.editor-pane.active {
+  outline: 2px solid #007acc;
+  outline-offset: -2px;
+}
+
+.pane-divider {
+  width: 4px;
+  background: #333;
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.pane-divider:hover {
+  background: #007acc;
+}
+
+.close-split-btn {
+  min-width: 40px !important;
+  max-width: 40px !important;
+  padding: 8px !important;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 20px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.close-split-btn:hover {
+  background: #ff4444;
+  color: #fff;
+}
