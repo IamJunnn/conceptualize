@@ -31,14 +31,18 @@ export interface GraphData {
 
 /**
  * Extracts wiki-style links [[Link Text]] from markdown content
+ * Handles both normal and escaped wiki-links (with backslashes)
  */
 export function extractWikiLinks(content: string): string[] {
-  const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+  // Match both [[link]] and \[\[link\]\] (escaped versions)
+  const wikiLinkRegex = /\\?\[\\?\[([^\]\\]+(?:\\[^\]\\]+)*)\\?\]\\?\]/g;
   const links: string[] = [];
   let match;
 
   while ((match = wikiLinkRegex.exec(content)) !== null) {
-    links.push(match[1].trim());
+    // Remove any escape characters from the captured link text
+    const linkText = match[1].replace(/\\_/g, '_').replace(/\\/g, '').trim();
+    links.push(linkText);
   }
 
   return links;
@@ -236,15 +240,25 @@ export function buildGraphFromFiles(
 
     const wikiLinks = extractWikiLinks(file.content);
 
+    console.log(`📝 File: ${pathToNodeName(file.path)}`);
+    console.log(`   Wiki-links found: ${wikiLinks.join(', ') || '(none)'}`);
+
     wikiLinks.forEach(linkText => {
       const targetNode = fileNodeMap.get(linkText.toLowerCase());
+      console.log(`   Looking for: "${linkText}" (normalized: "${linkText.toLowerCase()}")`);
+      console.log(`   Found target: ${targetNode ? targetNode.name : 'NOT FOUND'}`);
+
       if (targetNode && targetNode.id !== sourceNode.id) {
+        console.log(`   ✅ Creating link: ${sourceNode.name} -> ${targetNode.name}`);
         links.push({
           source: sourceNode.id,
           target: targetNode.id,
           value: 1,
           type: 'conceptual'
         });
+      } else if (!targetNode) {
+        console.log(`   ❌ No target node found for wiki-link: "${linkText}"`);
+        console.log(`   Available nodes: ${Array.from(fileNodeMap.keys()).join(', ')}`);
       }
     });
   });
