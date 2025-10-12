@@ -70,7 +70,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, onNodeClick, onNodeDoub
       .force('charge', d3.forceManyBody().strength(-400))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<GraphNode>().radius(d => {
-        if ((d as GraphNode).type === 'root') return 35;
+        if ((d as GraphNode).type === 'root') return 28;
         return 25;
       }));
 
@@ -99,7 +99,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, onNodeClick, onNodeDoub
     node.append('circle')
       .attr('r', d => {
         // Root node is larger
-        if (d.type === 'root') return 24;
+        if (d.type === 'root') return 18;
 
         // For files, size based on conceptual connections
         const conceptualConnections = getConceptualConnections(d.id);
@@ -108,8 +108,12 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, onNodeClick, onNodeDoub
         return Math.min(baseSize + conceptualConnections * 1.5, maxSize);
       })
       .attr('fill', d => {
-        // Folders (root and subfolders) are purple
-        if (d.type === 'root' || d.type === 'folder') {
+        // Root folder is purple #b64ac8
+        if (d.type === 'root') {
+          return '#b64ac8'; // purple
+        }
+        // Subfolders are pastel purple
+        if (d.type === 'folder') {
           return '#c4b5fd'; // pastel purple
         }
 
@@ -123,15 +127,19 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, onNodeClick, onNodeDoub
       .attr('stroke-width', 2)
       .style('cursor', 'pointer');
 
-    // Add labels with type-specific styling
+    // Add labels with type-specific styling (excluding root)
     node.append('text')
-      .text(d => d.name)
+      .text(d => d.type === 'root' ? '' : d.name) // Don't show label for root
       .attr('class', 'node-label')
       .attr('dx', 12)
       .attr('dy', 4)
       .style('font-size', d => d.type === 'root' ? '14px' : '12px')
       .style('font-weight', d => (d.type === 'root' || d.type === 'folder') ? '600' : '400')
-      .style('fill', d => (d.type === 'root' || d.type === 'folder') ? '#e9d5ff' : '#d4d4d4')
+      .style('fill', d => {
+        if (d.type === 'root') return '#b64ac8'; // purple for root
+        if (d.type === 'folder') return '#e9d5ff'; // pastel purple for folders
+        return '#d4d4d4'; // gray for files
+      })
       .style('pointer-events', 'none')
       .style('user-select', 'none');
 
@@ -184,7 +192,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, onNodeClick, onNodeDoub
         .attr('r', (d: any) => {
           const node = d as GraphNode;
           // Root node is larger
-          if (node.type === 'root') return 24;
+          if (node.type === 'root') return 18;
 
           // For files, size based on conceptual connections
           const conceptualConnections = getConceptualConnections(node.id);

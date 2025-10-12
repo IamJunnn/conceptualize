@@ -12,11 +12,8 @@ interface TabBarProps {
   openFiles: OpenFile[];
   pane?: EditorPane;
   showGraphTab?: boolean;
-  showTimelineTab?: boolean;
-  showCloseSplit?: boolean;
   onTabClick: (tabId: string) => void;
   onTabClose: (filePath: string) => void;
-  onCloseSplit?: () => void;
   dragStartPos: { x: number; y: number } | null;
   setDragStartPos: (pos: { x: number; y: number } | null) => void;
 }
@@ -26,11 +23,8 @@ export function TabBar({
   openFiles,
   pane,
   showGraphTab = true,
-  showTimelineTab = true,
-  showCloseSplit = false,
   onTabClick,
   onTabClose,
-  onCloseSplit,
   dragStartPos,
   setDragStartPos,
 }: TabBarProps) {
@@ -56,16 +50,6 @@ export function TabBar({
 
   return (
     <div className="tab-bar">
-      {showCloseSplit && onCloseSplit && (
-        <button
-          className="close-split-btn"
-          onClick={onCloseSplit}
-          title="Close Split View"
-        >
-          ×
-        </button>
-      )}
-
       {showGraphTab && (
         <button
           className={`tab ${activeTab === 'graph' ? 'active' : ''}`}
@@ -73,16 +57,6 @@ export function TabBar({
           title="Graph"
         >
           Graph
-        </button>
-      )}
-
-      {showTimelineTab && (
-        <button
-          className={`tab ${activeTab === 'timeline' ? 'active' : ''}`}
-          onClick={() => onTabClick('timeline')}
-          title="Timeline"
-        >
-          Timeline
         </button>
       )}
 

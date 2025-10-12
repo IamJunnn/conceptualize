@@ -27,13 +27,13 @@ function SetupScreen({ onFolderSelected }: SetupScreenProps) {
       <div className="setup-content">
         <div className="setup-title">
           <span>Welcome to </span>
-          <img src="/main_logo.svg" alt="MicroGrid" className="setup-title-logo" />
+          <img src="/main_logo.svg" alt="Conceptualize" className="setup-title-logo" />
         </div>
         <p className="setup-description">
-          Choose a folder to store your knowledge base. This will be your MicroGrid root folder.
+          Choose a folder to store your knowledge base. This will be your Conceptualize root folder.
         </p>
         <button className="setup-button" onClick={handleChooseFolder}>
-          Choose Your MicroGrid Folder
+          Choose Your Conceptualize Folder
         </button>
       </div>
     </div>

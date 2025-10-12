@@ -127,11 +127,14 @@ function MainUI({ rootPath }: MainUIProps) {
 
     const handleGlobalMouseUp = () => {
       if (dragStartPos || draggedTab) {
-        console.log('🏁 DRAG END (tab)');
+        console.log('🏁 DRAG END (tab)', { isDragging, dropZone });
 
-        // Handle drop if we're over a drop zone
-        if (isDragging) {
+        // Only handle drop if we're dragging AND over a valid drop zone
+        if (isDragging && dropZone && (dropZone === 'left' || dropZone === 'right')) {
+          console.log('✅ Valid drop - handling');
           handleTabDrop();
+        } else {
+          console.log('❌ No valid drop zone - tab stays in place');
         }
 
         // Reset all drag state
@@ -154,8 +157,8 @@ function MainUI({ rootPath }: MainUIProps) {
   const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
     console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
 
-    if (!splitView || !pane) {
-      // Single pane mode or no pane specified
+    if (!splitView) {
+      // Single pane mode
       const existingFile = openFiles.find(f => f.path === filePath)
       if (existingFile) {
         setActiveTab(filePath)
@@ -164,10 +167,11 @@ function MainUI({ rootPath }: MainUIProps) {
         setActiveTab(filePath)
       }
     } else {
-      // Split view mode with pane specified
-      const targetFiles = pane === 'left' ? leftPaneFiles : rightPaneFiles
-      const setTargetFiles = pane === 'left' ? setLeftPaneFiles : setRightPaneFiles
-      const setTargetTab = pane === 'left' ? setLeftPaneTab : setRightPaneTab
+      // Split view mode - if no pane specified, default to left pane
+      const targetPane = pane || 'left';
+      const targetFiles = targetPane === 'left' ? leftPaneFiles : rightPaneFiles
+      const setTargetFiles = targetPane === 'left' ? setLeftPaneFiles : setRightPaneFiles
+      const setTargetTab = targetPane === 'left' ? setLeftPaneTab : setRightPaneTab
 
       const existingFile = targetFiles.find(f => f.path === filePath)
       if (existingFile) {
@@ -176,7 +180,7 @@ function MainUI({ rootPath }: MainUIProps) {
         setTargetFiles([...targetFiles, { path: filePath, name: fileName }])
         setTargetTab(filePath)
       }
-      setActivePane(pane)
+      setActivePane(targetPane)
     }
   }
 
@@ -496,19 +500,13 @@ function MainUI({ rootPath }: MainUIProps) {
               activeTab={activeTab}
               openFiles={openFiles}
               showGraphTab={true}
-              showTimelineTab={true}
               onTabClick={setActiveTab}
               onTabClose={handleCloseFile}
               dragStartPos={dragStartPos}
               setDragStartPos={setDragStartPos}
             />
             <div className="tab-content">
-              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
-              {activeTab === 'timeline' && (
-                <div className="timeline-placeholder">
-                  <p>Timeline view coming soon...</p>
-                </div>
-              )}
+              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} />}
               {openFiles.map((file) => {
                 const isMarkdown = file.name.toLowerCase().endsWith('.md')
                 return activeTab === file.path && (
@@ -557,7 +555,6 @@ function MainUI({ rootPath }: MainUIProps) {
                 openFiles={leftPaneFiles}
                 pane="left"
                 showGraphTab={true}
-                showTimelineTab={true}
                 onTabClick={setLeftPaneTab}
                 onTabClose={(filePath) => {
                   const newFiles = leftPaneFiles.filter(f => f.path !== filePath);
@@ -570,12 +567,7 @@ function MainUI({ rootPath }: MainUIProps) {
                 setDragStartPos={setDragStartPos}
               />
               <div className="tab-content">
-                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
-                {leftPaneTab === 'timeline' && (
-                  <div className="timeline-placeholder">
-                    <p>Timeline view coming soon...</p>
-                  </div>
-                )}
+                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} />}
                 {leftPaneFiles.map((file) => {
                   const isMarkdown = file.name.toLowerCase().endsWith('.md')
                   return leftPaneTab === file.path && (
@@ -625,8 +617,6 @@ function MainUI({ rootPath }: MainUIProps) {
                 openFiles={rightPaneFiles}
                 pane="right"
                 showGraphTab={false}
-                showTimelineTab={false}
-                showCloseSplit={true}
                 onTabClick={setRightPaneTab}
                 onTabClose={(filePath) => {
                   const newFiles = rightPaneFiles.filter(f => f.path !== filePath);
@@ -638,17 +628,11 @@ function MainUI({ rootPath }: MainUIProps) {
                     handleCloseSplitView();
                   }
                 }}
-                onCloseSplit={handleCloseSplitView}
                 dragStartPos={dragStartPos}
                 setDragStartPos={setDragStartPos}
               />
               <div className="tab-content">
-                {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} />}
-                {rightPaneTab === 'timeline' && (
-                  <div className="timeline-placeholder">
-                    <p>Timeline view coming soon...</p>
-                  </div>
-                )}
+                {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} />}
                 {rightPaneFiles.map((file) => {
                   const isMarkdown = file.name.toLowerCase().endsWith('.md')
                   return rightPaneTab === file.path && (

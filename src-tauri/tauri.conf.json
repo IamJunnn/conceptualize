@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "microgrid",
+  "productName": "conceptualize",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.conceptualize.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MicroGrid",
+        "title": "Conceptualize",
         "width": 800,
         "height": 600,
         "resizable": true,

@@ -48,7 +48,7 @@ fn get_root_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 async fn select_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let folder = app.dialog().file().set_title("Choose Your MicroGrid Folder").blocking_pick_folder();
+    let folder = app.dialog().file().set_title("Choose Your Conceptualize Folder").blocking_pick_folder();
     Ok(folder.map(|p| p.to_string()))
 }
 
