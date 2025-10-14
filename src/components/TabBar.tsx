@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext';
+import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+import { DocumentIcon, StarIcon } from '@heroicons/react/24/outline';
+import { isImportantNote, toggleImportantNote } from '../utils/importantNotes';
 import './TabBar.css';
 
 export interface OpenFile {
@@ -41,6 +44,8 @@ export function TabBar({
 }: TabBarProps) {
   const { draggedTab, setDraggedTab } = useDragDrop();
   const [contextMenu, setContextMenu] = useState<TabContextMenuState | null>(null);
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
+  const [importantNotes, setImportantNotes] = useState<Set<string>>(new Set());
 
   const handleTabMouseDown = (e: React.MouseEvent, filePath: string, fileName: string) => {
     // Don't start drag if clicking the close button
@@ -81,6 +86,53 @@ export function TabBar({
     }
   }, [contextMenu]);
 
+  // Listen for important notes changes
+  React.useEffect(() => {
+    const updateImportantNotes = () => {
+      const important = new Set<string>();
+      openFiles.forEach(file => {
+        if (isImportantNote(file.path)) {
+          important.add(file.path);
+        }
+      });
+      setImportantNotes(important);
+    };
+
+    updateImportantNotes();
+    window.addEventListener('importantNotesChanged', updateImportantNotes);
+    return () => window.removeEventListener('importantNotesChanged', updateImportantNotes);
+  }, [openFiles]);
+
+  // Track cursor position for drag preview
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (dragStartPos && draggedTab) {
+        const dx = Math.abs(e.clientX - dragStartPos.x);
+        const dy = Math.abs(e.clientY - dragStartPos.y);
+
+        // Update cursor position if dragging or moved past threshold
+        if (dx > 5 || dy > 5) {
+          setCursorPos({ x: e.clientX, y: e.clientY });
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setCursorPos(null);
+      setDragStartPos(null);
+      setDraggedTab(null);
+    };
+
+    if (dragStartPos) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [dragStartPos, draggedTab, setDragStartPos, setDraggedTab]);
+
   return (
     <div className="tab-bar">
       {showGraphTab && (
@@ -111,6 +163,12 @@ export function TabBar({
             }}
             title={displayName}
           >
+            {importantNotes.has(file.path) && (
+              <StarSolidIcon
+                className="tab-star-icon"
+                style={{ width: '14px', height: '14px', color: '#fbbf24', flexShrink: 0 }}
+              />
+            )}
             <span className="tab-name">{displayName}</span>
             <button
               className="tab-close"
@@ -141,14 +199,62 @@ export function TabBar({
           <div
             className="tab-context-menu-item"
             onClick={() => {
+              toggleImportantNote(contextMenu.filePath);
+              window.dispatchEvent(new CustomEvent('importantNotesChanged'));
+              setContextMenu(null);
+            }}
+          >
+            {importantNotes.has(contextMenu.filePath) ? (
+              <>
+                <StarIcon className="menu-icon" style={{ width: '16px', height: '16px' }} />
+                <span>Unmark as Important</span>
+              </>
+            ) : (
+              <>
+                <StarSolidIcon className="menu-icon" style={{ width: '16px', height: '16px', color: '#fbbf24' }} />
+                <span>Mark as Important</span>
+              </>
+            )}
+          </div>
+          <div className="tab-context-menu-separator" />
+          <div
+            className="tab-context-menu-item"
+            onClick={() => {
               if (onRevealInTree) {
                 onRevealInTree(contextMenu.filePath);
               }
               setContextMenu(null);
             }}
           >
-            <span className="menu-icon">📂</span>
+            <FolderSolidIcon className="menu-icon" style={{ width: '16px', height: '16px' }} />
             <span>Reveal in File Tree</span>
+          </div>
+        </div>
+      )}
+
+      {/* Drag Preview - follows cursor */}
+      {cursorPos && draggedTab && (
+        <div
+          className="tab-drag-preview"
+          style={{
+            position: 'fixed',
+            left: `${cursorPos.x + 10}px`,
+            top: `${cursorPos.y + 10}px`,
+            pointerEvents: 'none',
+            zIndex: 10000,
+          }}
+        >
+          <div className="tab-drag-preview-content">
+            <DocumentIcon
+              className={`tab-drag-preview-icon ${
+                draggedTab.fileName.endsWith('.md') ? 'md-file' : ''
+              }`}
+            />
+            <span className="tab-drag-preview-name">
+              {draggedTab.fileName.endsWith('.md')
+                ? draggedTab.fileName.slice(0, -3)
+                : draggedTab.fileName}
+            </span>
           </div>
         </div>
       )}

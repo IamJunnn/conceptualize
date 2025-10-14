@@ -36,6 +36,13 @@ interface ContextMenuState {
   itemName: string;
 }
 
+// Helper function to check if a file can be viewed (editable or previewable)
+function isFileViewable(fileName: string): boolean {
+  const ext = fileName.toLowerCase().split('.').pop();
+  const viewableExtensions = ['md', 'txt', 'pdf', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'webp', 'bmp', 'ico', 'doc', 'docx', 'xls', 'xlsx'];
+  return viewableExtensions.includes(ext || '');
+}
+
 function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -545,6 +552,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
   }
 
+  const handleOpenExternal = async (itemPath: string) => {
+    try {
+      await invoke('open_file_external', { path: itemPath })
+    } catch (error) {
+      console.error('Error opening file externally:', error)
+      alert('Failed to open file in external application')
+    }
+  }
+
   const handleChangeFolderPath = async () => {
     try {
       const newFolder = await invoke<string | null>('select_folder')
@@ -965,6 +981,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           onCreateFolder={handleCreateFolder}
           onRefresh={handleRefresh}
           onRevealInExplorer={handleRevealInExplorer}
+          onOpenExternal={handleOpenExternal}
           onOpenInSecondPane={handleOpenInSecondPane}
           allPaths={getAllPaths(fileTree)}
         />

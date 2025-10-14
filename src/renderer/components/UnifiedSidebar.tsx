@@ -1,5 +1,6 @@
 import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
-import { FolderIcon as FolderSolidIcon } from '@heroicons/react/24/solid';
+import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+import { isImportantNote } from '../../utils/importantNotes';
 import React from 'react';
 import './UnifiedSidebar.css';
 
@@ -78,6 +79,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   const [isOpen, setIsOpen] = React.useState(getSavedFolderState());
   const [isHovered, setIsHovered] = React.useState(false);
   const [isDragOver, setIsDragOver] = React.useState(false);
+  const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+
+  // Listen for important notes changes to re-render
+  React.useEffect(() => {
+    const handleImportantNotesChanged = () => {
+      forceUpdate();
+    };
+    window.addEventListener('importantNotesChanged', handleImportantNotesChanged);
+    return () => window.removeEventListener('importantNotesChanged', handleImportantNotesChanged);
+  }, []);
 
   const isCurrentlyEditing = editing?.type === 'rename' && editing.path === node.path;
   const isAddingChild = isOpen && (editing?.type === 'new-note' || editing?.type === 'new-folder') && editing.path === node.path;
@@ -88,7 +99,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   // Save folder state to localStorage when it changes
   const saveFolderState = (path: string, state: boolean) => {
     const savedStates = localStorage.getItem('folderStates');
-    let states = {};
+    let states: Record<string, boolean> = {};
     if (savedStates) {
       try {
         states = JSON.parse(savedStates);
@@ -218,6 +229,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
           )}
         </div>
 
+        {/* Star icon for important files */}
+        {node.type === 'file' && isImportantNote(node.path) && (
+          <StarSolidIcon
+            className="important-star-icon"
+            style={{ width: '14px', height: '14px', color: '#fbbf24', flexShrink: 0, marginRight: '4px' }}
+          />
+        )}
+
         {/* Name or EditInput */}
         {isCurrentlyEditing ? (
           <EditInput
@@ -250,8 +269,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
           }}
           onMouseLeave={(e) => {
             // Only clear if we're actually leaving the children area
-            const relatedTarget = e.relatedTarget as HTMLElement;
-            if (!e.currentTarget.contains(relatedTarget)) {
+            const relatedTarget = e.relatedTarget as Node | null;
+            if (!relatedTarget || !(e.currentTarget as Node).contains(relatedTarget)) {
               setIsDragOver(false);
               if (dragState.hoveredFolder === node.path) {
                 setDragState(prev => ({ ...prev, hoveredFolder: null }));
@@ -305,6 +324,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
+  const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
   const sidebarContentRef = React.useRef<HTMLDivElement>(null);
 
   // Shared drag state for all tree nodes
@@ -365,7 +385,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
       // Open all parent folders
       const savedStates = localStorage.getItem('folderStates');
-      let states = {};
+      let states: Record<string, boolean> = {};
       if (savedStates) {
         try {
           states = JSON.parse(savedStates);
@@ -379,6 +399,9 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
         states[path] = true;
       });
       localStorage.setItem('folderStates', JSON.stringify(states));
+
+      // Force re-render to expand folders
+      setTreeKey(prev => prev + 1);
 
       // Highlight the file
       setHighlightedPath(filePath);
@@ -582,7 +605,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
         )}
         {fileTree.map((node: FileTreeNode) => (
           <TreeNode
-            key={node.path}
+            key={`${node.path}-${treeKey}`}
             node={node}
             onSelectFile={onSelectFile}
             level={0}

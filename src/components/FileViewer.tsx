@@ -1,6 +1,8 @@
 import EditorTabMilkdown from './EditorTabMilkdown'
 import PdfViewer from './PdfViewer'
 import ImageViewer from './ImageViewer'
+import WordViewer from './WordViewer'
+import ExcelViewer from './ExcelViewer'
 
 interface FileViewerProps {
   filePath: string
@@ -15,7 +17,7 @@ interface FileViewerProps {
   isActive?: boolean
 }
 
-type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'unknown'
+type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'word' | 'excel' | 'unknown'
 
 function getFileType(fileName: string): FileType {
   const ext = fileName.toLowerCase().split('.').pop()
@@ -25,6 +27,12 @@ function getFileType(fileName: string): FileType {
   if (ext === 'pdf') return 'pdf'
   if (['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp', 'bmp', 'ico'].includes(ext || '')) {
     return 'image'
+  }
+  if (['doc', 'docx'].includes(ext || '')) {
+    return 'word'
+  }
+  if (['xls', 'xlsx'].includes(ext || '')) {
+    return 'excel'
   }
 
   return 'unknown'
@@ -55,6 +63,12 @@ function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, o
 
     case 'image':
       return <ImageViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+
+    case 'word':
+      return <WordViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+
+    case 'excel':
+      return <ExcelViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
 
     case 'unknown':
     default:

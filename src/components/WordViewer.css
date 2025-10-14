@@ -1,0 +1,40 @@
+.word-viewer {
+  height: 100%;
+  overflow: auto;
+  padding: 20px;
+  background-color: #1a1a1a;
+  color: #ddd;
+}
+
+.word-viewer-content {
+  max-width: 800px;
+  margin: 0 auto;
+  background-color: #2a2a2a;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.word-viewer-content h2 {
+  margin-bottom: 20px;
+  color: #64c8ca;
+  font-size: 18px;
+}
+
+.word-viewer-text {
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.loading-or-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  font-size: 14px;
+}
+
+.error-message {
+  color: #ff6b6b;
+}
