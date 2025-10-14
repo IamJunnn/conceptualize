@@ -39,7 +39,7 @@ interface ContextMenuState {
 // Helper function to check if a file can be viewed (editable or previewable)
 function isFileViewable(fileName: string): boolean {
   const ext = fileName.toLowerCase().split('.').pop();
-  const viewableExtensions = ['md', 'txt', 'pdf', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'webp', 'bmp', 'ico', 'doc', 'docx', 'xls', 'xlsx'];
+  const viewableExtensions = ['md', 'txt', 'pdf', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'webp', 'bmp', 'ico', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
   return viewableExtensions.includes(ext || '');
 }
 
@@ -47,6 +47,11 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
   const mainContentRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<{ revealFile: (filePath: string) => void }>(null);
+
+  // Refs to capture latest state values for event handlers
+  const isDraggingRef = useRef(isDragging);
+  const dropZoneRef = useRef(dropZone);
+
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('graph') // 'graph' | 'timeline' | file path
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
@@ -85,6 +90,12 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [sidebarWidth, setSidebarWidth] = useState(250) // Pixels
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
   const [sessionLoaded, setSessionLoaded] = useState(false) // Track if session was restored
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isDraggingRef.current = isDragging;
+    dropZoneRef.current = dropZone;
+  }, [isDragging, dropZone]);
 
   // Debug: Log split view state changes
   useEffect(() => {
@@ -326,7 +337,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       const dy = Math.abs(e.clientY - dragStartPos.y);
 
       // Set dragging flag once threshold is exceeded
-      if ((dx > 5 || dy > 5) && !isDragging) {
+      if ((dx > 5 || dy > 5) && !isDraggingRef.current) {
         console.log('🚀 DRAG START (tab):', draggedTab.fileName);
         setIsDragging(true);
       }
@@ -334,14 +345,25 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
     const handleGlobalMouseUp = () => {
       if (dragStartPos || draggedTab) {
-        console.log('🏁 DRAG END (tab)', { isDragging, dropZone });
+        // Use refs to get the latest values
+        const currentIsDragging = isDraggingRef.current;
+        const currentDropZone = dropZoneRef.current;
+
+        console.log('🏁 DRAG END (tab)', {
+          isDragging: currentIsDragging,
+          dropZone: currentDropZone,
+          draggedTab: draggedTab?.fileName
+        });
 
         // Only handle drop if we're dragging AND over a valid drop zone
-        if (isDragging && dropZone && (dropZone === 'left' || dropZone === 'right')) {
-          console.log('✅ Valid drop - handling');
+        if (currentIsDragging && currentDropZone && (currentDropZone === 'left' || currentDropZone === 'right')) {
+          console.log('✅ Valid drop - handling on', currentDropZone, 'side');
           handleTabDrop();
         } else {
-          console.log('❌ No valid drop zone - tab stays in place');
+          console.log('❌ No valid drop zone - tab stays in place', {
+            isDragging: currentIsDragging,
+            dropZone: currentDropZone
+          });
         }
 
         // Reset all drag state
@@ -359,7 +381,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       document.removeEventListener('mousemove', handleGlobalMouseMove);
       document.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [dragStartPos, draggedTab, isDragging, dropZone]);
+  }, [dragStartPos, draggedTab]);
 
   const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
     console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
@@ -658,12 +680,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const handleTabDrop = useCallback(() => {
     if (!draggedTab) return;
 
-    console.log('Handling tab drop:', { draggedTab, dropZone });
+    // Get the current drop zone from ref (not stale closure)
+    const currentDropZone = dropZoneRef.current;
+
+    console.log('Handling tab drop:', { draggedTab, dropZone: currentDropZone });
 
     const { filePath, fileName, sourcePane } = draggedTab;
 
     // Only handle if dropping on left or right edge
-    if (!dropZone || (dropZone !== 'left' && dropZone !== 'right')) {
+    if (!currentDropZone || (currentDropZone !== 'left' && currentDropZone !== 'right')) {
       console.log('No valid drop zone - ignoring drop');
       setDraggedTab(null);
       setDropZone(null);
@@ -671,53 +696,75 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
 
     // Handle left/right edge drops - create new splits or move between panes
-    if (dropZone === 'left' || dropZone === 'right') {
+    if (currentDropZone === 'left' || currentDropZone === 'right') {
       if (!splitView) {
         // Create new split view
-        console.log('Creating new split view');
-        setLeftPaneFiles(openFiles);
-        setLeftPaneTab(activeTab);
+        console.log('Creating new split view on', currentDropZone, 'side');
+
+        // Remove the dragged file from openFiles
+        const newOpenFiles = openFiles.filter(f => f.path !== filePath);
+
+        if (currentDropZone === 'left') {
+          // Drop on LEFT: dragged file goes to left pane, others to right
+          setLeftPaneFiles([{ path: filePath, name: fileName }]);
+          setLeftPaneTab(filePath);
+
+          setRightPaneFiles(newOpenFiles);
+          setRightPaneTab(newOpenFiles.length > 0 ? newOpenFiles[0].path : 'graph');
+          setActivePane('left');
+        } else {
+          // Drop on RIGHT: others stay on left, dragged file goes to right
+          setLeftPaneFiles(newOpenFiles);
+          setLeftPaneTab(newOpenFiles.length > 0 ? newOpenFiles[0].path : 'graph');
+
+          setRightPaneFiles([{ path: filePath, name: fileName }]);
+          setRightPaneTab(filePath);
+          setActivePane('right');
+        }
+
+        // Enable split view and clear single pane state
         setSplitView(true);
         setOpenFiles([]);
         setActiveTab('graph');
-
-        // Add dragged file to right pane
-        setRightPaneFiles([{ path: filePath, name: fileName }]);
-        setRightPaneTab(filePath);
-        setActivePane('right');
-
-        // Remove from source if it was in openFiles
-        const newOpenFiles = openFiles.filter(f => f.path !== filePath);
-        setLeftPaneFiles(newOpenFiles);
       } else {
-        // Already in split view - move tab to opposite pane
-        if (sourcePane === 'left') {
-          // Move from left to right
-          const newLeftFiles = leftPaneFiles.filter(f => f.path !== filePath);
-          setLeftPaneFiles(newLeftFiles);
+        // Already in split view - move tab based on drop zone
+        console.log('Moving tab in split view from', sourcePane, 'to', currentDropZone);
 
-          const existingInRight = rightPaneFiles.find(f => f.path === filePath);
-          if (!existingInRight) {
-            setRightPaneFiles([...rightPaneFiles, { path: filePath, name: fileName }]);
-          }
-          setRightPaneTab(filePath);
-          setActivePane('right');
-        } else if (sourcePane === 'right') {
-          // Move from right to left
-          const newRightFiles = rightPaneFiles.filter(f => f.path !== filePath);
-          setRightPaneFiles(newRightFiles);
+        if (currentDropZone === 'left') {
+          // Drop on LEFT pane
+          if (sourcePane === 'right') {
+            // Move from right to left
+            const newRightFiles = rightPaneFiles.filter(f => f.path !== filePath);
+            setRightPaneFiles(newRightFiles);
 
-          const existingInLeft = leftPaneFiles.find(f => f.path === filePath);
-          if (!existingInLeft) {
-            setLeftPaneFiles([...leftPaneFiles, { path: filePath, name: fileName }]);
-          }
-          setLeftPaneTab(filePath);
-          setActivePane('left');
+            const existingInLeft = leftPaneFiles.find(f => f.path === filePath);
+            if (!existingInLeft) {
+              setLeftPaneFiles([...leftPaneFiles, { path: filePath, name: fileName }]);
+            }
+            setLeftPaneTab(filePath);
+            setActivePane('left');
 
-          // Close split if right pane is empty
-          if (newRightFiles.length === 0) {
-            handleCloseSplitView();
+            // Close split if right pane is empty
+            if (newRightFiles.length === 0) {
+              handleCloseSplitView();
+            }
           }
+          // If already in left pane, do nothing
+        } else if (currentDropZone === 'right') {
+          // Drop on RIGHT pane
+          if (sourcePane === 'left') {
+            // Move from left to right
+            const newLeftFiles = leftPaneFiles.filter(f => f.path !== filePath);
+            setLeftPaneFiles(newLeftFiles);
+
+            const existingInRight = rightPaneFiles.find(f => f.path === filePath);
+            if (!existingInRight) {
+              setRightPaneFiles([...rightPaneFiles, { path: filePath, name: fileName }]);
+            }
+            setRightPaneTab(filePath);
+            setActivePane('right');
+          }
+          // If already in right pane, do nothing
         }
       }
     }
@@ -725,7 +772,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     // Clear drag state
     setDraggedTab(null);
     setDropZone(null);
-  }, [draggedTab, dropZone, splitView, openFiles, activeTab, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab]);
+  }, [draggedTab, splitView, openFiles, activeTab, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab]);
 
 
   return (

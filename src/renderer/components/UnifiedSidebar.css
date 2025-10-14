@@ -89,11 +89,11 @@
 }
 
 .sidebar-content::-webkit-scrollbar-track {
-  background: transparent;
+  background: #1e1e1e;
 }
 
 .sidebar-content::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: #3e3e3e;
   border-radius: 5px;
 }
 

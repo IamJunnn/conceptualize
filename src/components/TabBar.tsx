@@ -114,24 +114,19 @@ export function TabBar({
         if (dx > 5 || dy > 5) {
           setCursorPos({ x: e.clientX, y: e.clientY });
         }
+      } else {
+        // Clear cursor position when drag ends
+        setCursorPos(null);
       }
-    };
-
-    const handleMouseUp = () => {
-      setCursorPos(null);
-      setDragStartPos(null);
-      setDraggedTab(null);
     };
 
     if (dragStartPos) {
       document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [dragStartPos, draggedTab, setDragStartPos, setDraggedTab]);
+  }, [dragStartPos, draggedTab]);
 
   return (
     <div className="tab-bar">

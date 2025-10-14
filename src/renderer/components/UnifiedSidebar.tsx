@@ -270,7 +270,10 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
           onMouseLeave={(e) => {
             // Only clear if we're actually leaving the children area
             const relatedTarget = e.relatedTarget as Node | null;
-            if (!relatedTarget || !(e.currentTarget as Node).contains(relatedTarget)) {
+            const currentTarget = e.currentTarget as Node;
+
+            // If relatedTarget is null or not within currentTarget, we're leaving
+            if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
               setIsDragOver(false);
               if (dragState.hoveredFolder === node.path) {
                 setDragState(prev => ({ ...prev, hoveredFolder: null }));

@@ -35,6 +35,16 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) 
     loadGraphData();
   }, [rootPath, hiddenPaths]);
 
+  // Reload graph when important notes change
+  useEffect(() => {
+    const handleImportantNotesChange = () => {
+      loadGraphData();
+    };
+
+    window.addEventListener('importantNotesChanged', handleImportantNotesChange);
+    return () => window.removeEventListener('importantNotesChanged', handleImportantNotesChange);
+  }, []);
+
   const loadGraphData = async () => {
     setLoading(true);
     setError(null);
