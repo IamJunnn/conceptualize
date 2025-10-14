@@ -46,7 +46,9 @@
     "@types/d3": "^7.4.3",
     "@uiw/react-codemirror": "^4.25.2",
     "d3": "^7.9.0",
+    "mammoth": "^1.11.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "xlsx": "^0.18.5"
   }
 }

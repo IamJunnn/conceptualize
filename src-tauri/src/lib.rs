@@ -418,6 +418,18 @@ fn read_file(file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
+    let path = PathBuf::from(&file_path);
+    if !path.exists() {
+        return Err("File does not exist".to_string());
+    }
+    if !path.is_file() {
+        return Err("Path is not a file".to_string());
+    }
+    fs::read(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn write_file(file_path: String, content: String) -> CreateResult {
     let path = PathBuf::from(&file_path);
     match fs::write(&path, content) {
@@ -467,6 +479,41 @@ fn reveal_in_explorer(path: String) -> Result<(), String> {
     {
         std::process::Command::new("xdg-open")
             .arg(reveal_path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn open_file_external(path: String) -> Result<(), String> {
+    let path_buf = PathBuf::from(&path);
+
+    if !path_buf.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(&["/C", "start", "", &path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path)
             .spawn()
             .map_err(|e| e.to_string())?;
     }
@@ -635,7 +682,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_root_folder, select_folder, save_root_folder, get_file_tree, create_file, create_folder, get_markdown_files, delete_item, rename_item, move_item, read_file, write_file, reveal_in_explorer, find_file_by_name, search_files])
+        .invoke_handler(tauri::generate_handler![get_root_folder, select_folder, save_root_folder, get_file_tree, create_file, create_folder, get_markdown_files, delete_item, rename_item, move_item, read_file, read_binary_file, write_file, reveal_in_explorer, open_file_external, find_file_by_name, search_files])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

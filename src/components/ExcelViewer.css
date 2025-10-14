@@ -1,0 +1,92 @@
+.excel-viewer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #1a1a1a;
+  color: #ddd;
+}
+
+.excel-viewer-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+  background-color: #2a2a2a;
+}
+
+.excel-viewer-header h2 {
+  margin: 0;
+  color: #64c8ca;
+  font-size: 18px;
+}
+
+.excel-viewer-sheets {
+  display: flex;
+  gap: 4px;
+  padding: 8px 20px;
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #333;
+  overflow-x: auto;
+}
+
+.excel-viewer-sheet-button {
+  padding: 6px 12px;
+  background-color: #3a3a3a;
+  color: #ddd;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.excel-viewer-sheet-button.active {
+  background-color: #64c8ca;
+  color: #000;
+}
+
+.excel-viewer-content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.excel-viewer-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.excel-viewer-table td {
+  padding: 8px 12px;
+  border: 1px solid #444;
+  color: #ddd;
+}
+
+.excel-viewer-table tr:first-child td {
+  background-color: #3a3a3a;
+  font-weight: bold;
+}
+
+.loading-or-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+  font-size: 14px;
+}
+
+.error-message {
+  color: #ff6b6b;
+}
+
+.empty-sheet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #666;
+  font-size: 14px;
+}
