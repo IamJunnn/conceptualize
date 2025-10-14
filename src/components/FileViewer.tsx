@@ -3,6 +3,7 @@ import PdfViewer from './PdfViewer'
 import ImageViewer from './ImageViewer'
 import WordViewer from './WordViewer'
 import ExcelViewer from './ExcelViewer'
+import PowerPointViewer from './PowerPointViewer'
 
 interface FileViewerProps {
   filePath: string
@@ -17,7 +18,7 @@ interface FileViewerProps {
   isActive?: boolean
 }
 
-type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'word' | 'excel' | 'unknown'
+type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'word' | 'excel' | 'powerpoint' | 'unknown'
 
 function getFileType(fileName: string): FileType {
   const ext = fileName.toLowerCase().split('.').pop()
@@ -33,6 +34,9 @@ function getFileType(fileName: string): FileType {
   }
   if (['xls', 'xlsx'].includes(ext || '')) {
     return 'excel'
+  }
+  if (['ppt', 'pptx'].includes(ext || '')) {
+    return 'powerpoint'
   }
 
   return 'unknown'
@@ -69,6 +73,9 @@ function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, o
 
     case 'excel':
       return <ExcelViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+
+    case 'powerpoint':
+      return <PowerPointViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
 
     case 'unknown':
     default:

@@ -13,22 +13,20 @@
 .milkdown::-webkit-scrollbar,
 .milkdown *::-webkit-scrollbar,
 .editor-content::-webkit-scrollbar {
-  width: 12px;
+  width: 10px;
 }
 
 .milkdown::-webkit-scrollbar-track,
 .milkdown *::-webkit-scrollbar-track,
 .editor-content::-webkit-scrollbar-track {
   background: #1e1e1e;
-  border-left: 1px solid #2d2d2d;
 }
 
 .milkdown::-webkit-scrollbar-thumb,
 .milkdown *::-webkit-scrollbar-thumb,
 .editor-content::-webkit-scrollbar-thumb {
   background: #3e3e3e;
-  border-radius: 6px;
-  border: 2px solid #1e1e1e;
+  border-radius: 5px;
 }
 
 .milkdown::-webkit-scrollbar-thumb:hover,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { GraphNode, GraphLink, GraphData } from '../utils/graphUtils';
+import { isImportantNote } from '../utils/importantNotes';
 import './GraphEngine.css';
 
 interface GraphEngineProps {
@@ -131,7 +132,12 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
           return '#ecd1cd'; // pastel purple
         }
 
-        // Files: blue for markdown, gray for other file types
+        // Files: check if important first (applies to all file types)
+        if (d.type === 'file' && isImportantNote(d.path)) {
+          return '#fbbf24'; // yellow/gold for important files (any type)
+        }
+
+        // Regular files: blue for markdown, gray for other file types
         if (d.fileType === 'markdown') {
           return '#64c8ca'; // blue
         }
