@@ -10,6 +10,8 @@ interface EditorTabProps {
   onFileRenamed?: (oldPath: string, newPath: string, newName: string) => void
   onOpenFile?: (filePath: string, fileName: string) => void
   onFileCreated?: () => void
+  editorId?: string // Unique ID for autocomplete scoping
+  onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
 }
 
 interface SaveResult {
@@ -17,7 +19,7 @@ interface SaveResult {
   error?: string
 }
 
-function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated }: EditorTabProps) {
+function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate }: EditorTabProps) {
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -236,6 +238,8 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
           onChange={handleChange}
           onWikiLinkClick={handleWikiLinkClick}
           rootPath={rootPath}
+          editorId={editorId}
+          onPaneActivate={onPaneActivate}
         />
       </div>
     </div>

@@ -12,10 +12,11 @@ interface SearchResult {
 
 interface TitleBarProps {
   onSearchResultClick: (filePath: string, fileName: string, line?: number) => void
+  onGuideOpen?: (guideName: 'shortcuts' | 'markdown') => void
   rootPath: string
 }
 
-function TitleBar({ onSearchResultClick, rootPath }: TitleBarProps) {
+function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -49,7 +50,16 @@ function TitleBar({ onSearchResultClick, rootPath }: TitleBarProps) {
   // Handle search
   useEffect(() => {
     const handleSearch = async () => {
-      if (searchQuery.trim() === '') {
+      const trimmedQuery = searchQuery.trim()
+
+      if (trimmedQuery === '') {
+        setSearchResults([])
+        setShowDropdown(false)
+        return
+      }
+
+      // Require at least 2 characters
+      if (trimmedQuery.length < 2) {
         setSearchResults([])
         setShowDropdown(false)
         return
@@ -62,7 +72,7 @@ function TitleBar({ onSearchResultClick, rootPath }: TitleBarProps) {
         const { invoke } = await import('@tauri-apps/api/core')
         const rawResults = await invoke<any[]>('search_files', {
           rootPath,
-          query: searchQuery.trim()
+          query: trimmedQuery
         })
 
         // Convert snake_case from Rust to camelCase for TypeScript
@@ -131,6 +141,18 @@ function TitleBar({ onSearchResultClick, rootPath }: TitleBarProps) {
     setSearchQuery('')
   }
 
+  const handleGuideClick = (guideName: 'shortcuts' | 'markdown') => {
+    if (onGuideOpen) {
+      onGuideOpen(guideName)
+    }
+    setShowDropdown(false)
+    setSearchQuery('')
+  }
+
+  // Determine what to show in dropdown
+  const shouldShowQuickActions = showDropdown && searchQuery.trim().length < 2 && !isSearching
+  const shouldShowSearchResults = showDropdown && searchQuery.trim().length >= 2
+
   return (
     <div className="titlebar">
       {/* Logo */}
@@ -147,44 +169,63 @@ function TitleBar({ onSearchResultClick, rootPath }: TitleBarProps) {
           ref={searchInputRef}
           type="text"
           className="titlebar-search-input"
-          placeholder="Search files by name or content (Ctrl+P)"
+          placeholder="Search files by name or content (min 2 chars, Ctrl+P)"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          onFocus={() => searchQuery.trim() !== '' && setShowDropdown(true)}
+          onFocus={() => setShowDropdown(true)}
         />
 
         {/* Search Dropdown */}
         {showDropdown && (
           <div className="titlebar-search-dropdown">
-            {isSearching ? (
-              <div className="search-loading">
-                <div className="loading-spinner"></div>
-                <span>Searching...</span>
+            {shouldShowQuickActions ? (
+              <div className="search-quick-actions">
+                <div
+                  className="quick-action-item"
+                  onClick={() => handleGuideClick('shortcuts')}
+                >
+                  <span className="file-icon">📄</span>
+                  <span className="file-name">Shortcuts.md</span>
+                </div>
+                <div
+                  className="quick-action-item"
+                  onClick={() => handleGuideClick('markdown')}
+                >
+                  <span className="file-icon">📝</span>
+                  <span className="file-name">Note Syntax.md</span>
+                </div>
               </div>
-            ) : searchResults.length > 0 ? (
-              <div className="search-results">
-                {searchResults.map((result, index) => (
-                  <div
-                    key={`${result.filePath}-${index}`}
-                    className="search-result-item"
-                    onClick={() => handleResultClick(result)}
-                  >
-                    <div className="result-filename">{result.fileName}</div>
-                    <div className="result-path">{result.filePath}</div>
-                    {result.lineContent && (
-                      <div className="result-line">
-                        <span className="line-number">Line {result.line}:</span>
-                        <span className="line-content">{result.lineContent}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="search-no-results">
-                <span>No results found</span>
-              </div>
-            )}
+            ) : shouldShowSearchResults ? (
+              isSearching ? (
+                <div className="search-loading">
+                  <div className="loading-spinner"></div>
+                  <span>Searching...</span>
+                </div>
+              ) : searchResults.length > 0 ? (
+                <div className="search-results">
+                  {searchResults.map((result, index) => (
+                    <div
+                      key={`${result.filePath}-${index}`}
+                      className="search-result-item"
+                      onClick={() => handleResultClick(result)}
+                    >
+                      <div className="result-filename">{result.fileName}</div>
+                      <div className="result-path">{result.filePath}</div>
+                      {result.lineContent && (
+                        <div className="result-line">
+                          <span className="line-number">Line {result.line}:</span>
+                          <span className="line-content">{result.lineContent}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="search-no-results">
+                  <span>No results found</span>
+                </div>
+              )
+            ) : null}
           </div>
         )}
       </div>

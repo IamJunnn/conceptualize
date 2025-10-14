@@ -30,7 +30,6 @@ export const urlLinkPlugin = () => {
                 Decoration.inline(from, to, {
                   class: 'external-link',
                   'data-url': url,
-                  title: 'Open link (Ctrl + click)',
                 })
               )
             }

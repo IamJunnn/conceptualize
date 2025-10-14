@@ -6,6 +6,7 @@
   padding: 20px;
   background-color: #1e1e1e;
   color: #d4d4d4;
+  cursor: text; /* Show I-beam cursor over entire editor area */
 }
 
 /* Custom scrollbar to match dark theme */
@@ -46,6 +47,7 @@
 .milkdown .editor {
   min-height: 100%;
   outline: none;
+  cursor: text; /* Show I-beam cursor in editor */
 }
 
 /* Headings with larger font sizes */
@@ -115,41 +117,6 @@
   color: #40a6ff;
 }
 
-/* Remove default link styles for external links */
-.milkdown a.external-link {
-  text-decoration: none;
-  color: #C586C0;
-}
-
-.milkdown a.external-link:hover {
-  color: #C586C0;
-}
-
-/* Tooltip for external links */
-.milkdown a::before {
-  content: 'Follow link (ctrl + click)';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(-4px);
-  background-color: #1e1e1e;
-  color: #d4d4d4;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-  border: 1px solid #3e3e3e;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-}
-
-.milkdown a:hover::before {
-  opacity: 1;
-}
-
 /* External links (URLs) */
 .external-link {
   color: #C586C0;
@@ -165,35 +132,31 @@
   background-color: rgba(197, 134, 192, 0.15);
 }
 
-/* Tooltip for external links */
+/* Tooltip indicator for external links */
 .external-link::after {
-  content: attr(title);
+  content: 'Ctrl+Click to follow';
   position: absolute;
   bottom: 100%;
-  left: 0;
-  margin-bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
   background-color: #1e1e1e;
   color: #d4d4d4;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease 1s;
+  transition: opacity 0.15s ease;
   border: 1px solid #3e3e3e;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   z-index: 1000;
 }
 
 .external-link:hover::after {
   opacity: 1;
-  transition: opacity 0.2s ease 1s;
-}
-
-.external-link:not(:hover)::after {
-  opacity: 0;
-  transition: opacity 0s;
+  transition-delay: 0.3s;
 }
 
 /* Wiki-links - Complete */
@@ -211,29 +174,31 @@
   border-bottom: 1px solid #007acc;
 }
 
-/* Tooltip for wiki-links */
+/* Tooltip indicator for wiki links */
 .wiki-link::before {
-  content: attr(title);
+  content: 'Ctrl+Click to follow';
   position: absolute;
   bottom: 100%;
   left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(-50%);
+  margin-bottom: 6px;
   background-color: #1e1e1e;
   color: #d4d4d4;
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.15s ease;
   border: 1px solid #3e3e3e;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   z-index: 1000;
 }
 
 .wiki-link:hover::before {
   opacity: 1;
+  transition-delay: 0.3s;
 }
 
 /* Wiki-links - Incomplete (typing in progress) */
@@ -259,30 +224,6 @@
   border-bottom: 1px solid #ce9178;
 }
 
-/* Tooltip for non-existent wiki-links */
-.wiki-link-nonexistent::before {
-  content: 'Create note (ctrl + click)';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%) translateY(-4px);
-  background-color: #1e1e1e;
-  color: #d4d4d4;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-  border: 1px solid #3e3e3e;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
-}
-
-.wiki-link-nonexistent:hover::before {
-  opacity: 1;
-}
 
 /* Bold and italic */
 .milkdown strong {

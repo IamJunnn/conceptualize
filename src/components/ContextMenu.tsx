@@ -5,8 +5,11 @@ import {
   PencilIcon,
   TrashIcon,
   ArrowPathIcon,
-  FolderOpenIcon
+  FolderOpenIcon,
+  EyeSlashIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline';
+import { useGraphVisibility } from '../contexts/GraphVisibilityContext';
 import './ContextMenu.css';
 
 interface ContextMenuProps {
@@ -23,6 +26,7 @@ interface ContextMenuProps {
   onRefresh: () => void;
   onRevealInExplorer: (path: string) => void;
   onOpenInSecondPane?: (path: string, name: string) => void;
+  allPaths?: string[]; // All file/folder paths for cascade operations
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -39,8 +43,11 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onRefresh,
   onRevealInExplorer,
   onOpenInSecondPane,
+  allPaths = [],
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const { isHidden, hideItem, showItem } = useGraphVisibility();
+  const hidden = isHidden(itemPath);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -55,12 +62,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('keydown', handleEscape, true);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('keydown', handleEscape, true);
     };
   }, [onClose]);
 
@@ -121,6 +128,29 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       >
         <FolderOpenIcon className="menu-icon" />
         Reveal in File Explorer
+      </div>
+      <div className="context-menu-separator" />
+      <div
+        className="context-menu-item"
+        onClick={() => handleAction(() => {
+          if (hidden) {
+            showItem(itemPath, itemType === 'folder', allPaths);
+          } else {
+            hideItem(itemPath, itemType === 'folder', allPaths);
+          }
+        })}
+      >
+        {hidden ? (
+          <>
+            <EyeIcon className="menu-icon" />
+            Show in Graph
+          </>
+        ) : (
+          <>
+            <EyeSlashIcon className="menu-icon" />
+            Hide from Graph
+          </>
+        )}
       </div>
       <div className="context-menu-separator" />
       <div

@@ -29,7 +29,7 @@
 }
 
 .sidebar-divider:hover {
-  background: #007acc;
+  background: #64c8ca;
 }
 
 .main-content {
@@ -79,7 +79,7 @@
   min-width: 70px;
   background: #1e1e1e;
   color: #fff;
-  border-bottom: 2px solid #007acc;
+  border-bottom: 2px solid #64c8ca;
 }
 
 .file-tab {
@@ -112,7 +112,7 @@
   min-width: 70px;
   background: #1e1e1e;
   color: #fff;
-  border-bottom: 2px solid #007acc;
+  border-bottom: 2px solid #64c8ca;
   padding-right: 4px;
 }
 
@@ -204,9 +204,9 @@
   position: relative;
 }
 
+/* No outline on panes - VS Code style uses only tab indicator */
 .editor-pane.active {
-  outline: 2px solid #007acc;
-  outline-offset: -2px;
+  /* Active pane indicated by blue line on active tab only */
 }
 
 .pane-divider {
@@ -218,7 +218,7 @@
 }
 
 .pane-divider:hover {
-  background: #007acc;
+  background: #64c8ca;
 }
 
 .close-split-btn {

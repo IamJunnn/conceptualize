@@ -203,6 +203,40 @@
   pointer-events: none;
 }
 
+/* Quick Actions (shown when search is empty) */
+.search-quick-actions {
+  padding: 4px 0;
+}
+
+.quick-action-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #2d2d2d;
+  transition: background 0.15s;
+}
+
+.quick-action-item:hover {
+  background: #2a2d2e;
+}
+
+.quick-action-item:last-child {
+  border-bottom: none;
+}
+
+.quick-action-item .file-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.quick-action-item .file-name {
+  font-size: 14px;
+  color: #cccccc;
+  font-weight: 500;
+}
+
 /* Scrollbar for dropdown */
 .titlebar-search-dropdown::-webkit-scrollbar {
   width: 10px;

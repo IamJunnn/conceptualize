@@ -60,7 +60,7 @@
 }
 
 .action-button:hover {
-  background-color: #2a2d2e;
+  background-color: #3d3d3d;
 }
 
 .action-icon {
@@ -79,7 +79,7 @@
 
 .sidebar-content.root-drag-over {
   background-color: rgba(9, 71, 113, 0.3);
-  outline: 2px dashed #007acc;
+  outline: 2px dashed #64c8ca;
   outline-offset: -2px;
 }
 
@@ -123,11 +123,26 @@
 }
 
 .tree-node.hovered {
-  background-color: #2a2d2e;
+  background-color: #3d3d3d;
 }
 
 .tree-node.selected {
-  background-color: #37373d;
+  background-color: #4a4a4a;
+}
+
+.tree-node.highlighted {
+  background-color: rgba(100, 200, 202, 0.3) !important;
+  border-left: 3px solid #64c8ca;
+  animation: highlight-pulse 2s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% {
+    background-color: rgba(100, 200, 202, 0.3);
+  }
+  50% {
+    background-color: rgba(100, 200, 202, 0.5);
+  }
 }
 
 .tree-node.new-item {
@@ -137,8 +152,8 @@
 /* Drag over styling - when dragging over a folder */
 .tree-node.drag-over {
   background-color: rgba(9, 71, 113, 0.4) !important;
-  border-left: 3px solid #007acc;
-  box-shadow: inset 0 0 0 1px #007acc;
+  border-left: 3px solid #64c8ca;
+  box-shadow: inset 0 0 0 1px #64c8ca;
 }
 
 /* Dragging state - item being dragged */
@@ -222,7 +237,7 @@
 }
 
 .file-icon.md-file {
-  color: #007acc;
+  color: #64c8ca;
 }
 
 /* Node Name */
@@ -238,6 +253,15 @@
 /* Tree Node Children */
 .tree-node-children {
   width: 100%;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+/* Highlight the entire folder children area when dragging over it */
+.tree-node-children.folder-children-drag-over {
+  background-color: rgba(9, 71, 113, 0.2);
+  border-left: 2px solid #64c8ca;
+  margin-left: 2px;
 }
 
 /* Footer Section */
@@ -270,7 +294,7 @@
 
 /* Context Menu Support */
 .tree-node:focus {
-  outline: 1px solid #007acc;
+  outline: 1px solid #64c8ca;
   outline-offset: -1px;
 }
 
@@ -291,4 +315,41 @@
 .tree-node .node-icon,
 .tree-node .node-name {
   pointer-events: auto;
+}
+
+/* Drag Preview */
+.drag-preview {
+  pointer-events: none;
+  user-select: none;
+}
+
+.drag-preview-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(42, 42, 42, 0.95);
+  border: 1px solid #64c8ca;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  color: #ddd;
+  font-size: 13px;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+}
+
+.drag-preview-icon {
+  width: 16px;
+  height: 16px;
+  color: #cccccc;
+  flex-shrink: 0;
+}
+
+.drag-preview-icon.md-file {
+  color: #64c8ca;
+}
+
+.drag-preview-name {
+  color: #fff;
+  font-weight: 500;
 }

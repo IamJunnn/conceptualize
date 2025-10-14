@@ -94,6 +94,7 @@
   flex: 1;
   overflow: auto;
   background-color: #1e1e1e;
+  cursor: text; /* Show I-beam cursor over entire editor area */
 }
 
 .editor-content .cm-editor {

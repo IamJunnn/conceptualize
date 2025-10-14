@@ -24,14 +24,23 @@
 }
 
 .tab:hover {
-  background: #2a2a2a;
+  background: #3a3a3a;
   color: #ddd;
 }
 
 .tab.active {
   background: #2a2a2a;
   color: #fff;
-  border-bottom: 2px solid #3b82f6;
+}
+
+/* Blue line ONLY on active pane's active tab */
+.tab.active.pane-active {
+  border-bottom: 2px solid #64c8ca;
+}
+
+/* No blue line on inactive pane's tabs */
+.tab.active.pane-inactive {
+  border-bottom: 2px solid transparent;
 }
 
 .file-tab {
@@ -51,14 +60,23 @@
 }
 
 .file-tab:hover {
-  background: #2a2a2a;
+  background: #3a3a3a;
   color: #ddd;
 }
 
 .file-tab.active {
   background: #2a2a2a;
   color: #fff;
-  border-bottom: 2px solid #3b82f6;
+}
+
+/* Blue line ONLY on active pane's active tab */
+.file-tab.active.pane-active {
+  border-bottom: 2px solid #64c8ca;
+}
+
+/* No blue line on inactive pane's tabs */
+.file-tab.active.pane-inactive {
+  border-bottom: 2px solid transparent;
 }
 
 .file-tab.dragging {
@@ -94,6 +112,15 @@
   justify-content: center;
   width: 20px;
   height: 20px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Show close button on tab hover or when tab is active */
+.file-tab:hover .tab-close,
+.file-tab.active .tab-close {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .tab-close:hover {
@@ -116,4 +143,39 @@
 .close-split-btn:hover {
   background: #2a2a2a;
   color: #fff;
+}
+
+/* Tab Context Menu */
+.tab-context-menu {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  padding: 4px 0;
+  min-width: 180px;
+  font-size: 13px;
+}
+
+.tab-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #ddd;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.tab-context-menu-item:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.tab-context-menu-item .menu-icon {
+  font-size: 16px;
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

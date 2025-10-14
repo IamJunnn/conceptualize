@@ -10,14 +10,18 @@ interface FileViewerProps {
   onOpenFile?: (filePath: string, fileName: string) => void
   onFileCreated?: () => void
   onFileRenamed?: (oldPath: string, newPath: string, newName: string) => void
+  onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
+  editorId?: string // Unique ID for autocomplete scoping
+  isActive?: boolean
 }
 
-type FileType = 'markdown' | 'pdf' | 'image' | 'unknown'
+type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'unknown'
 
 function getFileType(fileName: string): FileType {
   const ext = fileName.toLowerCase().split('.').pop()
 
   if (ext === 'md') return 'markdown'
+  if (ext === 'txt') return 'text'
   if (ext === 'pdf') return 'pdf'
   if (['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp', 'bmp', 'ico'].includes(ext || '')) {
     return 'image'
@@ -26,11 +30,12 @@ function getFileType(fileName: string): FileType {
   return 'unknown'
 }
 
-function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, onFileRenamed }: FileViewerProps) {
+function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive }: FileViewerProps) {
   const fileType = getFileType(fileName)
 
   switch (fileType) {
     case 'markdown':
+    case 'text':
       return (
         <EditorTabMilkdown
           filePath={filePath}
@@ -39,6 +44,9 @@ function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, o
           onOpenFile={onOpenFile}
           onFileCreated={onFileCreated}
           onFileRenamed={onFileRenamed}
+          onPaneActivate={onPaneActivate}
+          editorId={editorId}
+          isActive={isActive}
         />
       )
 

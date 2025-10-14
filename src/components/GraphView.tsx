@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import GraphEngine from './GraphEngine';
-import { buildGraphFromFiles, GraphData } from '../utils/graphUtils';
+import ConfirmModal from './ConfirmModal';
+import { buildGraphFromFiles, GraphData, GraphNode, getHiddenNodes } from '../utils/graphUtils';
+import { useGraphVisibility } from '../contexts/GraphVisibilityContext';
 import './GraphView.css';
 
 interface GraphViewProps {
   rootPath: string;
   onFileOpen?: (filePath: string, fileName: string) => void;
+  onNodeContextMenu?: (event: React.MouseEvent, node: any) => void;
 }
 
 interface MarkdownFile {
@@ -19,14 +22,18 @@ interface MarkdownFilesResult {
   folders: string[];
 }
 
-function GraphView({ rootPath, onFileOpen }: GraphViewProps) {
+function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
+  const [hiddenNodesData, setHiddenNodesData] = useState<GraphNode[]>([]);
+  const [totalNodes, setTotalNodes] = useState(0); // Total before filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const { hiddenPaths, showAll, getHiddenCount } = useGraphVisibility();
 
   useEffect(() => {
     loadGraphData();
-  }, [rootPath]);
+  }, [rootPath, hiddenPaths]);
 
   const loadGraphData = async () => {
     setLoading(true);
@@ -45,8 +52,16 @@ function GraphView({ rootPath, onFileOpen }: GraphViewProps) {
       }
 
       // Build graph data structure with all folders (including empty ones)
-      const data = buildGraphFromFiles(result.files, result.folders);
+      const dataWithoutFilter = buildGraphFromFiles(result.files, result.folders);
+      setTotalNodes(dataWithoutFilter.nodes.filter(n => n.type === 'file').length);
+
+      // Apply hidden paths filter
+      const data = buildGraphFromFiles(result.files, result.folders, hiddenPaths);
       setGraphData(data);
+
+      // Build hidden nodes for ghost rendering
+      const hiddenNodes = getHiddenNodes(result.files, result.folders, hiddenPaths);
+      setHiddenNodesData(hiddenNodes);
     } catch (err) {
       console.error('Failed to load graph data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load graph data');
@@ -118,13 +133,24 @@ function GraphView({ rootPath, onFileOpen }: GraphViewProps) {
     <div className="graph-view">
       <GraphEngine
         data={graphData}
+        hiddenNodes={hiddenNodesData}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
       />
       <div className="graph-stats">
         <span className="stat">
-          <strong>{graphData.nodes.filter(n => n.type === 'file').length}</strong> files
+          <strong>{graphData.nodes.filter(n => n.type === 'file').length}</strong>
+          {getHiddenCount() > 0 ? ` of ${totalNodes}` : ''} files
         </span>
+        {getHiddenCount() > 0 && (
+          <>
+            <span className="stat-divider">•</span>
+            <span className="stat hidden-count">
+              <strong>{getHiddenCount()}</strong> hidden
+            </span>
+          </>
+        )}
         <span className="stat-divider">•</span>
         <span className="stat">
           <strong>{graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length - 1}</strong> folders
@@ -133,10 +159,32 @@ function GraphView({ rootPath, onFileOpen }: GraphViewProps) {
         <span className="stat">
           <strong>{graphData.links.filter(l => l.type === 'conceptual').length}</strong> wiki-links
         </span>
+        {getHiddenCount() > 0 && (
+          <button
+            onClick={() => setShowConfirmModal(true)}
+            className="show-all-button"
+            title={`Show ${getHiddenCount()} hidden items`}
+          >
+            Show All
+          </button>
+        )}
         <button onClick={loadGraphData} className="refresh-graph-button" title="Refresh Graph">
           ↻
         </button>
       </div>
+
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        title="Show All Hidden Items"
+        message={`Are you sure you want to unhide ${getHiddenCount()} item${getHiddenCount() !== 1 ? 's' : ''}? This will make them visible in the graph again.`}
+        confirmText="Show All"
+        cancelText="Cancel"
+        onConfirm={() => {
+          showAll();
+          setShowConfirmModal(false);
+        }}
+        onCancel={() => setShowConfirmModal(false)}
+      />
     </div>
   );
 }

@@ -521,8 +521,10 @@ fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, S
     fn search_in_directory(
         dir_path: &Path,
         query: &str,
-        results: &mut Vec<SearchResult>,
-        root: &Path
+        filename_results: &mut Vec<SearchResult>,
+        content_results: &mut Vec<SearchResult>,
+        root: &Path,
+        max_results: usize
     ) -> Result<(), String> {
         let entries = fs::read_dir(dir_path).map_err(|e| e.to_string())?;
         let query_lower = query.to_lowercase();
@@ -539,17 +541,17 @@ fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, S
 
             if path.is_dir() {
                 // Recursively search subdirectories
-                search_in_directory(&path, query, results, root)?;
+                search_in_directory(&path, query, filename_results, content_results, root, max_results)?;
             } else if path.is_file() {
-                // Check if filename matches
-                if file_name.to_lowercase().contains(&query_lower) {
-                    let relative_path = path.strip_prefix(root)
-                        .unwrap_or(&path)
-                        .to_string_lossy()
-                        .to_string();
+                let relative_path = path.strip_prefix(root)
+                    .unwrap_or(&path)
+                    .to_string_lossy()
+                    .to_string();
 
-                    results.push(SearchResult {
-                        file_path: relative_path,
+                // Check if filename matches (search filename first)
+                if file_name.to_lowercase().contains(&query_lower) {
+                    filename_results.push(SearchResult {
+                        file_path: relative_path.clone(),
                         file_name: file_name.clone(),
                         line: None,
                         line_content: None,
@@ -557,36 +559,37 @@ fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, S
                     });
                 }
 
-                // Search file content (only for text files)
-                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    // Only search in text-based files
-                    if matches!(ext, "md" | "txt" | "json" | "toml" | "yaml" | "yml" | "rs" | "js" | "ts" | "tsx" | "jsx" | "css" | "html") {
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            let relative_path = path.strip_prefix(root)
-                                .unwrap_or(&path)
-                                .to_string_lossy()
-                                .to_string();
+                // Search file content (only for text files) if we haven't hit limit
+                if filename_results.len() + content_results.len() < max_results {
+                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                        // Only search in text-based files
+                        if matches!(ext, "md" | "txt" | "json" | "toml" | "yaml" | "yml" | "rs" | "js" | "ts" | "tsx" | "jsx" | "css" | "html") {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                let mut matches_in_file = 0;
 
-                            for (line_num, line) in content.lines().enumerate() {
-                                if line.to_lowercase().contains(&query_lower) {
-                                    // Truncate long lines
-                                    let truncated_line = if line.len() > 100 {
-                                        format!("{}...", &line[..100])
-                                    } else {
-                                        line.to_string()
-                                    };
+                                for (line_num, line) in content.lines().enumerate() {
+                                    if line.to_lowercase().contains(&query_lower) {
+                                        // Truncate long lines
+                                        let truncated_line = if line.len() > 100 {
+                                            format!("{}...", &line[..100])
+                                        } else {
+                                            line.to_string()
+                                        };
 
-                                    results.push(SearchResult {
-                                        file_path: relative_path.clone(),
-                                        file_name: file_name.clone(),
-                                        line: Some(line_num + 1),
-                                        line_content: Some(truncated_line),
-                                        match_type: "content".to_string(),
-                                    });
+                                        content_results.push(SearchResult {
+                                            file_path: relative_path.clone(),
+                                            file_name: file_name.clone(),
+                                            line: Some(line_num + 1),
+                                            line_content: Some(truncated_line),
+                                            match_type: "content".to_string(),
+                                        });
 
-                                    // Limit results per file to avoid too many matches
-                                    if results.iter().filter(|r| r.file_path == relative_path).count() >= 3 {
-                                        break;
+                                        matches_in_file += 1;
+
+                                        // Limit results per file to 3
+                                        if matches_in_file >= 3 {
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -595,8 +598,8 @@ fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, S
                 }
             }
 
-            // Limit total results to prevent performance issues
-            if results.len() >= 100 {
+            // Early termination if we hit the limit
+            if filename_results.len() + content_results.len() >= max_results {
                 return Ok(());
             }
         }
@@ -604,9 +607,20 @@ fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, S
         Ok(())
     }
 
-    let mut results = Vec::new();
+    let mut filename_results = Vec::new();
+    let mut content_results = Vec::new();
     let root = Path::new(&root_path);
-    search_in_directory(root, &query, &mut results, root)?;
+    let max_results = 50;
+
+    search_in_directory(root, &query, &mut filename_results, &mut content_results, root, max_results)?;
+
+    // Combine results: filename matches first, then content matches
+    let mut results = filename_results;
+    results.extend(content_results);
+
+    // Truncate to max_results in case we went over
+    results.truncate(max_results);
+
     Ok(results)
 }
 

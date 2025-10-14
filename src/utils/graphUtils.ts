@@ -144,7 +144,8 @@ export function extractFolderStructure(filePaths: string[]): {
  */
 export function buildGraphFromFiles(
   files: Array<{ path: string; content: string }>,
-  allFolders?: string[]
+  allFolders?: string[],
+  hiddenPaths?: Set<string>
 ): GraphData {
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
@@ -271,7 +272,92 @@ export function buildGraphFromFiles(
     });
   });
 
+  // Filter hidden nodes if hiddenPaths provided
+  if (hiddenPaths && hiddenPaths.size > 0) {
+    // Filter out hidden nodes
+    const visibleNodes = nodes.filter(node => !hiddenPaths.has(node.path));
+    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+
+    // Filter out links that connect to hidden nodes
+    const visibleLinks = links.filter(link => {
+      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
+      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+      return visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+    });
+
+    return { nodes: visibleNodes, links: visibleLinks };
+  }
+
   return { nodes, links };
+}
+
+/**
+ * Builds hidden nodes for ghost rendering in the graph
+ */
+export function getHiddenNodes(
+  files: Array<{ path: string; content: string }>,
+  allFolders?: string[],
+  hiddenPaths?: Set<string>
+): GraphNode[] {
+  if (!hiddenPaths || hiddenPaths.size === 0) {
+    return [];
+  }
+
+  const nodes: GraphNode[] = [];
+  const filePaths = files.map(f => f.path);
+
+  // Extract folder structure
+  let rootPath: string;
+  let folders: Set<string>;
+
+  if (allFolders && allFolders.length > 0) {
+    const normalizedFolders = allFolders.map(f => normalizePath(f));
+    rootPath = findCommonRoot([...filePaths, ...normalizedFolders]);
+    folders = new Set(normalizedFolders);
+  } else {
+    const result = extractFolderStructure(filePaths);
+    rootPath = result.rootPath;
+    folders = result.folders;
+  }
+
+  // Add root if hidden
+  if (rootPath && hiddenPaths.has(rootPath)) {
+    nodes.push({
+      id: rootPath,
+      name: getFolderName(rootPath),
+      path: rootPath,
+      type: 'root'
+    });
+  }
+
+  // Add hidden folders
+  folders.forEach(folderPath => {
+    if (folderPath !== rootPath && hiddenPaths.has(folderPath)) {
+      nodes.push({
+        id: folderPath,
+        name: getFolderName(folderPath),
+        path: folderPath,
+        type: 'folder'
+      });
+    }
+  });
+
+  // Add hidden files
+  files.forEach(file => {
+    if (hiddenPaths.has(file.path)) {
+      const nodeName = pathToNodeName(file.path);
+      const isMarkdown = file.path.toLowerCase().endsWith('.md');
+      nodes.push({
+        id: file.path,
+        name: nodeName,
+        path: file.path,
+        type: 'file',
+        fileType: isMarkdown ? 'markdown' : 'other'
+      });
+    }
+  });
+
+  return nodes;
 }
 
 /**
