@@ -159,6 +159,31 @@
   color: #555;
 }
 
+.stat.hidden-count strong {
+  color: #ef4444;
+}
+
+.show-all-button {
+  padding: 4px 12px;
+  background-color: #b64ac8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.show-all-button:hover {
+  background-color: #a23ab5;
+}
+
+.show-all-button:active {
+  transform: scale(0.98);
+}
+
 .refresh-graph-button {
   display: flex;
   align-items: center;

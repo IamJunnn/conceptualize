@@ -31,13 +31,16 @@ interface TreeNodeProps {
     draggedPath: string | null;
     dragStartPos: { x: number; y: number } | null;
     hoveredFolder: string | null;
+    draggedNode: FileTreeNode | null;
   };
   setDragState: React.Dispatch<React.SetStateAction<{
     isDragging: boolean;
     draggedPath: string | null;
     dragStartPos: { x: number; y: number } | null;
     hoveredFolder: string | null;
+    draggedNode: FileTreeNode | null;
   }>>;
+  highlightedPath: string | null;
 }
 
 // Define FileTreeNode and EditingState types
@@ -56,7 +59,7 @@ interface EditingState {
 // Corrected the import path for EditInput
 import EditInput from './EditInput';
 
-const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState }) => {
+const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, highlightedPath }) => {
   // Load saved folder state from localStorage, default to true (open) for first time
   const getSavedFolderState = () => {
     if (node.type !== 'folder') return true;
@@ -148,7 +151,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       isDragging: false,
       draggedPath: node.path,
       dragStartPos: { x: e.clientX, y: e.clientY },
-      hoveredFolder: null
+      hoveredFolder: null,
+      draggedNode: node
     });
 
     console.log('🖱️ Mouse down on:', node.name);
@@ -175,11 +179,14 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
     }
   };
 
+  const isHighlighted = highlightedPath === node.path;
+
   return (
     <div className="tree-node-container">
       <div
-        className={`tree-node ${isHovered ? 'hovered' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragging ? 'dragging' : ''}`}
+        className={`tree-node ${isHovered ? 'hovered' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragging ? 'dragging' : ''} ${isHighlighted ? 'highlighted' : ''}`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
+        data-file-path={node.path}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         onMouseDown={handleMouseDown}
@@ -230,7 +237,28 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 
       {/* Children */}
       {isOpen && node.type === 'folder' && (
-        <div className="tree-node-children">
+        <div
+          className={`tree-node-children ${isDragOver ? 'folder-children-drag-over' : ''}`}
+          onMouseEnter={(e) => {
+            // When hovering over the children area, set the parent folder as hovered
+            if (dragState.draggedPath && dragState.draggedPath !== node.path) {
+              e.stopPropagation();
+              setIsDragOver(true);
+              setDragState(prev => ({ ...prev, hoveredFolder: node.path }));
+              console.log('🎯 Mouse enter folder children area:', node.name);
+            }
+          }}
+          onMouseLeave={(e) => {
+            // Only clear if we're actually leaving the children area
+            const relatedTarget = e.relatedTarget as HTMLElement;
+            if (!e.currentTarget.contains(relatedTarget)) {
+              setIsDragOver(false);
+              if (dragState.hoveredFolder === node.path) {
+                setDragState(prev => ({ ...prev, hoveredFolder: null }));
+              }
+            }
+          }}
+        >
           {node.children?.map((child: FileTreeNode) => (
             <TreeNode
               key={child.path}
@@ -243,6 +271,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
               onMoveItem={onMoveItem}
               dragState={dragState}
               setDragState={setDragState}
+              highlightedPath={highlightedPath}
             />
           ))}
           {isAddingChild && (
@@ -272,9 +301,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   );
 };
 
-const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
+const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
   const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
+  const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
+  const sidebarContentRef = React.useRef<HTMLDivElement>(null);
 
   // Shared drag state for all tree nodes
   const [dragState, setDragState] = React.useState<{
@@ -282,17 +313,93 @@ const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
     draggedPath: string | null;
     dragStartPos: { x: number; y: number } | null;
     hoveredFolder: string | null; // Track which folder we're hovering over
+    draggedNode: FileTreeNode | null; // Store the node being dragged
   }>({
     isDragging: false,
     draggedPath: null,
     dragStartPos: null,
-    hoveredFolder: null
+    hoveredFolder: null,
+    draggedNode: null
   });
+
+  // State for drag preview cursor position
+  const [cursorPos, setCursorPos] = React.useState<{ x: number; y: number } | null>(null);
 
   console.log('🔄 UnifiedSidebar render - onMoveItem is:', onMoveItem ? 'defined ✅' : 'undefined ❌');
 
   const folderName = getRootPath().split(/\\/g).pop(); // Extract folder name from path
   const rootPath = getRootPath();
+
+  // Helper function to find all parent paths of a file
+  const getParentPaths = (filePath: string, tree: FileTreeNode[]): string[] => {
+    const parents: string[] = [];
+
+    const findParents = (nodes: FileTreeNode[], targetPath: string): boolean => {
+      for (const node of nodes) {
+        if (node.path === targetPath) {
+          return true;
+        }
+
+        if (node.children) {
+          if (findParents(node.children, targetPath)) {
+            parents.push(node.path);
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    findParents(tree, filePath);
+    return parents.reverse(); // Return in top-down order
+  };
+
+  // Expose revealFile function via ref
+  React.useImperativeHandle(ref, () => ({
+    revealFile: (filePath: string) => {
+      console.log('🔍 Revealing file:', filePath);
+
+      // Get all parent folders
+      const parentPaths = getParentPaths(filePath, fileTree);
+      console.log('📁 Parent paths:', parentPaths);
+
+      // Open all parent folders
+      const savedStates = localStorage.getItem('folderStates');
+      let states = {};
+      if (savedStates) {
+        try {
+          states = JSON.parse(savedStates);
+        } catch (e) {
+          states = {};
+        }
+      }
+
+      // Set all parents to open
+      parentPaths.forEach(path => {
+        states[path] = true;
+      });
+      localStorage.setItem('folderStates', JSON.stringify(states));
+
+      // Highlight the file
+      setHighlightedPath(filePath);
+
+      // Scroll to the file after a short delay to allow folders to expand
+      setTimeout(() => {
+        const element = document.querySelector(`[data-file-path="${filePath}"]`);
+        if (element && sidebarContentRef.current) {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+          });
+        }
+      }, 100);
+
+      // Remove highlight after animation
+      setTimeout(() => {
+        setHighlightedPath(null);
+      }, 2000);
+    }
+  }));
 
   // Global mouse event listeners for drag (single set for entire sidebar)
   React.useEffect(() => {
@@ -308,6 +415,11 @@ const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
       if ((dx > 5 || dy > 5) && !dragState.isDragging) {
         console.log('🚀 DRAG START:', dragState.draggedPath);
         setDragState(prev => ({ ...prev, isDragging: true }));
+      }
+
+      // Update cursor position for drag preview
+      if (dragState.isDragging || (dx > 5 || dy > 5)) {
+        setCursorPos({ x: e.clientX, y: e.clientY });
       }
     };
 
@@ -342,8 +454,12 @@ const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
           isDragging: false,
           draggedPath: null,
           dragStartPos: null,
-          hoveredFolder: null
+          hoveredFolder: null,
+          draggedNode: null
         });
+
+        // Reset cursor position
+        setCursorPos(null);
       }
     };
 
@@ -440,6 +556,7 @@ const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
 
       {/* File Tree */}
       <div
+        ref={sidebarContentRef}
         className={`sidebar-content ${isRootDragOver ? 'root-drag-over' : ''}`}
         onDragOver={handleRootDragOver}
         onDragLeave={handleRootDragLeave}
@@ -475,11 +592,39 @@ const UnifiedSidebar: React.FC<UnifiedSidebarProps> = (props) => {
             onMoveItem={onMoveItem}
             dragState={dragState}
             setDragState={setDragState}
+            highlightedPath={highlightedPath}
           />
         ))}
       </div>
+
+      {/* Drag Preview - follows cursor */}
+      {dragState.isDragging && cursorPos && dragState.draggedNode && (
+        <div
+          className="drag-preview"
+          style={{
+            position: 'fixed',
+            left: `${cursorPos.x + 10}px`,
+            top: `${cursorPos.y + 10}px`,
+            pointerEvents: 'none',
+            zIndex: 10000,
+          }}
+        >
+          <div className="drag-preview-content">
+            <DocumentIcon
+              className={`drag-preview-icon ${
+                dragState.draggedNode.name.endsWith('.md') ? 'md-file' : ''
+              }`}
+            />
+            <span className="drag-preview-name">
+              {dragState.draggedNode.name.endsWith('.md')
+                ? dragState.draggedNode.name.slice(0, -3)
+                : dragState.draggedNode.name}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+});
 
 export { TreeNode, UnifiedSidebar };

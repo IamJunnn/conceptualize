@@ -33,7 +33,6 @@ export const wikiLinkPlugin = (options: WikiLinkPluginOptions = {}) => {
                 Decoration.inline(from, to, {
                   class: 'wiki-link',
                   'data-note-name': noteName,
-                  title: 'Follow link (ctrl + click)',
                 })
               )
             }

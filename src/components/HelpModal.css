@@ -1,0 +1,248 @@
+.help-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.help-modal {
+  background-color: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.help-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #3e3e42;
+  background-color: #252526;
+}
+
+.help-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #cccccc;
+}
+
+.help-modal-icon {
+  font-size: 18px;
+}
+
+.help-modal-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: #858585;
+  background-color: #3c3c3c;
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+.help-modal-close {
+  background: none;
+  border: none;
+  color: #cccccc;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.help-modal-close:hover {
+  background: #3e3e42;
+}
+
+.help-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+  background-color: #1e1e1e;
+}
+
+/* Markdown-like styling for guide content */
+.help-modal-content .help-section {
+  margin-bottom: 32px;
+}
+
+.help-modal-content .help-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #3e3e42;
+}
+
+.help-modal-content .help-section-icon {
+  font-size: 20px;
+}
+
+.help-modal-content .help-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  color: #b0b0b0;
+  font-size: 14px;
+}
+
+.help-modal-content .help-item-key {
+  background: #3c3c3c;
+  color: #cccccc;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid #555555;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  min-width: 120px;
+  text-align: center;
+}
+
+.help-modal-content .help-item-description {
+  flex: 1;
+  color: #d4d4d4;
+}
+
+.help-modal-content .help-code {
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 6px;
+  padding: 16px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  margin: 12px 0;
+}
+
+.help-modal-content .help-example {
+  margin: 16px 0;
+}
+
+.help-modal-content .help-example-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #cccccc;
+  margin-bottom: 8px;
+}
+
+.help-modal-content .help-example-content {
+  padding-left: 16px;
+  border-left: 3px solid #3e3e42;
+}
+
+.help-modal-content .help-tip {
+  background: #2d2d30;
+  border: 1px solid #3e3e42;
+  border-left: 4px solid #b64ac8;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 32px;
+}
+
+.help-modal-content .help-tip-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.help-modal-content .help-tip-content {
+  color: #d4d4d4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.help-modal-content .help-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 8px 0;
+}
+
+.help-modal-content .help-list li {
+  padding: 6px 0;
+  padding-left: 20px;
+  position: relative;
+  color: #d4d4d4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.help-modal-content .help-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #b64ac8;
+  font-weight: bold;
+}
+
+/* Scrollbar */
+.help-modal-content::-webkit-scrollbar {
+  width: 12px;
+}
+
+.help-modal-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.help-modal-content::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 6px;
+}
+
+.help-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}

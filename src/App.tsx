@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import SetupScreen from './components/SetupScreen'
 import MainUI from './components/MainUI'
 import { DragDropProvider } from './contexts/DragDropContext'
+import { GraphVisibilityProvider } from './contexts/GraphVisibilityContext'
 import './App.css'
 
 function App() {
@@ -65,11 +66,13 @@ function App() {
 
   // Main application UI
   return (
-    <DragDropProvider>
-      <div className="app-transition fade-in">
-        <MainUI rootPath={rootPath} onRootPathChange={handleRootPathChange} />
-      </div>
-    </DragDropProvider>
+    <GraphVisibilityProvider>
+      <DragDropProvider>
+        <div className="app-transition fade-in">
+          <MainUI rootPath={rootPath} onRootPathChange={handleRootPathChange} />
+        </div>
+      </DragDropProvider>
+    </GraphVisibilityProvider>
   )
 }
 

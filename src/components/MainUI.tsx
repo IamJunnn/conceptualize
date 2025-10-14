@@ -5,6 +5,7 @@ import TitleBar from './TitleBar'
 import GraphView from './GraphView'
 import FileViewer from './FileViewer'
 import ContextMenu from './ContextMenu'
+import HelpModal from './HelpModal'
 import { TabBar, OpenFile } from './TabBar'
 import { DropZoneOverlay } from './DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
@@ -38,6 +39,7 @@ interface ContextMenuState {
 function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
   const mainContentRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<{ revealFile: (filePath: string) => void }>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('graph') // 'graph' | 'timeline' | file path
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
@@ -45,6 +47,20 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [graphKey, setGraphKey] = useState(0) // For forcing graph refresh
+  const [activeGuide, setActiveGuide] = useState<'shortcuts' | 'markdown' | null>(null)
+
+  // Helper function to extract all paths from file tree
+  const getAllPaths = (nodes: FileTreeNode[]): string[] => {
+    const paths: string[] = [];
+    const traverse = (node: FileTreeNode) => {
+      paths.push(node.path);
+      if (node.children) {
+        node.children.forEach(traverse);
+      }
+    };
+    nodes.forEach(traverse);
+    return paths;
+  };
 
   // Split view state
   const [splitView, setSplitView] = useState(false)
@@ -61,6 +77,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState(250) // Pixels
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
+  const [sessionLoaded, setSessionLoaded] = useState(false) // Track if session was restored
 
   // Debug: Log split view state changes
   useEffect(() => {
@@ -72,6 +89,58 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       rightPaneTab
     })
   }, [splitView, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab])
+
+  // Load session from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedSession = localStorage.getItem('editorSession')
+      if (savedSession) {
+        const session = JSON.parse(savedSession)
+        console.log('📂 Restoring session:', session)
+
+        if (session.splitView) {
+          // Restore split view
+          setSplitView(true)
+          setLeftPaneFiles(session.leftPaneFiles || [])
+          setRightPaneFiles(session.rightPaneFiles || [])
+          setLeftPaneTab(session.leftPaneTab || 'graph')
+          setRightPaneTab(session.rightPaneTab || 'graph')
+          setActivePane(session.activePane || 'left')
+        } else {
+          // Restore single pane
+          setOpenFiles(session.openFiles || [])
+          setActiveTab(session.activeTab || 'graph')
+        }
+
+        setSessionLoaded(true)
+      } else {
+        setSessionLoaded(true)
+      }
+    } catch (error) {
+      console.error('Failed to restore session:', error)
+      setSessionLoaded(true)
+    }
+  }, [])
+
+  // Save session to localStorage whenever tabs change
+  useEffect(() => {
+    // Don't save until we've loaded the session
+    if (!sessionLoaded) return
+
+    const session = {
+      splitView,
+      openFiles,
+      activeTab,
+      leftPaneFiles,
+      rightPaneFiles,
+      leftPaneTab,
+      rightPaneTab,
+      activePane
+    }
+
+    console.log('💾 Saving session:', session)
+    localStorage.setItem('editorSession', JSON.stringify(session))
+  }, [sessionLoaded, splitView, openFiles, activeTab, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab, activePane])
 
   const loadFileTree = useCallback(async () => {
     try {
@@ -89,13 +158,46 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // ESC - Close help modal
+      if (e.key === 'Escape' && activeGuide) {
+        e.preventDefault()
+        setActiveGuide(null)
+        return
+      }
+
       // Ctrl+W or Cmd+W (Mac) - Close active tab
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         e.preventDefault() // Prevent browser from closing tab/window
 
-        // Only close if active tab is a file (not Graph or Timeline)
-        if (activeTab !== 'graph' && activeTab !== 'timeline') {
-          handleCloseFile(activeTab)
+        if (!splitView) {
+          // Single pane mode: close active file
+          if (activeTab !== 'graph' && activeTab !== 'timeline') {
+            handleCloseFile(activeTab)
+          }
+        } else {
+          // Split view mode: close active file in active pane
+          if (activePane === 'left') {
+            if (leftPaneTab !== 'graph' && leftPaneTab !== 'timeline') {
+              const newFiles = leftPaneFiles.filter(f => f.path !== leftPaneTab)
+              setLeftPaneFiles(newFiles)
+              if (newFiles.length > 0) {
+                setLeftPaneTab(newFiles[0].path)
+              } else {
+                setLeftPaneTab('graph')
+              }
+            }
+          } else if (activePane === 'right') {
+            if (rightPaneTab !== 'graph' && rightPaneTab !== 'timeline') {
+              const newFiles = rightPaneFiles.filter(f => f.path !== rightPaneTab)
+              setRightPaneFiles(newFiles)
+              if (newFiles.length > 0) {
+                setRightPaneTab(newFiles[0].path)
+              } else {
+                // Close split view when last tab in right pane is closed
+                handleCloseSplitView()
+              }
+            }
+          }
         }
       }
 
@@ -105,8 +207,21 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         if (splitView) {
           handleCloseSplitView()
         } else {
-          // Open split view with Graph in right pane
-          handleOpenInSecondPane('graph', 'Graph')
+          // Open split view: Current content on left, empty right pane
+          setSplitView(true)
+
+          // Transfer current state to left pane
+          setLeftPaneFiles(openFiles)
+          setLeftPaneTab(activeTab)
+
+          // Right pane: empty with null/empty state
+          setRightPaneFiles([])
+          setRightPaneTab('') // Empty string means no content will render
+
+          setActivePane('left')
+          // Clear single pane state
+          setOpenFiles([])
+          setActiveTab('graph')
         }
       }
     }
@@ -116,7 +231,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [activeTab, splitView]) // Re-bind when active tab or splitView changes
+  }, [activeTab, splitView, activeGuide, activePane, leftPaneTab, rightPaneTab, leftPaneFiles, rightPaneFiles, openFiles]) // Re-bind when active tab, splitView, or activeGuide changes
 
   // Handle pane resizing
   useEffect(() => {
@@ -365,6 +480,22 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     })
   }
 
+  const handleGraphNodeContextMenu = (e: React.MouseEvent, node: any) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Extract file name from node
+    const fileName = node.name + (node.fileType === 'markdown' ? '.md' : '')
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      itemPath: node.path,
+      itemType: node.type === 'folder' || node.type === 'root' ? 'folder' : 'file',
+      itemName: fileName
+    })
+  }
+
   const handleDeleteItem = async (itemPath: string) => {
     const confirmMessage = `Are you sure you want to delete this item? This action cannot be undone.`
     if (!window.confirm(confirmMessage)) {
@@ -426,6 +557,18 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     } catch (error) {
       console.error('Error selecting folder:', error)
       alert('Failed to select folder')
+    }
+  }
+
+  const handleGuideOpen = (guideName: 'shortcuts' | 'markdown') => {
+    console.log('Opening guide:', guideName)
+    setActiveGuide(guideName)
+  }
+
+  const handleRevealInTree = (filePath: string) => {
+    console.log('📂 Revealing in tree:', filePath)
+    if (sidebarRef.current) {
+      sidebarRef.current.revealFile(filePath)
     }
   }
 
@@ -574,6 +717,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       {/* Custom Title Bar */}
       <TitleBar
         onSearchResultClick={handleSelectFile}
+        onGuideOpen={handleGuideOpen}
         rootPath={rootPath}
       />
 
@@ -581,6 +725,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         {/* Left Sidebar - Explorer */}
         <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
           <UnifiedSidebar
+            ref={sidebarRef}
             fileTree={fileTree}
             onSelectFile={handleSelectFile}
             getRootPath={() => rootPath}
@@ -615,13 +760,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               onTabClose={handleCloseFile}
               dragStartPos={dragStartPos}
               setDragStartPos={setDragStartPos}
+              isPaneActive={true}
+              onRevealInTree={handleRevealInTree}
             />
             <div className="tab-content">
-              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} />}
+              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} />}
               {openFiles.map((file) => {
-                const isMarkdown = file.name.toLowerCase().endsWith('.md')
+                const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                 return activeTab === file.path && (
-                  isMarkdown ? (
+                  isEditable ? (
                     <FileViewer
                       key={file.path}
                       filePath={file.path}
@@ -662,7 +809,6 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             {/* Left Pane */}
             <div
               className={`editor-pane ${activePane === 'left' ? 'active' : ''}`}
-              onClick={() => setActivePane('left')}
               style={{ width: `${leftPaneWidth}%` }}
             >
               <TabBar
@@ -680,13 +826,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 }}
                 dragStartPos={dragStartPos}
                 setDragStartPos={setDragStartPos}
+                isPaneActive={activePane === 'left'}
+                onRevealInTree={handleRevealInTree}
               />
               <div className="tab-content">
-                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} />}
+                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} />}
                 {leftPaneFiles.map((file) => {
-                  const isMarkdown = file.name.toLowerCase().endsWith('.md')
+                  const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return leftPaneTab === file.path && (
-                    isMarkdown ? (
+                    isEditable ? (
                       <FileViewer
                         key={file.path}
                         filePath={file.path}
@@ -708,6 +856,9 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                           loadFileTree()
                           setGraphKey(prev => prev + 1)
                         }}
+                        onPaneActivate={() => setActivePane('left')}
+                        editorId="left"
+                        isActive={activePane === 'left'}
                       />
                     ) : (
                       <FileViewer
@@ -728,14 +879,13 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             {/* Right Pane */}
             <div
               className={`editor-pane ${activePane === 'right' ? 'active' : ''}`}
-              onClick={() => setActivePane('right')}
               style={{ flex: 1 }}
             >
               <TabBar
                 activeTab={rightPaneTab}
                 openFiles={rightPaneFiles}
                 pane="right"
-                showGraphTab={false}
+                showGraphTab={rightPaneFiles.length === 0 && rightPaneTab !== ''}
                 onTabClick={setRightPaneTab}
                 onTabClose={(filePath) => {
                   const newFiles = rightPaneFiles.filter(f => f.path !== filePath);
@@ -749,13 +899,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 }}
                 dragStartPos={dragStartPos}
                 setDragStartPos={setDragStartPos}
+                isPaneActive={activePane === 'right'}
+                onRevealInTree={handleRevealInTree}
               />
               <div className="tab-content">
-                {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} />}
+                {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
                 {rightPaneFiles.map((file) => {
-                  const isMarkdown = file.name.toLowerCase().endsWith('.md')
+                  const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return rightPaneTab === file.path && (
-                    isMarkdown ? (
+                    isEditable ? (
                       <FileViewer
                         key={file.path}
                         filePath={file.path}
@@ -777,6 +929,9 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                           loadFileTree()
                           setGraphKey(prev => prev + 1)
                         }}
+                        onPaneActivate={() => setActivePane('right')}
+                        editorId="right"
+                        isActive={activePane === 'right'}
                       />
                     ) : (
                       <FileViewer
@@ -811,6 +966,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           onRefresh={handleRefresh}
           onRevealInExplorer={handleRevealInExplorer}
           onOpenInSecondPane={handleOpenInSecondPane}
+          allPaths={getAllPaths(fileTree)}
+        />
+      )}
+
+      {/* Help Modal */}
+      {activeGuide && (
+        <HelpModal
+          guide={activeGuide}
+          onClose={() => setActiveGuide(null)}
         />
       )}
     </div>
