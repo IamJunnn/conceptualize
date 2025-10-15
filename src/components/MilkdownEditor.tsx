@@ -12,6 +12,7 @@ import { wikiLinkPlugin } from '../utils/wikiLinkPlugin'
 import { urlLinkPlugin } from '../utils/urlLinkPlugin'
 import { keyboardShortcuts } from '../utils/keyboardShortcuts'
 import { wikiLinkAutocompletePlugin } from '../utils/wikiLinkAutocompletePlugin'
+import { imageResizePlugin } from '../utils/imageResizePlugin'
 import WikiLinkAutocomplete from './WikiLinkAutocomplete'
 import { invoke } from '@tauri-apps/api/core'
 import '@milkdown/theme-nord/style.css'
@@ -257,6 +258,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       .use(urlLinkPlugin())
       .use(keyboardShortcuts())
       .use(wikiLinkAutocompletePlugin())
+      .use(imageResizePlugin())
 
     editorRef.current = editor
     return editor

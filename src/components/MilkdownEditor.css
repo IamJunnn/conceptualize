@@ -108,6 +108,53 @@
   line-height: 1.6;
 }
 
+/* Image resize functionality */
+.milkdown img {
+  max-width: 100%;
+  height: auto;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.milkdown img:hover {
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.5);
+}
+
+.image-resize-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.image-resize-wrapper img {
+  display: block;
+  max-width: none;
+}
+
+.selected-image-resize img {
+  box-shadow: 0 0 0 3px #64c8ca;
+  outline: none;
+}
+
+.image-resize-handle {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  background-color: #64c8ca;
+  border: 2px solid white;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.image-resize-handle:hover {
+  background-color: #7dd3d5;
+  transform: scale(1.2);
+}
+
 /* Links */
 .milkdown a {
   color: #007acc;
