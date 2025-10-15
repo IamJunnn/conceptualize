@@ -269,6 +269,76 @@
   margin: 0.25em 0;
 }
 
+/* Nested bullet point styles */
+/* Level 1: Filled circle (default) */
+.milkdown ul {
+  list-style-type: disc;
+}
+
+/* Level 2: Empty circle */
+.milkdown ul ul {
+  list-style-type: circle;
+}
+
+/* Level 3: Filled square */
+.milkdown ul ul ul {
+  list-style-type: square;
+}
+
+/* Level 4: Empty square (custom) */
+.milkdown ul ul ul ul {
+  list-style-type: square;
+}
+
+.milkdown ul ul ul ul > li::marker {
+  font-weight: 100;
+  opacity: 0.7;
+}
+
+/* Level 5+: Repeat pattern */
+.milkdown ul ul ul ul ul {
+  list-style-type: disc;
+}
+
+.milkdown ul ul ul ul ul ul {
+  list-style-type: circle;
+}
+
+/* Nested numbered list styles */
+/* Level 1: Numbers (1, 2, 3...) */
+.milkdown ol {
+  list-style-type: decimal;
+}
+
+/* Level 2: Lowercase letters (a, b, c...) */
+.milkdown ol ol {
+  list-style-type: lower-alpha;
+}
+
+/* Level 3: Lowercase roman numerals (i, ii, iii...) */
+.milkdown ol ol ol {
+  list-style-type: lower-roman;
+}
+
+/* Level 4: Uppercase letters (A, B, C...) */
+.milkdown ol ol ol ol {
+  list-style-type: upper-alpha;
+}
+
+/* Level 5: Uppercase roman numerals (I, II, III...) */
+.milkdown ol ol ol ol ol {
+  list-style-type: upper-roman;
+}
+
+/* Level 6+: Repeat pattern starting with numbers */
+.milkdown ol ol ol ol ol ol {
+  list-style-type: decimal;
+}
+
+.milkdown ol ol ol ol ol ol ol {
+  list-style-type: lower-alpha;
+}
+
 /* Blockquotes */
 .milkdown blockquote {
   border-left: 4px solid #6a6a6a;
