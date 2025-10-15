@@ -60,7 +60,7 @@
 
 /* Custom scrollbar */
 .wiki-link-autocomplete::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 .wiki-link-autocomplete::-webkit-scrollbar-track {

@@ -24,17 +24,27 @@ const EditInput: React.FC<EditInputProps> = ({ initialValue, onSave, onCancel, i
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      // Add .md extension back when saving if it's a file and doesn't already have it
-      const savedValue = isFile && !value.endsWith('.md') ? `${value}.md` : value;
-      onSave(savedValue);
+      // Only save if there's a value, otherwise cancel
+      if (value.trim()) {
+        // Add .md extension back when saving if it's a file and doesn't already have it
+        const savedValue = isFile && !value.endsWith('.md') ? `${value}.md` : value;
+        onSave(savedValue);
+      } else {
+        onCancel();
+      }
     }
     if (e.key === 'Escape') onCancel();
   };
 
   const handleBlur = () => {
-    // Add .md extension back when saving if it's a file and doesn't already have it
-    const savedValue = isFile && !value.endsWith('.md') ? `${value}.md` : value;
-    onSave(savedValue);
+    // Only save if there's a value, otherwise cancel
+    if (value.trim()) {
+      // Add .md extension back when saving if it's a file and doesn't already have it
+      const savedValue = isFile && !value.endsWith('.md') ? `${value}.md` : value;
+      onSave(savedValue);
+    } else {
+      onCancel();
+    }
   };
 
   return (

@@ -1,6 +1,7 @@
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './PowerPointViewer.css';
+import './CustomScrollbar.css';
 
 interface PowerPointViewerProps {
   filePath: string;
@@ -19,14 +20,14 @@ const PowerPointViewer: React.FC<PowerPointViewerProps> = ({ filePath, fileName 
   };
 
   return (
-    <div className="powerpoint-viewer">
+    <div className="powerpoint-viewer custom-scrollbar">
       {/* Header */}
       <div className="powerpoint-viewer-header">
         <h2>{fileName}</h2>
       </div>
 
       {/* Content */}
-      <div className="powerpoint-viewer-content">
+      <div className="powerpoint-viewer-content custom-scrollbar">
         <div className="powerpoint-message">
           <svg
             width="80"

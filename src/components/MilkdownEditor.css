@@ -13,13 +13,15 @@
 .milkdown::-webkit-scrollbar,
 .milkdown *::-webkit-scrollbar,
 .editor-content::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
+  cursor: default;
 }
 
 .milkdown::-webkit-scrollbar-track,
 .milkdown *::-webkit-scrollbar-track,
 .editor-content::-webkit-scrollbar-track {
   background: #1e1e1e;
+  cursor: default;
 }
 
 .milkdown::-webkit-scrollbar-thumb,
@@ -27,18 +29,21 @@
 .editor-content::-webkit-scrollbar-thumb {
   background: #3e3e3e;
   border-radius: 5px;
+  cursor: default;
 }
 
 .milkdown::-webkit-scrollbar-thumb:hover,
 .milkdown *::-webkit-scrollbar-thumb:hover,
 .editor-content::-webkit-scrollbar-thumb:hover {
   background: #4e4e4e;
+  cursor: default;
 }
 
 .milkdown::-webkit-scrollbar-thumb:active,
 .milkdown *::-webkit-scrollbar-thumb:active,
 .editor-content::-webkit-scrollbar-thumb:active {
   background: #5e5e5e;
+  cursor: default;
 }
 
 /* Editor content area */

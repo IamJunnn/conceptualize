@@ -85,7 +85,7 @@
 
 /* Scrollbar Styling */
 .sidebar-content::-webkit-scrollbar {
-  width: 10px;
+  width: 8px;
 }
 
 .sidebar-content::-webkit-scrollbar-track {
