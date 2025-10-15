@@ -97,6 +97,34 @@
   cursor: text; /* Show I-beam cursor over entire editor area */
 }
 
+/* Scrollbar styles for editor content */
+.editor-content::-webkit-scrollbar {
+  width: 8px;
+  height: 10px;
+  cursor: default !important;
+}
+
+.editor-content::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  cursor: default !important;
+}
+
+.editor-content::-webkit-scrollbar-thumb {
+  background: #3e3e3e;
+  border-radius: 5px;
+  cursor: default !important;
+}
+
+.editor-content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+  cursor: default !important;
+}
+
+.editor-content::-webkit-scrollbar-thumb:active {
+  background: #5e5e5e;
+  cursor: default !important;
+}
+
 .editor-content .cm-editor {
   height: 100%;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;

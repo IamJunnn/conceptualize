@@ -91,7 +91,16 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   }, []);
 
   const isCurrentlyEditing = editing?.type === 'rename' && editing.path === node.path;
-  const isAddingChild = isOpen && (editing?.type === 'new-note' || editing?.type === 'new-folder') && editing.path === node.path;
+  const isAddingChild = (editing?.type === 'new-note' || editing?.type === 'new-folder') && editing.path === node.path;
+
+  // Auto-open folder when creating a new item inside it
+  React.useEffect(() => {
+    if (isAddingChild && !isOpen) {
+      const newState = true;
+      setIsOpen(newState);
+      saveFolderState(node.path, newState);
+    }
+  }, [isAddingChild]);
 
   // Check if this node is being dragged
   const isDragging = dragState.isDragging && dragState.draggedPath === node.path;
@@ -147,12 +156,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 
   // Mouse-based drag and drop handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only allow dragging for files (for now)
-    if (node.type !== 'file' || isCurrentlyEditing) {
+    // Don't allow dragging while editing
+    if (isCurrentlyEditing) {
       return;
     }
 
-    // Don't start drag if clicking chevron
+    // Don't start drag if clicking chevron (for folders)
     const target = e.target as HTMLElement;
     if (target.closest('.chevron-container')) {
       return;
@@ -636,13 +645,17 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           }}
         >
           <div className="drag-preview-content">
-            <DocumentIcon
-              className={`drag-preview-icon ${
-                dragState.draggedNode.name.endsWith('.md') ? 'md-file' : ''
-              }`}
-            />
+            {dragState.draggedNode.type === 'folder' ? (
+              <FolderIcon className="drag-preview-icon folder-icon" />
+            ) : (
+              <DocumentIcon
+                className={`drag-preview-icon ${
+                  dragState.draggedNode.name.endsWith('.md') ? 'md-file' : ''
+                }`}
+              />
+            )}
             <span className="drag-preview-name">
-              {dragState.draggedNode.name.endsWith('.md')
+              {dragState.draggedNode.type === 'file' && dragState.draggedNode.name.endsWith('.md')
                 ? dragState.draggedNode.name.slice(0, -3)
                 : dragState.draggedNode.name}
             </span>
