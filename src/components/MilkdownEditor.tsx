@@ -13,6 +13,7 @@ import { urlLinkPlugin } from '../utils/urlLinkPlugin'
 import { keyboardShortcuts } from '../utils/keyboardShortcuts'
 import { wikiLinkAutocompletePlugin } from '../utils/wikiLinkAutocompletePlugin'
 import { imageResizePlugin } from '../utils/imageResizePlugin'
+import { slashCommandPlugin } from '../utils/slashCommandPlugin'
 import WikiLinkAutocomplete from './WikiLinkAutocomplete'
 import { invoke } from '@tauri-apps/api/core'
 import '@milkdown/theme-nord/style.css'
@@ -279,6 +280,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       .use(history)
       .use(clipboard)
       .use(listener)
+      .use(slashCommandPlugin())
       .use(wikiLinkPlugin({ onWikiLinkClick }))
       .use(urlLinkPlugin())
       .use(keyboardShortcuts())
@@ -376,8 +378,6 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   const handleNavigate = () => {}
   const handleClose = () => {}
 
-
-  // Handle clicks on the editor container to focus editor
   const handleContainerClick = (e: React.MouseEvent) => {
     // Activate the pane when editor is clicked (for split view)
     if (onPaneActivate) {
