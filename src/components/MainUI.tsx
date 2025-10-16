@@ -9,6 +9,7 @@ import HelpModal from './HelpModal'
 import { TabBar, OpenFile } from './TabBar'
 import { DropZoneOverlay } from './DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
+import { getFilesWithIncomingLinks } from '../utils/graphUtils'
 import './MainUI.css'
 
 interface MainUIProps {
@@ -60,6 +61,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [graphKey, setGraphKey] = useState(0) // For forcing graph refresh
   const [activeGuide, setActiveGuide] = useState<'shortcuts' | 'markdown' | null>(null)
+  const [filesWithIncomingLinks, setFilesWithIncomingLinks] = useState<Set<string>>(new Set())
 
   // Helper function to extract all paths from file tree
   const getAllPaths = (nodes: FileTreeNode[]): string[] => {
@@ -169,9 +171,24 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
   }, [rootPath])
 
+  // Update files with incoming links whenever the file tree changes
+  const updateFilesWithIncomingLinks = useCallback(async () => {
+    try {
+      // Get all file contents using the existing get_markdown_files command
+      const result = await invoke<{ files: Array<{ path: string; content: string }>; folders: string[] }>('get_markdown_files', { rootPath })
+
+      // Calculate which files have incoming wiki-links
+      const linkedFiles = getFilesWithIncomingLinks(result.files)
+      setFilesWithIncomingLinks(linkedFiles)
+    } catch (error) {
+      console.error('Failed to update files with incoming links:', error)
+    }
+  }, [rootPath])
+
   useEffect(() => {
     loadFileTree()
-  }, [loadFileTree])
+    updateFilesWithIncomingLinks()
+  }, [loadFileTree, updateFilesWithIncomingLinks])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -450,6 +467,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
         if (result.success) {
           await loadFileTree()
+          await updateFilesWithIncomingLinks()
           console.log('Created file:', result.path)
           // TODO: Open the new file in editor
         } else {
@@ -464,6 +482,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
         if (result.success) {
           await loadFileTree()
+          await updateFilesWithIncomingLinks()
           console.log('Created folder:', result.path)
         } else {
           console.error('Failed to create folder:', result.error)
@@ -478,6 +497,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
         if (result.success) {
           await loadFileTree()
+          await updateFilesWithIncomingLinks()
           console.log('Renamed item:', result.path)
 
           // Refresh graph if it was a markdown file
@@ -538,6 +558,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
       if (result.success) {
         await loadFileTree()
+        await updateFilesWithIncomingLinks()
         console.log('Deleted item:', itemPath)
       } else {
         console.error('Failed to delete item:', result.error)
@@ -563,6 +584,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
   const handleRefresh = async () => {
     await loadFileTree()
+    await updateFilesWithIncomingLinks()
   }
 
   const handleRevealInExplorer = async (itemPath: string) => {
@@ -623,6 +645,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         console.log('✅ Move successful! New path:', result.path, 'New name:', result.name)
         // Refresh the file tree to show the updated structure
         await loadFileTree()
+        await updateFilesWithIncomingLinks()
       } else {
         console.error('❌ Failed to move item:', result.error)
         // Don't show alert for "already in folder" case
@@ -799,6 +822,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             onContextMenu={handleContextMenu}
             onMoveItem={handleMoveItem}
             onChangeFolderPath={handleChangeFolderPath}
+            filesWithIncomingLinks={filesWithIncomingLinks}
           />
         </div>
 

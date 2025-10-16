@@ -21,6 +21,7 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const appWindow = getCurrentWindow()
 
@@ -30,11 +31,13 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
   }
 
   const handleMaximize = async () => {
-    const isMaximized = await appWindow.isMaximized()
-    if (isMaximized) {
+    const maximized = await appWindow.isMaximized()
+    if (maximized) {
       appWindow.unmaximize()
+      setIsMaximized(false)
     } else {
       appWindow.maximize()
+      setIsMaximized(true)
     }
   }
 
@@ -46,6 +49,26 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
   const handleDragStart = () => {
     appWindow.startDragging()
   }
+
+  // Check initial maximized state and listen for changes
+  useEffect(() => {
+    const checkMaximized = async () => {
+      const maximized = await appWindow.isMaximized()
+      setIsMaximized(maximized)
+    }
+
+    checkMaximized()
+
+    // Listen for window state changes
+    const unlisten = appWindow.onResized(async () => {
+      const maximized = await appWindow.isMaximized()
+      setIsMaximized(maximized)
+    })
+
+    return () => {
+      unlisten.then(fn => fn())
+    }
+  }, [appWindow])
 
   // Handle search
   useEffect(() => {
@@ -240,10 +263,21 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
             <rect x="0" y="5" width="12" height="2" fill="currentColor" />
           </svg>
         </button>
-        <button className="titlebar-button maximize" onClick={handleMaximize} title="Maximize">
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+        <button className="titlebar-button maximize" onClick={handleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
+          {isMaximized ? (
+            // Restore icon - two overlapping rectangles
+            <svg width="12" height="12" viewBox="0 0 12 12">
+              <g fill="none" stroke="currentColor" strokeWidth="1.2">
+                <rect x="3" y="3" width="7" height="7" />
+                <path d="M2 2 L2 0 L12 0 L12 10 L10 10" />
+              </g>
+            </svg>
+          ) : (
+            // Maximize icon - single rectangle
+            <svg width="12" height="12" viewBox="0 0 12 12">
+              <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            </svg>
+          )}
         </button>
         <button className="titlebar-button close" onClick={handleClose} title="Close">
           <svg width="12" height="12" viewBox="0 0 12 12">

@@ -46,7 +46,13 @@
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
       "Bash(git push:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(cmd /c \"taskkill /IM node.exe /F\")",
+      "Bash(powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(powershell -Command \"Get-Content \"\"$env:APPDATA\\com.microgrid.app\\config.json\"\"\")",
+      "Bash(powershell -Command \"Get-Content ''C:\\Users\\Owner\\AppData\\Roaming\\com.microgrid.app\\config.json''\")"
     ],
     "deny": [],
     "ask": []

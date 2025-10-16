@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { DocumentIcon } from '@heroicons/react/24/outline'
 import './WikiLinkAutocomplete.css'
 
 interface FileItem {
@@ -47,20 +48,21 @@ export default function WikiLinkAutocomplete({
 
   if (!visible || filteredFiles.length === 0) return null
 
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'md':
-        return '📝'
-      case 'svg':
-        return '📄'
-      case 'pdf':
-        return '📄'
-      case 'png':
-      case 'jpg':
-        return '🖼️'
-      default:
-        return '📄'
+  // Format the display path as "parent_folder / filename"
+  const formatDisplayPath = (file: FileItem) => {
+    // Split path by slashes
+    const parts = file.path.replace(/\\/g, '/').split('/')
+
+    // If only one part (file at root), just return the filename
+    if (parts.length === 1) {
+      return file.type === 'md' ? file.name.replace(/\.md$/, '') : file.name
     }
+
+    // Get parent folder (second to last part) and filename (last part)
+    const parentFolder = parts[parts.length - 2]
+    const fileName = file.type === 'md' ? file.name.replace(/\.md$/, '') : file.name
+
+    return { folder: parentFolder, file: fileName }
   }
 
   // Separate md files from others
@@ -75,18 +77,29 @@ export default function WikiLinkAutocomplete({
         left: `${position.left}px`,
       }}
     >
-      {mdFiles.map((file, index) => (
-        <div
-          key={file.path}
-          className={`autocomplete-item md-file ${
-            index === selectedIndex ? 'selected' : ''
-          }`}
-          onClick={() => onSelect(file)}
-        >
-          <span className="file-icon">{getFileIcon(file.type)}</span>
-          <span className="file-path">{file.path}</span>
-        </div>
-      ))}
+      {mdFiles.map((file, index) => {
+        const display = formatDisplayPath(file)
+        return (
+          <div
+            key={file.path}
+            className={`autocomplete-item md-file ${
+              index === selectedIndex ? 'selected' : ''
+            }`}
+            onClick={() => onSelect(file)}
+          >
+            <DocumentIcon className="file-icon icon-md" />
+            {typeof display === 'string' ? (
+              <span className="file-path file-name-md">{display}</span>
+            ) : (
+              <span className="file-path">
+                <span className="folder-name">{display.folder}</span>
+                <span className="separator"> / </span>
+                <span className="file-name-md">{display.file}</span>
+              </span>
+            )}
+          </div>
+        )
+      })}
 
       {mdFiles.length > 0 && otherFiles.length > 0 && (
         <div className="autocomplete-separator" />
@@ -94,6 +107,7 @@ export default function WikiLinkAutocomplete({
 
       {otherFiles.map((file, index) => {
         const actualIndex = mdFiles.length + index
+        const display = formatDisplayPath(file)
         return (
           <div
             key={file.path}
@@ -102,8 +116,16 @@ export default function WikiLinkAutocomplete({
             }`}
             onClick={() => onSelect(file)}
           >
-            <span className="file-icon">{getFileIcon(file.type)}</span>
-            <span className="file-path">{file.path}</span>
+            <DocumentIcon className="file-icon icon-other" />
+            {typeof display === 'string' ? (
+              <span className="file-path file-name-other">{display}</span>
+            ) : (
+              <span className="file-path">
+                <span className="folder-name">{display.folder}</span>
+                <span className="separator"> / </span>
+                <span className="file-name-other">{display.file}</span>
+              </span>
+            )}
           </div>
         )
       })}

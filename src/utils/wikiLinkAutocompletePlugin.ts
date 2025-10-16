@@ -68,8 +68,7 @@ export const wikiLinkAutocompletePlugin = () => {
 
                 // Smart positioning: show below by default, above if not enough space
                 const dropdownHeight = 300 // max height from CSS
-                const lineHeight = coords.bottom - coords.top // Calculate line height
-                const gap = 8 // Small gap between text and dropdown
+                const gap = 4 // Small gap between text and dropdown
                 const spaceBelow = editorRect.bottom - coords.bottom
                 const spaceAbove = coords.top - editorRect.top
 
@@ -78,8 +77,8 @@ export const wikiLinkAutocompletePlugin = () => {
                   // Not enough space below and more space above -> show above
                   topPosition = coords.top - editorRect.top - dropdownHeight - gap
                 } else {
-                  // Default: show below the line (not covering the [[text]])
-                  topPosition = coords.bottom - editorRect.top + lineHeight + gap
+                  // Default: show below the line (directly under the text)
+                  topPosition = coords.bottom - editorRect.top + gap
                 }
 
                 const meta = {

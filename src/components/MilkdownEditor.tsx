@@ -174,8 +174,33 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         const ctx = editor.ctx
         const view = ctx.get(editorViewCtx)
 
-        // Use only the filename (without extension and path) for wiki links
-        const fileNameWithoutExt = selectedFile.name.replace(/\.\w+$/, '')
+        // Smart naming logic for wiki links
+        let linkText = ''
+
+        if (selectedFile.type === 'md') {
+          // For markdown files, just use the name without extension
+          linkText = selectedFile.name.replace(/\.md$/, '')
+        } else {
+          // For non-markdown files, include extension
+          linkText = selectedFile.name
+        }
+
+        // Check if there's another file with the same name (without extension)
+        const nameWithoutExt = selectedFile.name.replace(/\.\w+$/, '')
+        const hasDuplicate = files.some(f =>
+          f.path !== selectedFile.path &&
+          f.name.replace(/\.\w+$/, '') === nameWithoutExt
+        )
+
+        if (hasDuplicate) {
+          // If there's a duplicate, include the folder path
+          const pathParts = selectedFile.path.split('/')
+          if (pathParts.length > 1) {
+            // Include parent folder in the link
+            const parentFolder = pathParts[pathParts.length - 2]
+            linkText = `${parentFolder}/${linkText}`
+          }
+        }
 
         // Insert the filename
         const { state, dispatch } = view
@@ -204,10 +229,10 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
           const tr = state.tr.replaceWith(
             triggerPos,
             endPos,
-            state.schema.text(fileNameWithoutExt)
+            state.schema.text(linkText)
           )
           // Move cursor after ]]
-          const newPos = triggerPos + fileNameWithoutExt.length + 2
+          const newPos = triggerPos + linkText.length + 2
           tr.setSelection(TextSelection.create(tr.doc, newPos))
           dispatch(tr)
         }
@@ -274,8 +299,33 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       // Get the editor view
       const view = ctx.get(editorViewCtx)
 
-      // Use only the filename (without extension and path) for wiki links
-      const fileNameWithoutExt = file.name.replace(/\.\w+$/, '')
+      // Smart naming logic for wiki links (same as handleSelect)
+      let linkText = ''
+
+      if (file.type === 'md') {
+        // For markdown files, just use the name without extension
+        linkText = file.name.replace(/\.md$/, '')
+      } else {
+        // For non-markdown files, include extension
+        linkText = file.name
+      }
+
+      // Check if there's another file with the same name (without extension)
+      const nameWithoutExt = file.name.replace(/\.\w+$/, '')
+      const hasDuplicate = files.some(f =>
+        f.path !== file.path &&
+        f.name.replace(/\.\w+$/, '') === nameWithoutExt
+      )
+
+      if (hasDuplicate) {
+        // If there's a duplicate, include the folder path
+        const pathParts = file.path.split('/')
+        if (pathParts.length > 1) {
+          // Include parent folder in the link
+          const parentFolder = pathParts[pathParts.length - 2]
+          linkText = `${parentFolder}/${linkText}`
+        }
+      }
 
       // Insert the filename using the insertWikiLink helper
       const { state, dispatch } = view
@@ -304,10 +354,10 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         const tr = state.tr.replaceWith(
           triggerPos,
           endPos,
-          state.schema.text(fileNameWithoutExt)
+          state.schema.text(linkText)
         )
         // Move cursor after ]]
-        const newPos = triggerPos + fileNameWithoutExt.length + 2
+        const newPos = triggerPos + linkText.length + 2
         tr.setSelection(TextSelection.create(tr.doc, newPos))
         dispatch(tr)
       }

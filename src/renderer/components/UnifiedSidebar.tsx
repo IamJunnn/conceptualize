@@ -16,6 +16,7 @@ interface UnifiedSidebarProps {
   onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string) => void;
   onMoveItem?: (sourcePath: string, destinationPath: string) => Promise<void>;
   onChangeFolderPath?: () => void;
+  filesWithIncomingLinks?: Set<string>;
 }
 
 // Ensure TreeNodeProps is defined
@@ -42,6 +43,7 @@ interface TreeNodeProps {
     draggedNode: FileTreeNode | null;
   }>>;
   highlightedPath: string | null;
+  filesWithIncomingLinks?: Set<string>;
 }
 
 // Define FileTreeNode and EditingState types
@@ -60,7 +62,7 @@ interface EditingState {
 // Corrected the import path for EditInput
 import EditInput from './EditInput';
 
-const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, highlightedPath }) => {
+const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, highlightedPath, filesWithIncomingLinks }) => {
   // Load saved folder state from localStorage, default to true (open) for first time
   const getSavedFolderState = () => {
     if (node.type !== 'folder') return true;
@@ -278,11 +280,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
           }}
           onMouseLeave={(e) => {
             // Only clear if we're actually leaving the children area
-            const relatedTarget = e.relatedTarget as Node | null;
-            const currentTarget = e.currentTarget as Node;
+            const relatedTarget = e.relatedTarget;
+            const currentTarget = e.currentTarget;
 
-            // If relatedTarget is null or not within currentTarget, we're leaving
-            if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+            // Check if relatedTarget is a valid Node before using contains
+            // If relatedTarget is null or not a child of currentTarget, we're leaving
+            if (!relatedTarget || !(relatedTarget instanceof Node) || !currentTarget.contains(relatedTarget)) {
               setIsDragOver(false);
               if (dragState.hoveredFolder === node.path) {
                 setDragState(prev => ({ ...prev, hoveredFolder: null }));
@@ -303,6 +306,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
               dragState={dragState}
               setDragState={setDragState}
               highlightedPath={highlightedPath}
+              filesWithIncomingLinks={filesWithIncomingLinks}
             />
           ))}
           {isAddingChild && (
@@ -333,7 +337,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 };
 
 const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath } = props;
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
   const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
@@ -628,6 +632,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
             dragState={dragState}
             setDragState={setDragState}
             highlightedPath={highlightedPath}
+            filesWithIncomingLinks={filesWithIncomingLinks}
           />
         ))}
       </div>

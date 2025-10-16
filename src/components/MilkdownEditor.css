@@ -1,12 +1,20 @@
-/* Milkdown Editor Styles */
+/* Main Editor Container */
+.milkdown-editor-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background-color: #1e1e1e;
+}
+
+/* Milkdown Editor Styles - Only text area has I-beam */
 .milkdown {
   height: 100%;
   width: 100%;
-  overflow-y: auto;
-  padding: 20px;
+  overflow: hidden; /* Container should not scroll */
+  padding: 0;
   background-color: #1e1e1e;
   color: #d4d4d4;
-  cursor: text; /* Show I-beam cursor over entire editor area */
+  cursor: text; /* I-beam cursor ONLY in text area */
 }
 
 /* Custom scrollbar to match dark theme */
@@ -48,9 +56,18 @@
 
 /* Editor content area */
 .milkdown .editor {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
   outline: none;
   cursor: text; /* Show I-beam cursor in editor */
+}
+
+/* ProseMirror content wrapper - This is where the scrollbar should be */
+.milkdown .ProseMirror {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 20px 20px 60px; /* Add left padding for block button space */
+  position: relative;
 }
 
 /* Headings with larger font sizes */
@@ -106,6 +123,31 @@
 .milkdown p {
   margin: 0.5em 0;
   line-height: 1.6;
+  position: relative;
+}
+
+/* Empty block placeholder */
+.milkdown p.empty-block-placeholder::before,
+.milkdown p[data-placeholder]::before {
+  content: attr(data-placeholder);
+  color: #666;
+  font-style: italic;
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  opacity: 0.5;
+}
+
+/* Only show placeholder when empty */
+.milkdown p.empty-block-placeholder:not(:empty):not(:has(br:only-child))::before,
+.milkdown p[data-placeholder]:not(:empty):not(:has(br:only-child))::before {
+  content: none;
+}
+
+/* Handle the case where Milkdown adds a BR to empty paragraphs */
+.milkdown p.empty-block-placeholder > br:only-child,
+.milkdown p[data-placeholder] > br:only-child {
+  /* Keep the br for cursor positioning but don't interfere with placeholder */
 }
 
 /* Image resize functionality */
@@ -211,17 +253,17 @@
 
 /* Wiki-links - Complete */
 .wiki-link {
-  color: #007acc;
+  color: #64c8ca;
   cursor: pointer;
   text-decoration: none;
-  border-bottom: 1px dotted #007acc;
+  border-bottom: 1px dotted #64c8ca;
   padding: 0 2px;
   position: relative;
 }
 
 .wiki-link:hover {
-  background-color: rgba(0, 122, 204, 0.1);
-  border-bottom: 1px solid #007acc;
+  background-color: rgba(100, 200, 202, 0.1);
+  border-bottom: 1px solid #64c8ca;
 }
 
 /* Tooltip indicator for wiki links */
@@ -253,9 +295,9 @@
 
 /* Wiki-links - Incomplete (typing in progress) */
 .wiki-link-incomplete {
-  color: #007acc;
-  background-color: rgba(0, 122, 204, 0.1);
-  border-bottom: 1px dotted #007acc;
+  color: #64c8ca;
+  background-color: rgba(100, 200, 202, 0.1);
+  border-bottom: 1px dotted #64c8ca;
   padding: 0 2px;
 }
 
@@ -316,8 +358,14 @@
   margin: 0.25em 0;
 }
 
-/* Nested bullet point styles */
-/* Level 1: Filled circle (default) */
+/* Change bullet points and numbering to teal */
+.milkdown ul > li::marker,
+.milkdown ol > li::marker {
+  color: #64c8ca;
+}
+
+/* Nested bullet point styles - 4 level pattern that repeats */
+/* Level 1: Filled circle */
 .milkdown ul {
   list-style-type: disc;
 }
@@ -332,26 +380,58 @@
   list-style-type: square;
 }
 
-/* Level 4: Empty square (custom) */
+/* Level 4: Empty square (custom marker) */
 .milkdown ul ul ul ul {
-  list-style-type: square;
+  list-style-type: none;
 }
 
-.milkdown ul ul ul ul > li::marker {
-  font-weight: 100;
-  opacity: 0.7;
+.milkdown ul ul ul ul > li {
+  position: relative;
+  padding-left: 0;
 }
 
-/* Level 5+: Repeat pattern */
+.milkdown ul ul ul ul > li::before {
+  content: '□';
+  position: absolute;
+  left: -1.5em;
+}
+
+/* Level 5: Repeat - Filled circle */
 .milkdown ul ul ul ul ul {
   list-style-type: disc;
 }
 
+.milkdown ul ul ul ul ul > li::before {
+  content: none;
+}
+
+/* Level 6: Repeat - Empty circle */
 .milkdown ul ul ul ul ul ul {
   list-style-type: circle;
 }
 
-/* Nested numbered list styles */
+/* Level 7: Repeat - Filled square */
+.milkdown ul ul ul ul ul ul ul {
+  list-style-type: square;
+}
+
+/* Level 8: Repeat - Empty square */
+.milkdown ul ul ul ul ul ul ul ul {
+  list-style-type: none;
+}
+
+.milkdown ul ul ul ul ul ul ul ul > li {
+  position: relative;
+  padding-left: 0;
+}
+
+.milkdown ul ul ul ul ul ul ul ul > li::before {
+  content: '□';
+  position: absolute;
+  left: -1.5em;
+}
+
+/* Nested numbered list styles - 5 level pattern that repeats */
 /* Level 1: Numbers (1, 2, 3...) */
 .milkdown ol {
   list-style-type: decimal;
@@ -377,13 +457,29 @@
   list-style-type: upper-roman;
 }
 
-/* Level 6+: Repeat pattern starting with numbers */
+/* Level 6: Repeat - Numbers */
 .milkdown ol ol ol ol ol ol {
   list-style-type: decimal;
 }
 
+/* Level 7: Repeat - Lowercase letters */
 .milkdown ol ol ol ol ol ol ol {
   list-style-type: lower-alpha;
+}
+
+/* Level 8: Repeat - Lowercase roman */
+.milkdown ol ol ol ol ol ol ol ol {
+  list-style-type: lower-roman;
+}
+
+/* Level 9: Repeat - Uppercase letters */
+.milkdown ol ol ol ol ol ol ol ol ol {
+  list-style-type: upper-alpha;
+}
+
+/* Level 10: Repeat - Uppercase roman */
+.milkdown ol ol ol ol ol ol ol ol ol ol {
+  list-style-type: upper-roman;
 }
 
 /* Blockquotes */
@@ -417,4 +513,471 @@
   border: none;
   border-top: 1px solid #3e3e3e;
   margin: 1em 0;
+}
+
+/* Task list styles (checkboxes) */
+.milkdown .task-list-item {
+  list-style: none;
+  position: relative;
+  padding-left: 1.5em;
+}
+
+.milkdown .task-list-item > input[type="checkbox"] {
+  position: absolute;
+  left: 0;
+  top: 0.3em;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  appearance: none;
+  background-color: #2d2d2d;
+  border: 2px solid #64c8ca;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.milkdown .task-list-item > input[type="checkbox"]:checked {
+  background-color: #64c8ca;
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.milkdown .task-list-item > input[type="checkbox"]:hover {
+  border-color: #7dd3d5;
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.2);
+}
+
+.milkdown .task-list-item > input[type="checkbox"]:checked:hover {
+  background-color: #7dd3d5;
+}
+
+/* Custom Block menu styles */
+.block-menu-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+}
+
+/* Add subtle hover effect to blocks */
+.milkdown .ProseMirror p:hover,
+.milkdown .ProseMirror h1:hover,
+.milkdown .ProseMirror h2:hover,
+.milkdown .ProseMirror h3:hover,
+.milkdown .ProseMirror h4:hover,
+.milkdown .ProseMirror h5:hover,
+.milkdown .ProseMirror h6:hover,
+.milkdown .ProseMirror li:hover,
+.milkdown .ProseMirror blockquote:hover,
+.milkdown .ProseMirror pre:hover,
+.milkdown .ProseMirror .task-list-item:hover,
+.milkdown .ProseMirror td:hover,
+.milkdown .ProseMirror th:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+  transition: background-color 0.15s ease;
+}
+
+.block-menu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: rgba(45, 45, 45, 0.8);
+  border: 1px solid rgba(100, 200, 202, 0.5);
+  border-radius: 4px;
+  color: rgba(100, 200, 202, 0.8);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 300;
+  transition: all 0.15s ease;
+  opacity: 0;
+  animation: fadeIn 0.15s forwards;
+  user-select: none;
+  position: relative;
+}
+
+.block-menu-trigger span {
+  display: block;
+  transition: transform 0.15s ease;
+  line-height: 1;
+}
+
+.block-menu-trigger span.rotate {
+  transform: rotate(45deg);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+}
+
+.block-menu-trigger:hover {
+  background: rgba(100, 200, 202, 0.2);
+  border-color: #64c8ca;
+  color: #64c8ca;
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.block-menu-trigger.active {
+  background: rgba(100, 200, 202, 0.3);
+  border-color: #64c8ca;
+  color: #64c8ca;
+  opacity: 1;
+  transform: scale(1);
+}
+
+.block-menu-trigger.active:hover {
+  background: rgba(100, 200, 202, 0.4);
+  transform: scale(1.05);
+}
+
+/* Prevent button from getting stuck in active state */
+.block-menu-trigger:active {
+  transform: scale(0.98);
+}
+
+/* Focus state for keyboard accessibility */
+.block-menu-trigger:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.4);
+}
+
+.block-menu-trigger:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
+.block-menu-dropdown {
+  position: absolute;
+  left: 0;
+  top: 35px;
+  background: #1a1a1a;
+  border: 1px solid #3e3e3e;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+  z-index: 1001;
+  min-width: 280px;
+  padding: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px);
+  transition: all 0.15s ease;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.block-menu-dropdown.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Positioning for dropdown above */
+.block-menu-dropdown.above {
+  transform-origin: bottom center;
+}
+
+.block-menu-dropdown.below {
+  transform-origin: top center;
+}
+
+.block-menu-dropdown.above.show {
+  transform: translateY(0);
+}
+
+.block-menu-dropdown.below.show {
+  transform: translateY(0);
+}
+
+/* Tab buttons container */
+.block-menu-tabs {
+  display: flex;
+  background: #252525;
+  border-bottom: 1px solid #3e3e3e;
+  padding: 4px;
+}
+
+.block-menu-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.block-menu-tab:hover {
+  color: #d4d4d4;
+  background: rgba(62, 62, 62, 0.4);
+}
+
+.block-menu-tab.active {
+  background: #3e3e3e;
+  color: #64c8ca;
+}
+
+/* Placeholder input area */
+.block-menu-placeholder {
+  padding: 12px;
+  border-bottom: 1px solid #3e3e3e;
+  background: #222;
+}
+
+.block-menu-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  border: 1px solid #3e3e3e;
+  border-radius: 6px;
+  color: #d4d4d4;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.block-menu-input:focus {
+  border-color: #64c8ca;
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.1);
+}
+
+.block-menu-input::placeholder {
+  color: #666;
+}
+
+/* Content area */
+.block-menu-content {
+  padding: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.block-menu-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.block-menu-label {
+  color: #666;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 8px 12px 4px 12px;
+  text-transform: uppercase;
+}
+
+.block-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #b8b8b8;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  font-size: 14px;
+  position: relative;
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.block-menu-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(100, 200, 202, 0.08));
+  transition: width 0.2s ease;
+}
+
+.block-menu-item:hover {
+  background: rgba(100, 200, 202, 0.1);
+  color: #e0e0e0;
+  transform: translateX(2px);
+}
+
+.block-menu-item:hover::before {
+  width: 100%;
+}
+
+.block-menu-item:active {
+  transform: translateX(0) scale(0.98);
+  background: rgba(100, 200, 202, 0.15);
+}
+
+/* Icon styles */
+.block-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #64c8ca;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.block-menu-item:hover .block-icon {
+  background: rgba(100, 200, 202, 0.15);
+  border-color: #64c8ca;
+  transform: scale(1.05);
+}
+
+.block-menu-divider {
+  height: 1px;
+  background: #3e3e3e;
+  margin: 6px 0;
+}
+
+/* Add a subtle fade animation when tabs change */
+@keyframes fadeInContent {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.block-menu-section {
+  animation: fadeInContent 0.2s ease;
+}
+
+/* Custom scrollbar for dropdown content */
+.block-menu-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.block-menu-content::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+
+.block-menu-content::-webkit-scrollbar-thumb {
+  background: #3e3e3e;
+  border-radius: 3px;
+}
+
+.block-menu-content::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* Slash command menu styles */
+.milkdown-slash-menu {
+  background: #2d2d2d;
+  border: 1px solid #3e3e3e;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 200px;
+}
+
+.milkdown-slash-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 3px;
+  color: #d4d4d4;
+  transition: all 0.15s;
+}
+
+.milkdown-slash-menu-item:hover,
+.milkdown-slash-menu-item.active {
+  background: #3e3e3e;
+  color: #64c8ca;
+}
+
+/* Floating toolbar styles */
+.milkdown-tooltip {
+  position: absolute;
+  background: #2d2d2d;
+  border: 1px solid #3e3e3e;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  z-index: 1000;
+}
+
+.milkdown-tooltip-button {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: #d4d4d4;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.milkdown-tooltip-button:hover {
+  background: #3e3e3e;
+  color: #64c8ca;
+}
+
+.milkdown-tooltip-button.active {
+  background: #64c8ca;
+  color: #1e1e1e;
+}
+
+/* Emoji picker styles */
+.milkdown-emoji-picker {
+  position: absolute;
+  background: #2d2d2d;
+  border: 1px solid #3e3e3e;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  max-width: 320px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.milkdown-emoji-item {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 20px;
+  transition: all 0.15s;
+}
+
+.milkdown-emoji-item:hover {
+  background: #3e3e3e;
+  transform: scale(1.2);
 }
