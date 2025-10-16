@@ -4,12 +4,24 @@
   border: 1px solid #3e3e3e;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  max-height: 300px;
+  max-height: 250px;
   overflow-y: auto;
-  min-width: 300px;
-  max-width: 500px;
+  min-width: 280px;
+  max-width: 450px;
   z-index: 10000;
   padding: 4px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .autocomplete-item {
@@ -28,21 +40,45 @@
 }
 
 .autocomplete-item.selected {
-  background-color: rgba(0, 122, 204, 0.2);
+  background-color: rgba(100, 200, 202, 0.2);
 }
 
-.autocomplete-item.md-file .file-path {
-  color: #007acc;
-  font-weight: 500;
-}
-
-.autocomplete-item.other-file .file-path {
+/* Folder name part (gray, normal weight) */
+.folder-name {
   color: #d4d4d4;
+  font-weight: normal;
+}
+
+/* Separator between folder and file */
+.separator {
+  color: #d4d4d4;
+  font-weight: normal;
+}
+
+/* MD file name (teal, bold) */
+.file-name-md {
+  color: #64c8ca;
+  font-weight: bold;
+}
+
+/* Other file name (white, normal weight) */
+.file-name-other {
+  color: #d4d4d4;
+  font-weight: normal;
 }
 
 .file-icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
+}
+
+.file-icon.icon-md {
+  color: #64c8ca;
+}
+
+.file-icon.icon-other {
+  color: #cccccc;
 }
 
 .file-path {

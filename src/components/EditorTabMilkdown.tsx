@@ -31,43 +31,124 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
   // Handle wiki-link clicks
   const handleWikiLinkClick = useCallback(async (noteName: string) => {
     try {
-      // Search for the file in the root path
-      const result = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('find_file_by_name', {
-        rootPath,
-        fileName: `${noteName}.md`
-      })
+      // Check if the link has an extension (for non-markdown files)
+      const hasExtension = /\.\w+$/.test(noteName)
 
-      if (result.success && result.path && result.name) {
-        // File exists, open it
-        if (onOpenFile) {
-          onOpenFile(result.path, result.name)
+      // Check if the link has a folder path
+      const hasFolder = noteName.includes('/')
+
+      let searchFileName = noteName
+      let expectedFolder = ''
+
+      // Handle folder paths
+      if (hasFolder) {
+        const parts = noteName.split('/')
+        expectedFolder = parts.slice(0, -1).join('/')
+        searchFileName = parts[parts.length - 1]
+      }
+
+      // Add .md extension if needed
+      if (!hasExtension) {
+        searchFileName = `${searchFileName}.md`
+      }
+
+      // If a folder is specified, check directly for the file in that specific folder
+      if (expectedFolder) {
+        // Build the exact path where the file should be
+        const normalizedRoot = rootPath.replace(/\//g, '\\')
+        const expectedFilePath = `${normalizedRoot}\\${expectedFolder.replace(/\//g, '\\')}\\${searchFileName}`
+
+        try {
+          // Check if the file exists at the expected location
+          await invoke<string>('read_file', { filePath: expectedFilePath })
+          // File exists at the expected location, open it
+          if (onOpenFile) {
+            onOpenFile(expectedFilePath, searchFileName)
+          }
+          return // Exit early since we found and opened the file
+        } catch (e) {
+          // File doesn't exist at the expected location, we'll create it below
+          console.log(`File ${searchFileName} not found at expected path: ${expectedFilePath}`)
         }
       } else {
-        // File doesn't exist, create it in the same folder as current file
-        const currentFolder = filePath.substring(0, filePath.lastIndexOf('\\'))
-
-        const createResult = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('create_file', {
-          parentPath: currentFolder,
-          fileName: `${noteName}.md`
+        // No folder specified, search for the file in the root path
+        const result = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('find_file_by_name', {
+          rootPath,
+          fileName: searchFileName
         })
 
-        if (createResult.success && createResult.path && createResult.name) {
-          // Successfully created, refresh file tree
-          if (onFileCreated) {
-            onFileCreated()
-          }
-
-          // Now open the newly created file
+        if (result.success && result.path && result.name) {
+          // File exists somewhere in the tree, open it
           if (onOpenFile) {
-            onOpenFile(createResult.path, createResult.name)
+            onOpenFile(result.path, result.name)
           }
-        } else {
-          alert(`Failed to create note: ${createResult.error || 'Unknown error'}`)
+          return // Exit early since we found and opened the file
         }
+      }
+
+      // If we reach here, the file doesn't exist or isn't in the right folder
+      // Only create markdown files, not other types
+      if (hasExtension && !searchFileName.endsWith('.md')) {
+        console.error(`File not found: ${searchFileName}`)
+        // TODO: Show proper notification or open file viewer for non-markdown files
+        return
+      }
+
+      // File doesn't exist, determine where to create it
+      let createPath = ''
+
+      if (expectedFolder) {
+        // If a folder was specified, create the file in that folder (relative to root)
+        // Normalize the path separators
+        const normalizedRoot = rootPath.replace(/\//g, '\\')
+        createPath = `${normalizedRoot}\\${expectedFolder.replace(/\//g, '\\')}`
+
+        // Ensure the folder structure exists
+        const folderParts = expectedFolder.split('/')
+        let currentPath = normalizedRoot
+
+        for (const folderName of folderParts) {
+          currentPath = `${currentPath}\\${folderName}`
+
+          // Check if folder exists, if not create it
+          try {
+            // Try to create the folder - it will fail silently if it already exists
+            await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('create_folder', {
+              parentPath: currentPath.substring(0, currentPath.lastIndexOf('\\')),
+              folderName: folderName
+            })
+          } catch (e) {
+            // Folder might already exist, which is fine
+            console.log(`Folder ${folderName} might already exist or creation failed:`, e)
+          }
+        }
+      } else {
+        // Otherwise create it in the same folder as the current file
+        createPath = filePath.substring(0, filePath.lastIndexOf('\\'))
+      }
+
+      console.log('Creating file:', searchFileName, 'in folder:', createPath)
+
+      const createResult = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('create_file', {
+        parentPath: createPath,
+        fileName: searchFileName
+      })
+
+      if (createResult.success && createResult.path && createResult.name) {
+        // Successfully created, refresh file tree
+        if (onFileCreated) {
+          onFileCreated()
+        }
+
+        // Now open the newly created file
+        if (onOpenFile) {
+          onOpenFile(createResult.path, createResult.name)
+        }
+      } else {
+        console.error(`Failed to create note: ${createResult.error || 'Unknown error'}`)
       }
     } catch (error) {
       console.error('Error handling wiki-link:', error)
-      alert(`Failed to handle link: ${error}`)
     }
   }, [rootPath, filePath, onOpenFile, onFileCreated])
 

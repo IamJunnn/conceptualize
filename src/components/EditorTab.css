@@ -92,7 +92,7 @@
 
 .editor-content {
   flex: 1;
-  overflow: auto;
+  overflow: auto; /* Allow scrollbar for the editor content */
   background-color: #1e1e1e;
   cursor: text; /* Show I-beam cursor over entire editor area */
 }

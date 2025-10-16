@@ -390,3 +390,39 @@ export function getNodeSize(nodeType: NodeType, connectionCount: number): number
   const maxSize = 20;
   return Math.min(baseSize + connectionCount * 2, maxSize);
 }
+
+/**
+ * Builds a set of file paths that have incoming wiki-links (are referenced by other files)
+ * Used to determine which files should have teal icons in the file tree
+ */
+export function getFilesWithIncomingLinks(
+  files: Array<{ path: string; content: string }>
+): Set<string> {
+  const filesWithLinks = new Set<string>();
+  const fileNodeMap = new Map<string, string>(); // Map from normalized name to file path
+
+  // Build a map of file names (without extension) to their paths
+  files.forEach(file => {
+    const isMarkdown = file.path.toLowerCase().endsWith('.md');
+    if (isMarkdown) {
+      const nodeName = pathToNodeName(file.path);
+      fileNodeMap.set(nodeName.toLowerCase(), file.path);
+    }
+  });
+
+  // For each file, extract wiki-links and mark target files as having incoming links
+  files.forEach(file => {
+    const wikiLinks = extractWikiLinks(file.content);
+
+    wikiLinks.forEach(linkText => {
+      const targetFilePath = fileNodeMap.get(linkText.toLowerCase());
+
+      if (targetFilePath && targetFilePath !== file.path) {
+        // This target file has an incoming link
+        filesWithLinks.add(targetFilePath);
+      }
+    });
+  });
+
+  return filesWithLinks;
+}
