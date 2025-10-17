@@ -11,8 +11,8 @@ import {
   StarIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import { useGraphVisibility } from '../contexts/GraphVisibilityContext';
-import { isImportantNote, toggleImportantNote } from '../utils/importantNotes';
+import { useGraphVisibility } from '../../contexts/GraphVisibilityContext';
+import { isImportantNote, toggleImportantNote } from '../../utils/importantNotes';
 import './ContextMenu.css';
 
 interface ContextMenuProps {

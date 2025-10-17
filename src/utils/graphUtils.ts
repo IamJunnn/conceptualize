@@ -249,25 +249,16 @@ export function buildGraphFromFiles(
 
     const wikiLinks = extractWikiLinks(file.content);
 
-    console.log(`📝 File: ${pathToNodeName(file.path)}`);
-    console.log(`   Wiki-links found: ${wikiLinks.join(', ') || '(none)'}`);
-
     wikiLinks.forEach(linkText => {
       const targetNode = fileNodeMap.get(linkText.toLowerCase());
-      console.log(`   Looking for: "${linkText}" (normalized: "${linkText.toLowerCase()}")`);
-      console.log(`   Found target: ${targetNode ? targetNode.name : 'NOT FOUND'}`);
 
       if (targetNode && targetNode.id !== sourceNode.id) {
-        console.log(`   ✅ Creating link: ${sourceNode.name} -> ${targetNode.name}`);
         links.push({
           source: sourceNode.id,
           target: targetNode.id,
           value: 1,
           type: 'conceptual'
         });
-      } else if (!targetNode) {
-        console.log(`   ❌ No target node found for wiki-link: "${linkText}"`);
-        console.log(`   Available nodes: ${Array.from(fileNodeMap.keys()).join(', ')}`);
       }
     });
   });

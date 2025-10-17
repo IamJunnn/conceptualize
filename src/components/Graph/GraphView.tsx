@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import GraphEngine from './GraphEngine';
-import ConfirmModal from './ConfirmModal';
-import { buildGraphFromFiles, GraphData, GraphNode, getHiddenNodes } from '../utils/graphUtils';
-import { useGraphVisibility } from '../contexts/GraphVisibilityContext';
+import ConfirmModal from '../UI/ConfirmModal';
+import { buildGraphFromFiles, GraphData, GraphNode, getHiddenNodes } from '../../utils/graphUtils';
+import { useGraphVisibility } from '../../contexts/GraphVisibilityContext';
 import './GraphView.css';
 
 interface GraphViewProps {

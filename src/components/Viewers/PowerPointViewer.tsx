@@ -1,7 +1,7 @@
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './PowerPointViewer.css';
-import './CustomScrollbar.css';
+import '../UI/CustomScrollbar.css';
 
 interface PowerPointViewerProps {
   filePath: string;

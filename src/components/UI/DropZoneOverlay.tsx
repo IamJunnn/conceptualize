@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useDragDrop, DropZone } from '../contexts/DragDropContext';
+import { useDragDrop, DropZone } from '../../contexts/DragDropContext';
 import './DropZoneOverlay.css';
 
 interface DropZoneOverlayProps {

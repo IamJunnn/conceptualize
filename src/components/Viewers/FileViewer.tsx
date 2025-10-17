@@ -1,4 +1,4 @@
-import EditorTabMilkdown from './EditorTabMilkdown'
+import EditorTabMilkdown from '../Editor/EditorTabMilkdown'
 import PdfViewer from './PdfViewer'
 import ImageViewer from './ImageViewer'
 import WordViewer from './WordViewer'

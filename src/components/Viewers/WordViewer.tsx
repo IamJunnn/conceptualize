@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import mammoth from 'mammoth';
 import { invoke } from '@tauri-apps/api/core';
 import './WordViewer.css';
-import './CustomScrollbar.css';
+import '../UI/CustomScrollbar.css';
 
 interface WordViewerProps {
   filePath: string;

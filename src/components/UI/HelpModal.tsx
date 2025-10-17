@@ -1,6 +1,6 @@
 import React from 'react';
-import ShortcutsGuide from './guides/ShortcutsGuide';
-import MarkdownGuide from './guides/MarkdownGuide';
+import ShortcutsGuide from '../guides/ShortcutsGuide';
+import MarkdownGuide from '../guides/MarkdownGuide';
 import './HelpModal.css';
 
 interface HelpModalProps {

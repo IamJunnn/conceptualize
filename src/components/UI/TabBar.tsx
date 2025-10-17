@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useDragDrop, EditorPane } from '../contexts/DragDropContext';
+import { useDragDrop, EditorPane } from '../../contexts/DragDropContext';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { DocumentIcon, StarIcon } from '@heroicons/react/24/outline';
-import { isImportantNote, toggleImportantNote } from '../utils/importantNotes';
+import { isImportantNote, toggleImportantNote } from '../../utils/importantNotes';
 import './TabBar.css';
 
 export interface OpenFile {
