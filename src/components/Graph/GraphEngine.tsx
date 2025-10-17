@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { GraphNode, GraphLink, GraphData } from '../utils/graphUtils';
-import { isImportantNote } from '../utils/importantNotes';
+import { GraphNode, GraphLink, GraphData } from '../../utils/graphUtils';
+import { isImportantNote } from '../../utils/importantNotes';
 import './GraphEngine.css';
 
 interface GraphEngineProps {

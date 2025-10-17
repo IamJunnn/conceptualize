@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { invoke } from '@tauri-apps/api/core';
 import './ExcelViewer.css';
-import './CustomScrollbar.css';
+import '../UI/CustomScrollbar.css';
 
 interface ExcelViewerProps {
   filePath: string;

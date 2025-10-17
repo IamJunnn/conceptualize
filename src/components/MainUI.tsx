@@ -1,16 +1,19 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
-import TitleBar from './TitleBar'
-import GraphView from './GraphView'
-import FileViewer from './FileViewer'
-import ContextMenu from './ContextMenu'
-import HelpModal from './HelpModal'
-import { TabBar, OpenFile } from './TabBar'
-import { DropZoneOverlay } from './DropZoneOverlay'
+import TitleBar from './UI/TitleBar'
+import GraphView from './Graph/GraphView'
+import FileViewer from './Viewers/FileViewer'
+import ContextMenu from './UI/ContextMenu'
+import HelpModal from './UI/HelpModal'
+import { TabBar, OpenFile } from './UI/TabBar'
+import { DropZoneOverlay } from './UI/DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import { getFilesWithIncomingLinks } from '../utils/graphUtils'
 import './MainUI.css'
+
+// Development mode flag
+const isDev = import.meta.env.DEV
 
 interface MainUIProps {
   rootPath: string
@@ -101,13 +104,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
   // Debug: Log split view state changes
   useEffect(() => {
-    console.log('Split view state changed:', {
-      splitView,
-      leftPaneFiles: leftPaneFiles.length,
-      rightPaneFiles: rightPaneFiles.length,
-      leftPaneTab,
-      rightPaneTab
-    })
+    if (isDev) {
+      console.log('Split view state changed:', {
+        splitView,
+        leftPaneFiles: leftPaneFiles.length,
+        rightPaneFiles: rightPaneFiles.length,
+        leftPaneTab,
+        rightPaneTab
+      })
+    }
   }, [splitView, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab])
 
   // Load session from localStorage on mount
@@ -116,7 +121,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       const savedSession = localStorage.getItem('editorSession')
       if (savedSession) {
         const session = JSON.parse(savedSession)
-        console.log('📂 Restoring session:', session)
+        if (isDev) console.log('📂 Restoring session:', session)
 
         if (session.splitView) {
           // Restore split view
@@ -158,7 +163,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       activePane
     }
 
-    console.log('💾 Saving session:', session)
+    if (isDev) console.log('💾 Saving session:', session)
     localStorage.setItem('editorSession', JSON.stringify(session))
   }, [sessionLoaded, splitView, openFiles, activeTab, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab, activePane])
 
@@ -355,7 +360,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
       // Set dragging flag once threshold is exceeded
       if ((dx > 5 || dy > 5) && !isDraggingRef.current) {
-        console.log('🚀 DRAG START (tab):', draggedTab.fileName);
+        if (isDev) console.log('🚀 DRAG START (tab):', draggedTab.fileName);
         setIsDragging(true);
       }
     };
@@ -366,21 +371,25 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         const currentIsDragging = isDraggingRef.current;
         const currentDropZone = dropZoneRef.current;
 
-        console.log('🏁 DRAG END (tab)', {
-          isDragging: currentIsDragging,
-          dropZone: currentDropZone,
-          draggedTab: draggedTab?.fileName
-        });
+        if (isDev) {
+          console.log('🏁 DRAG END (tab)', {
+            isDragging: currentIsDragging,
+            dropZone: currentDropZone,
+            draggedTab: draggedTab?.fileName
+          });
+        }
 
         // Only handle drop if we're dragging AND over a valid drop zone
         if (currentIsDragging && currentDropZone && (currentDropZone === 'left' || currentDropZone === 'right')) {
-          console.log('✅ Valid drop - handling on', currentDropZone, 'side');
+          if (isDev) console.log('✅ Valid drop - handling on', currentDropZone, 'side');
           handleTabDrop();
         } else {
-          console.log('❌ No valid drop zone - tab stays in place', {
-            isDragging: currentIsDragging,
-            dropZone: currentDropZone
-          });
+          if (isDev) {
+            console.log('❌ No valid drop zone - tab stays in place', {
+              isDragging: currentIsDragging,
+              dropZone: currentDropZone
+            });
+          }
         }
 
         // Reset all drag state
@@ -401,7 +410,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }, [dragStartPos, draggedTab]);
 
   const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
-    console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
+    if (isDev) console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
 
     if (!splitView) {
       // Single pane mode
@@ -468,7 +477,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         if (result.success) {
           await loadFileTree()
           await updateFilesWithIncomingLinks()
-          console.log('Created file:', result.path)
+          if (isDev) console.log('Created file:', result.path)
           // TODO: Open the new file in editor
         } else {
           console.error('Failed to create file:', result.error)
@@ -483,7 +492,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         if (result.success) {
           await loadFileTree()
           await updateFilesWithIncomingLinks()
-          console.log('Created folder:', result.path)
+          if (isDev) console.log('Created folder:', result.path)
         } else {
           console.error('Failed to create folder:', result.error)
           alert(`Failed to create folder: ${result.error}`)
@@ -498,7 +507,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         if (result.success) {
           await loadFileTree()
           await updateFilesWithIncomingLinks()
-          console.log('Renamed item:', result.path)
+          if (isDev) console.log('Renamed item:', result.path)
 
           // Refresh graph if it was a markdown file
           if (editing.path.endsWith('.md')) {
@@ -559,7 +568,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       if (result.success) {
         await loadFileTree()
         await updateFilesWithIncomingLinks()
-        console.log('Deleted item:', itemPath)
+        if (isDev) console.log('Deleted item:', itemPath)
       } else {
         console.error('Failed to delete item:', result.error)
         alert(`Failed to delete: ${result.error}`)
@@ -621,12 +630,12 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleGuideOpen = (guideName: 'shortcuts' | 'markdown') => {
-    console.log('Opening guide:', guideName)
+    if (isDev) console.log('Opening guide:', guideName)
     setActiveGuide(guideName)
   }
 
   const handleRevealInTree = (filePath: string) => {
-    console.log('📂 Revealing in tree:', filePath)
+    if (isDev) console.log('📂 Revealing in tree:', filePath)
     if (sidebarRef.current) {
       sidebarRef.current.revealFile(filePath)
     }
@@ -634,7 +643,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
   const handleMoveItem = async (sourcePath: string, destinationPath: string) => {
     try {
-      console.log('🔄 Moving:', sourcePath, 'to:', destinationPath)
+      if (isDev) console.log('🔄 Moving:', sourcePath, 'to:', destinationPath)
 
       const result = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('move_item', {
         sourcePath: sourcePath,
@@ -642,7 +651,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       })
 
       if (result.success) {
-        console.log('✅ Move successful! New path:', result.path, 'New name:', result.name)
+        if (isDev) console.log('✅ Move successful! New path:', result.path, 'New name:', result.name)
         // Refresh the file tree to show the updated structure
         await loadFileTree()
         await updateFilesWithIncomingLinks()
@@ -660,8 +669,10 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleOpenInSecondPane = (filePath: string, fileName: string) => {
-    console.log('Opening in second pane:', filePath, fileName)
-    console.log('Current splitView state:', splitView)
+    if (isDev) {
+      console.log('Opening in second pane:', filePath, fileName)
+      console.log('Current splitView state:', splitView)
+    }
 
     if (!splitView) {
       // Transfer current files to left pane
@@ -684,7 +695,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleCloseSplitView = () => {
-    console.log('Closing split view')
+    if (isDev) console.log('Closing split view')
 
     // Transfer left pane files back to single pane
     setOpenFiles(leftPaneFiles)
@@ -706,13 +717,13 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     // Get the current drop zone from ref (not stale closure)
     const currentDropZone = dropZoneRef.current;
 
-    console.log('Handling tab drop:', { draggedTab, dropZone: currentDropZone });
+    if (isDev) console.log('Handling tab drop:', { draggedTab, dropZone: currentDropZone });
 
     const { filePath, fileName, sourcePane } = draggedTab;
 
     // Only handle if dropping on left or right edge
     if (!currentDropZone || (currentDropZone !== 'left' && currentDropZone !== 'right')) {
-      console.log('No valid drop zone - ignoring drop');
+      if (isDev) console.log('No valid drop zone - ignoring drop');
       setDraggedTab(null);
       setDropZone(null);
       return;
@@ -722,7 +733,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     if (currentDropZone === 'left' || currentDropZone === 'right') {
       if (!splitView) {
         // Create new split view
-        console.log('Creating new split view on', currentDropZone, 'side');
+        if (isDev) console.log('Creating new split view on', currentDropZone, 'side');
 
         // Remove the dragged file from openFiles
         const newOpenFiles = openFiles.filter(f => f.path !== filePath);
@@ -751,7 +762,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         setActiveTab('graph');
       } else {
         // Already in split view - move tab based on drop zone
-        console.log('Moving tab in split view from', sourcePane, 'to', currentDropZone);
+        if (isDev) console.log('Moving tab in split view from', sourcePane, 'to', currentDropZone);
 
         if (currentDropZone === 'left') {
           // Drop on LEFT pane

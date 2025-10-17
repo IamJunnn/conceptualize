@@ -4,6 +4,9 @@ import { isImportantNote } from '../../utils/importantNotes';
 import React from 'react';
 import './UnifiedSidebar.css';
 
+// Development mode flag
+const isDev = import.meta.env.DEV;
+
 // Define the UnifiedSidebarProps interface
 interface UnifiedSidebarProps {
   fileTree: FileTreeNode[];
@@ -129,12 +132,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    console.log('🖱️ Click:', node.name, 'isDragging:', isDragging);
+    if (isDev) console.log('🖱️ Click:', node.name, 'isDragging:', isDragging);
 
     // Don't handle click if we just finished dragging
     if (isDragging) {
       e.preventDefault();
-      console.log('⚠️ Click prevented - was dragging');
+      if (isDev) console.log('⚠️ Click prevented - was dragging');
       return;
     }
 
@@ -142,9 +145,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       const newState = !isOpen;
       setIsOpen(newState);
       saveFolderState(node.path, newState);
-      console.log('📁 Folder toggled:', node.name, 'isOpen:', newState);
+      if (isDev) console.log('📁 Folder toggled:', node.name, 'isOpen:', newState);
     } else {
-      console.log('📄 File selected:', node.name);
+      if (isDev) console.log('📄 File selected:', node.name);
       onSelectFile(node.path, node.name);
     }
   };
@@ -177,7 +180,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       draggedNode: node
     });
 
-    console.log('🖱️ Mouse down on:', node.name);
+    if (isDev) console.log('🖱️ Mouse down on:', node.name);
   };
 
   const handleMouseEnter = () => {
@@ -188,7 +191,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       setIsDragOver(true);
       // Update the parent's dragState to track which folder we're hovering over
       setDragState(prev => ({ ...prev, hoveredFolder: node.path }));
-      console.log('🎯 Mouse enter folder:', node.name, 'while dragging:', dragState.draggedPath);
+      if (isDev) console.log('🎯 Mouse enter folder:', node.name, 'while dragging:', dragState.draggedPath);
     }
   };
 
@@ -275,7 +278,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
               e.stopPropagation();
               setIsDragOver(true);
               setDragState(prev => ({ ...prev, hoveredFolder: node.path }));
-              console.log('🎯 Mouse enter folder children area:', node.name);
+              if (isDev) console.log('🎯 Mouse enter folder children area:', node.name);
             }
           }}
           onMouseLeave={(e) => {
@@ -361,7 +364,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   // State for drag preview cursor position
   const [cursorPos, setCursorPos] = React.useState<{ x: number; y: number } | null>(null);
 
-  console.log('🔄 UnifiedSidebar render - onMoveItem is:', onMoveItem ? 'defined ✅' : 'undefined ❌');
+  if (isDev) console.log('🔄 UnifiedSidebar render - onMoveItem is:', onMoveItem ? 'defined ✅' : 'undefined ❌');
 
   const folderName = getRootPath().split(/\\/g).pop(); // Extract folder name from path
   const rootPath = getRootPath();
@@ -393,11 +396,11 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   // Expose revealFile function via ref
   React.useImperativeHandle(ref, () => ({
     revealFile: (filePath: string) => {
-      console.log('🔍 Revealing file:', filePath);
+      if (isDev) console.log('🔍 Revealing file:', filePath);
 
       // Get all parent folders
       const parentPaths = getParentPaths(filePath, fileTree);
-      console.log('📁 Parent paths:', parentPaths);
+      if (isDev) console.log('📁 Parent paths:', parentPaths);
 
       // Open all parent folders
       const savedStates = localStorage.getItem('folderStates');
@@ -452,7 +455,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
       // Only set dragging once when threshold is exceeded
       if ((dx > 5 || dy > 5) && !dragState.isDragging) {
-        console.log('🚀 DRAG START:', dragState.draggedPath);
+        if (isDev) console.log('🚀 DRAG START:', dragState.draggedPath);
         setDragState(prev => ({ ...prev, isDragging: true }));
       }
 
@@ -464,16 +467,18 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
     const handleGlobalMouseUp = async () => {
       if (dragState.dragStartPos || dragState.draggedPath) {
-        console.log('🏁 DRAG END (global)');
+        if (isDev) console.log('🏁 DRAG END (global)');
 
         // Check if we're dropping on a folder
         if (dragState.hoveredFolder && dragState.draggedPath && onMoveItem) {
           const sourcePath = dragState.draggedPath;
           const destPath = dragState.hoveredFolder;
 
-          console.log('💧 DROP detected');
-          console.log('   📦 Source:', sourcePath);
-          console.log('   📂 Destination:', destPath);
+          if (isDev) {
+            console.log('💧 DROP detected');
+            console.log('   📦 Source:', sourcePath);
+            console.log('   📂 Destination:', destPath);
+          }
 
           // Normalize paths
           const normalizedSource = sourcePath.replace(/\\/g, '/').toLowerCase();
@@ -481,10 +486,10 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
           // Validate
           if (normalizedSource !== normalizedDest && !normalizedDest.startsWith(normalizedSource + '/')) {
-            console.log('   ✅ Valid drop - moving item');
+            if (isDev) console.log('   ✅ Valid drop - moving item');
             await onMoveItem(sourcePath, destPath);
           } else {
-            console.log('   ❌ Invalid drop');
+            if (isDev) console.log('   ❌ Invalid drop');
           }
         }
 
@@ -544,12 +549,14 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
     if (onMoveItem) {
       const sourcePath = e.dataTransfer.getData('text/plain');
-      console.log('💧 DROP on ROOT');
-      console.log('   📦 Source path:', sourcePath);
-      console.log('   📂 Destination:', rootPath);
+      if (isDev) {
+        console.log('💧 DROP on ROOT');
+        console.log('   📦 Source path:', sourcePath);
+        console.log('   📂 Destination:', rootPath);
+      }
 
       if (sourcePath && sourcePath !== rootPath) {
-        console.log('   ✅ Valid drop - moving to root');
+        if (isDev) console.log('   ✅ Valid drop - moving to root');
         await onMoveItem(sourcePath, rootPath);
       }
     }
