@@ -26,6 +26,7 @@ interface MilkdownEditorProps {
   rootPath?: string
   editorId?: string // Unique ID to scope autocomplete per pane
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
+  isActive?: boolean // Whether this pane is currently active
 }
 
 interface FileItem {
@@ -34,7 +35,7 @@ interface FileItem {
   type: 'md' | 'svg' | 'pdf' | 'png' | 'jpg' | 'other'
 }
 
-function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, editorId = 'default', onPaneActivate }: MilkdownEditorProps) {
+function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, editorId = 'default', onPaneActivate, isActive }: MilkdownEditorProps) {
   const editorRef = useRef<Editor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [autocompleteVisible, setAutocompleteVisible] = useState(false)
@@ -44,6 +45,44 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   const [files, setFiles] = useState<FileItem[]>([])
   const [triggerPos, setTriggerPos] = useState(0)
   const [hasNavigated, setHasNavigated] = useState(false) // Track if user has used arrow keys
+  const pendingCursorPosRef = useRef<number | null>(null) // Store cursor position to restore after re-render
+
+  // Track when isActive changes and restore cursor if needed
+  useEffect(() => {
+    if (isActive && pendingCursorPosRef.current !== null && editorRef.current) {
+      const cursorPos = pendingCursorPosRef.current
+
+      // Restore immediately
+      try {
+        const view = editorRef.current.ctx.get(editorViewCtx)
+        view.focus()
+
+        const { state, dispatch } = view
+        const tr = state.tr.setSelection(TextSelection.create(state.doc, cursorPos))
+        dispatch(tr)
+      } catch (err) {
+        console.error(`[MilkdownEditor] ${editorId} - Failed to restore cursor:`, err)
+      }
+
+      // ALSO restore again after a tiny delay to combat whatever is stealing it
+      setTimeout(() => {
+        if (!editorRef.current) return
+
+        try {
+          const view = editorRef.current.ctx.get(editorViewCtx)
+          view.focus()
+
+          const { state, dispatch } = view
+          const tr = state.tr.setSelection(TextSelection.create(state.doc, cursorPos))
+          dispatch(tr)
+        } catch (err) {
+          console.error(`[MilkdownEditor] ${editorId} - Failed to restore cursor (delayed):`, err)
+        }
+      }, 10)
+
+      pendingCursorPosRef.current = null // Clear the pending position
+    }
+  }, [isActive, editorId])
 
   // Fetch files from workspace
   useEffect(() => {
@@ -331,7 +370,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
 
       // Insert the filename using the insertWikiLink helper
       const { state, dispatch } = view
-      const { doc } = state
+      const { doc} = state
 
       // Find the position of ']]' after trigger
       let endPos = triggerPos
@@ -379,11 +418,62 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   const handleClose = () => {}
 
   const handleContainerClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement
+
     // Activate the pane when editor is clicked (for split view)
-    if (onPaneActivate) {
+    if (onPaneActivate && !isActive) {
+      // Focus and set cursor immediately (must happen during click event for browser security)
+      if (editorRef.current) {
+        try {
+          const editor = editorRef.current
+          const ctx = editor.ctx
+          const view = ctx.get(editorViewCtx)
+
+          // Focus the editor first
+          view.focus()
+
+          const { state } = view
+
+          // Check if user clicked on empty space or on actual content
+          const clickedOnEmptySpace =
+            target === editorContainerRef.current ||
+            target.classList.contains('milkdown') ||
+            target.classList.contains('milkdown-editor-container')
+
+          let cursorPosition: number
+
+          if (clickedOnEmptySpace) {
+            // Clicked on empty space - move cursor to end of document
+            cursorPosition = state.doc.content.size - 1
+          } else {
+            // Clicked on actual content - get position from click coordinates
+            const pos = view.posAtCoords({ left: e.clientX, top: e.clientY })
+            if (pos) {
+              cursorPosition = pos.pos
+            } else {
+              // Fallback to current selection position
+              cursorPosition = state.selection.from
+            }
+          }
+
+          // Set cursor at the determined position
+          const tr = state.tr.setSelection(TextSelection.create(state.doc, cursorPosition))
+          view.dispatch(tr)
+
+          // Store the cursor position so we can restore it after React re-renders
+          pendingCursorPosRef.current = cursorPosition
+        } catch (err) {
+          console.error(`[MilkdownEditor] ${editorId} - Failed to handle inactive pane click:`, err)
+        }
+      }
+
+      // Call onPaneActivate to trigger React state update
       onPaneActivate()
+
+      return // Exit early
     }
 
+    // If pane is already active, handle click normally
     if (!editorRef.current) return
 
     try {
@@ -391,13 +481,12 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       const ctx = editor.ctx
       const view = ctx.get(editorViewCtx)
 
-      // Check if clicking on text content or empty space
-      const target = e.target as HTMLElement
       const clickedOnProseMirror = target.closest('.ProseMirror')
 
-      // If clicking on the ProseMirror content area, let it handle naturally (don't move cursor)
+      // If clicking on the ProseMirror content area, ensure it's focused
       if (clickedOnProseMirror && target.closest('.ProseMirror') !== target.closest('.milkdown')) {
-        // Clicking on actual text content - ProseMirror will handle cursor placement
+        // Clicking on actual text content - ensure editor is focused, ProseMirror will handle cursor placement
+        view.focus()
         return
       }
 
@@ -413,7 +502,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         dispatch(tr)
       }
     } catch (error) {
-      console.error('Failed to focus editor:', error)
+      console.error(`[MilkdownEditor] ${editorId} - Error handling click:`, error)
     }
   }
 
@@ -439,10 +528,10 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   )
 }
 
-export default function MilkdownEditor({ content, onChange, onWikiLinkClick, rootPath, editorId, onPaneActivate }: MilkdownEditorProps) {
+export default function MilkdownEditor({ content, onChange, onWikiLinkClick, rootPath, editorId, onPaneActivate, isActive }: MilkdownEditorProps) {
   return (
     <MilkdownProvider>
-      <MilkdownEditorInner content={content} onChange={onChange} onWikiLinkClick={onWikiLinkClick} rootPath={rootPath} editorId={editorId} onPaneActivate={onPaneActivate} />
+      <MilkdownEditorInner content={content} onChange={onChange} onWikiLinkClick={onWikiLinkClick} rootPath={rootPath} editorId={editorId} onPaneActivate={onPaneActivate} isActive={isActive} />
     </MilkdownProvider>
   )
 }

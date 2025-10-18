@@ -12,6 +12,7 @@ interface EditorTabProps {
   onFileCreated?: () => void
   editorId?: string // Unique ID for autocomplete scoping
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
+  isActive?: boolean // Whether this pane is currently active
 }
 
 interface SaveResult {
@@ -19,7 +20,7 @@ interface SaveResult {
   error?: string
 }
 
-function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate }: EditorTabProps) {
+function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive }: EditorTabProps) {
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -321,6 +322,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
           rootPath={rootPath}
           editorId={editorId}
           onPaneActivate={onPaneActivate}
+          isActive={isActive}
         />
       </div>
     </div>

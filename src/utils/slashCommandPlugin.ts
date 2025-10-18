@@ -50,17 +50,13 @@ export const slashCommandPlugin = () => {
         apply(tr, value) {
           const meta = tr.getMeta(slashCommandKey)
 
-          console.log('State apply called, meta:', meta)
-
           if (meta?.type === 'open') {
-            console.log('Setting state to active with range:', meta.range)
             const newState = {
               active: true,
               range: meta.range,
               selectedIndex: 0, // Start with first item selected
               filteredCommands: commands,
             }
-            console.log('New state:', newState)
             return newState
           }
 
@@ -152,20 +148,14 @@ export const slashCommandPlugin = () => {
           return false
         },
         handleTextInput(view, from, to, text) {
-          console.log('handleTextInput:', text, 'from:', from, 'to:', to)
-
           const { selection } = view.state
           const { $from } = selection
 
           // Check if user just typed /
           if (text === '/') {
-            console.log('Slash detected!')
             const textBefore = $from.parent.textBetween(0, $from.parentOffset - 1, null, '\ufffc')
-            console.log('Text before:', textBefore)
 
             if (textBefore === '' || textBefore.endsWith(' ')) {
-              console.log('Opening menu!')
-
               // Open menu - dispatch transaction and wait for state to update
               view.dispatch(
                 view.state.tr.setMeta(slashCommandKey, {
@@ -189,7 +179,6 @@ export const slashCommandPlugin = () => {
           const state = slashCommandKey.getState(view.state)
           if (state.active && state.range) {
             const query = view.state.doc.textBetween(state.range.from + 1, selection.from, null, '\ufffc')
-            console.log('Filtering with query:', query)
             const tr = view.state.tr.setMeta(slashCommandKey, {
               type: 'filter',
               query,
@@ -216,12 +205,9 @@ export const slashCommandPlugin = () => {
     })
 
     function showMenu(view: any) {
-      console.log('showMenu called')
       const state = slashCommandKey.getState(view.state)
-      console.log('Menu state:', state)
 
       if (!state.active || !state.range) {
-        console.log('Menu not active or no range')
         return
       }
 
@@ -234,17 +220,50 @@ export const slashCommandPlugin = () => {
       menuElement = document.createElement('div')
       menuElement.className = 'slash-command-menu'
 
-      // Position menu
-      const coords = view.coordsAtPos(state.range.from)
-      console.log('Menu coords:', coords)
+      // Position menu - first render it off-screen to measure height
       menuElement.style.position = 'fixed'
-      menuElement.style.left = `${coords.left}px`
-      menuElement.style.top = `${coords.bottom + 5}px`
+      menuElement.style.left = '-9999px'
+      menuElement.style.top = '-9999px'
       menuElement.style.zIndex = '1000'
 
       renderMenuItems(view, menuElement)
       document.body.appendChild(menuElement)
-      console.log('Menu appended to body')
+
+      // Now measure and position smartly
+      const coords = view.coordsAtPos(state.range.from)
+      const menuHeight = menuElement.offsetHeight
+      const menuWidth = menuElement.offsetWidth
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+
+      // Calculate space above and below cursor
+      const spaceBelow = viewportHeight - coords.bottom
+      const spaceAbove = coords.top
+
+      // Determine vertical position
+      let top: number
+      if (spaceBelow >= menuHeight + 10) {
+        // Enough space below - show below cursor
+        top = coords.bottom + 5
+      } else if (spaceAbove >= menuHeight + 10) {
+        // Not enough space below but enough above - show above cursor
+        top = coords.top - menuHeight - 5
+      } else {
+        // Not enough space either way - show below but allow scrolling
+        top = coords.bottom + 5
+      }
+
+      // Determine horizontal position (avoid going off-screen on right)
+      let left = coords.left
+      if (left + menuWidth > viewportWidth - 10) {
+        left = viewportWidth - menuWidth - 10
+      }
+      if (left < 10) {
+        left = 10
+      }
+
+      menuElement.style.left = `${left}px`
+      menuElement.style.top = `${top}px`
     }
 
     function updateMenu(view: any) {
@@ -381,15 +400,12 @@ export const slashCommandPlugin = () => {
     }
 
     function executeCommand(view: any, cmd: SlashCommand) {
-      console.log('Executing command:', cmd)
       const state = slashCommandKey.getState(view.state)
       if (!state.range) return
 
       const { from } = state.range
       const to = view.state.selection.from
       const { tr, schema } = view.state
-
-      console.log('Schema nodes:', Object.keys(schema.nodes))
 
       // Delete the / and any typed text
       tr.delete(from, to)
@@ -455,22 +471,10 @@ export const slashCommandPlugin = () => {
           node = schema.nodes.blockquote.create(null, schema.nodes.paragraph.create())
           break
         case 'taskList':
-          console.log('Creating task list, available nodes:', Object.keys(schema.nodes))
-          console.log('Has task_list_item?', !!schema.nodes.task_list_item)
-          console.log('Has list_item?', !!schema.nodes.list_item)
-          if (schema.nodes.list_item) {
-            console.log('list_item spec:', schema.nodes.list_item.spec)
-            console.log('list_item attrs:', schema.nodes.list_item.spec.attrs)
-          }
-
           // Use bullet_list with list_item that has checked attribute
           if (schema.nodes.bullet_list && schema.nodes.list_item) {
-            console.log('Using bullet_list with checked list_item')
-
             // Check what attributes list_item supports
             const listItemSpecAttrs = schema.nodes.list_item.spec.attrs || {}
-            console.log('Available list_item attributes:', Object.keys(listItemSpecAttrs))
-            console.log('Full list_item attrs spec:', listItemSpecAttrs)
 
             // Create list item with checked attribute set to null (unchecked checkbox)
             // In Milkdown GFM, checked: null means unchecked checkbox, checked: true means checked
@@ -482,7 +486,6 @@ export const slashCommandPlugin = () => {
               listItemAttrs.listType = 'task'
             }
 
-            console.log('Creating list_item with attrs:', listItemAttrs)
             node = schema.nodes.bullet_list.create(
               null,
               schema.nodes.list_item.create(
@@ -491,7 +494,6 @@ export const slashCommandPlugin = () => {
               )
             )
           } else if (schema.nodes.bulletList && schema.nodes.listItem) {
-            console.log('Using bulletList with checked listItem (camelCase)')
             const attrs = schema.nodes.listItem.spec.attrs || {}
             const listItemAttrs: any = {}
             if ('checked' in attrs) {
@@ -511,19 +513,12 @@ export const slashCommandPlugin = () => {
           }
           break
         case 'divider':
-          console.log('Creating divider, available nodes:', Object.keys(schema.nodes))
-          console.log('Has horizontal_rule?', !!schema.nodes.horizontal_rule)
-          console.log('Has horizontalRule?', !!schema.nodes.horizontalRule)
-          console.log('Has hr?', !!schema.nodes.hr)
           // Check both horizontal_rule and horizontalRule
           if (schema.nodes.horizontal_rule) {
-            console.log('Using horizontal_rule')
             node = schema.nodes.horizontal_rule.create()
           } else if (schema.nodes.horizontalRule) {
-            console.log('Using horizontalRule')
             node = schema.nodes.horizontalRule.create()
           } else if (schema.nodes.hr) {
-            console.log('Using hr')
             node = schema.nodes.hr.create()
           }
           break
@@ -531,7 +526,6 @@ export const slashCommandPlugin = () => {
           // For now, just insert a paragraph and let user add image manually
           // TODO: Add image upload dialog
           node = schema.nodes.paragraph.create()
-          console.log('Image insertion not yet implemented')
           break
         case 'table':
           // Create a simple 3x3 table
@@ -551,14 +545,13 @@ export const slashCommandPlugin = () => {
         case 'math':
           // Math block not yet implemented
           node = schema.nodes.paragraph.create()
-          console.log('Math block not yet implemented')
           break
         default:
           node = schema.nodes.paragraph.create()
       }
 
       if (!node) {
-        console.error('Failed to create node for command:', cmd.command)
+        console.error('[SlashCommand] Failed to create node for command:', cmd.command)
         closeMenu(view)
         return
       }
