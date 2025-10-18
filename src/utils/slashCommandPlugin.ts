@@ -528,11 +528,14 @@ export const slashCommandPlugin = () => {
           node = schema.nodes.paragraph.create()
           break
         case 'table':
-          // Create a simple 3x3 table
+          // Create a simple 3x3 table with proper GFM alignment attributes
           if (schema.nodes.table) {
-            const cell = schema.nodes.table_cell?.create(null, schema.nodes.paragraph.create()) ||
-                        schema.nodes.tableCell?.create(null, schema.nodes.paragraph.create())
-            const headerCell = schema.nodes.table_header?.create(null, schema.nodes.paragraph.create()) || cell
+            // GFM tables require alignment attribute on cells (null = default/left alignment)
+            const cellAttrs = { alignment: null }
+
+            const cell = schema.nodes.table_cell?.create(cellAttrs, schema.nodes.paragraph.create()) ||
+                        schema.nodes.tableCell?.create(cellAttrs, schema.nodes.paragraph.create())
+            const headerCell = schema.nodes.table_header?.create(cellAttrs, schema.nodes.paragraph.create()) || cell
 
             const headerRow = schema.nodes.table_row?.create(null, [headerCell, headerCell, headerCell]) ||
                              schema.nodes.tableRow?.create(null, [headerCell, headerCell, headerCell])

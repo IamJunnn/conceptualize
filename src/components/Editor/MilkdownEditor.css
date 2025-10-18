@@ -750,3 +750,68 @@
   background: #3e3e3e;
   transform: scale(1.2);
 }
+
+/* Table Widget Styles */
+.table-widget-container {
+  position: relative;
+  pointer-events: none;
+}
+
+/* Hoverable border line */
+.table-border-line {
+  pointer-events: all;
+  cursor: pointer;
+  background: #64c8ca;
+  transition: all 0.15s ease;
+}
+
+.table-border-line.horizontal {
+  transform: translateY(-1.5px);
+}
+
+.table-border-line.vertical {
+  transform: translateX(-1.5px);
+}
+
+.table-border-line:hover {
+  background: #7dd3d5;
+  box-shadow: 0 0 8px rgba(100, 200, 202, 0.6);
+}
+
+/* Plus button on border line */
+.table-border-button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #64c8ca;
+  color: #1e1e1e;
+  border: 2px solid #1e1e1e;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: all;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  padding: 0;
+  margin: 0;
+}
+
+.table-border-button:hover {
+  background: #7dd3d5;
+  transform: scale(1.2);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.table-border-button:active {
+  transform: scale(1.0);
+}
+
+/* Table hover effects */
+.milkdown table {
+  position: relative;
+}

@@ -14,7 +14,9 @@ import { keyboardShortcuts } from '../../utils/keyboardShortcuts'
 import { wikiLinkAutocompletePlugin } from '../../utils/wikiLinkAutocompletePlugin'
 import { imageResizePlugin } from '../../utils/imageResizePlugin'
 import { slashCommandPlugin } from '../../utils/slashCommandPlugin'
+import { tableWidgetPlugin } from '../../utils/tableCommandsPlugin'
 import WikiLinkAutocomplete from './WikiLinkAutocomplete'
+import TableWidget from './TableWidget'
 import { invoke } from '@tauri-apps/api/core'
 import '@milkdown/theme-nord/style.css'
 import './MilkdownEditor.css'
@@ -325,6 +327,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       .use(keyboardShortcuts())
       .use(wikiLinkAutocompletePlugin())
       .use(imageResizePlugin())
+      .use(tableWidgetPlugin)
 
     editorRef.current = editor
     return editor
@@ -524,6 +527,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         selectedIndex={selectedIndex}
         onNavigate={handleNavigate}
       />
+      <TableWidget editor={editorRef.current} />
     </div>
   )
 }

@@ -292,13 +292,16 @@ function insertBlock(view: any, pos: number, type: string) {
       node = schema.nodes.codeBlock.create()
       break
     case 'table':
-      // Create a 3x3 table
+      // Create a 3x3 table with proper GFM alignment attributes
+      // GFM tables require alignment attribute on cells (null = default/left alignment)
+      const cellAttrs = { alignment: null }
+
       const cell = schema.nodes.tableCell.create(
-        null,
+        cellAttrs,
         schema.nodes.paragraph.create()
       )
       const headerCell = schema.nodes.tableHeader?.create(
-        null,
+        cellAttrs,
         schema.nodes.paragraph.create()
       ) || cell
 
