@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { DocumentIcon } from '@heroicons/react/24/outline'
 import './WikiLinkAutocomplete.css'
 
@@ -15,6 +15,7 @@ interface WikiLinkAutocompleteProps {
   files: FileItem[]
   onSelect: (file: FileItem) => void
   onClose: () => void
+  onClickOutsideClose?: () => void // Called when autocomplete is closed by click-outside
   selectedIndex: number
   onNavigate: (direction: 'up' | 'down') => void
 }
@@ -26,10 +27,22 @@ export default function WikiLinkAutocomplete({
   files,
   onSelect,
   onClose,
+  onClickOutsideClose,
   selectedIndex,
   onNavigate,
 }: WikiLinkAutocompleteProps) {
   const [filteredFiles, setFilteredFiles] = useState<FileItem[]>([])
+  const [adjustedPosition, setAdjustedPosition] = useState(position)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Use refs for callbacks to avoid recreating the handler
+  const onCloseRef = useRef(onClose)
+  const onClickOutsideCloseRef = useRef(onClickOutsideClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+    onClickOutsideCloseRef.current = onClickOutsideClose
+  }, [onClose, onClickOutsideClose])
 
   useEffect(() => {
     if (!searchQuery) {
@@ -45,6 +58,63 @@ export default function WikiLinkAutocomplete({
     )
     setFilteredFiles(filtered)
   }, [searchQuery, files])
+
+  // Smart positioning: check available space and position dropdown accordingly
+  useEffect(() => {
+    if (!visible || !dropdownRef.current) return
+
+    const dropdown = dropdownRef.current
+    const dropdownHeight = dropdown.offsetHeight
+    const viewportHeight = window.innerHeight
+
+    const spaceBelow = viewportHeight - position.top
+    const spaceAbove = position.top
+
+    // If more space above and not enough space below, show above
+    if (spaceAbove > spaceBelow && spaceBelow < dropdownHeight) {
+      setAdjustedPosition({
+        top: position.top - dropdownHeight - 5, // 5px gap above cursor
+        left: position.left,
+      })
+    } else {
+      // Default: show below
+      setAdjustedPosition(position)
+    }
+  }, [visible, position, filteredFiles])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!visible) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        // Stop the event from propagating to prevent it from reopening the autocomplete
+        event.stopImmediatePropagation()
+
+        // Dispatch close event with clickOutside flag to notify the plugin
+        window.dispatchEvent(
+          new CustomEvent('wiki-link-autocomplete-close', {
+            detail: { clickOutside: true },
+          })
+        )
+
+        // Call the click-outside callback
+        if (onClickOutsideCloseRef.current) {
+          onClickOutsideCloseRef.current()
+        }
+
+        // Close the autocomplete
+        onCloseRef.current()
+      }
+    }
+
+    // Use capture phase to handle the event before it reaches other handlers
+    document.addEventListener('mousedown', handleClickOutside, true)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true)
+    }
+  }, [visible])
 
   if (!visible || filteredFiles.length === 0) return null
 
@@ -71,10 +141,11 @@ export default function WikiLinkAutocomplete({
 
   return (
     <div
+      ref={dropdownRef}
       className="wiki-link-autocomplete"
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
+        top: `${adjustedPosition.top}px`,
+        left: `${adjustedPosition.left}px`,
       }}
     >
       {mdFiles.map((file, index) => {

@@ -10,6 +10,9 @@ export interface WikiLinkAutocompleteState {
   triggerPos: number
 }
 
+// Global flag to prevent reopening after click-outside
+let lastClickOutsideCloseTime = 0
+
 export const wikiLinkAutocompletePlugin = () => {
   return $prose(() => {
     let autocompleteState: WikiLinkAutocompleteState = {
@@ -18,6 +21,14 @@ export const wikiLinkAutocompletePlugin = () => {
       searchQuery: '',
       triggerPos: 0,
     }
+
+    // Listen for click-outside close events to set the global flag
+    window.addEventListener('wiki-link-autocomplete-close', (event: any) => {
+      const detail = event.detail
+      if (detail?.clickOutside) {
+        lastClickOutsideCloseTime = Date.now()
+      }
+    })
 
     return new Plugin({
       key: wikiLinkAutocompletePluginKey,
@@ -90,6 +101,13 @@ export const wikiLinkAutocompletePlugin = () => {
                   searchQuery: '',
                   triggerPos: cursorPos,
                   editorId,
+                }
+
+                // Check if we should block opening due to recent click-outside close
+                const timeSinceClickOutside = Date.now() - lastClickOutsideCloseTime
+                if (timeSinceClickOutside < 300) {
+                  // Block autocomplete from reopening within 300ms of click-outside close
+                  return
                 }
 
                 // Dispatch metadata to update plugin state
