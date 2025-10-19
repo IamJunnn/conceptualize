@@ -17,7 +17,19 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  
+  const highlightingRef = useRef<((nodeId: string | null) => void) | null>(null);
+
+  // Store callbacks in refs to prevent useEffect from re-running when they change
+  const onNodeClickRef = useRef(onNodeClick);
+  const onNodeDoubleClickRef = useRef(onNodeDoubleClick);
+  const onNodeContextMenuRef = useRef(onNodeContextMenu);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+    onNodeDoubleClickRef.current = onNodeDoubleClick;
+    onNodeContextMenuRef.current = onNodeContextMenu;
+  }, [onNodeClick, onNodeDoubleClick, onNodeContextMenu]);
 
   // Update dimensions on mount and resize
   useEffect(() => {
@@ -60,10 +72,30 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     // Add zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
-      .filter((event) => !event.button && event.type !== 'dblclick')
+      .filter((event) => {
+        const target = event.target as Element;
+
+        // ALWAYS prevent zoom/pan if clicking on a node (any button, any event type)
+        if (target.closest('.graph-node')) {
+          return false;
+        }
+
+        // Prevent zoom on right-click anywhere
+        if (event.button === 2 || event.type === 'contextmenu') {
+          return false;
+        }
+
+        // Prevent zoom on double-click
+        if (event.type === 'dblclick') {
+          return false;
+        }
+
+        // Allow wheel zoom and left-click panning on background only
+        return event.type === 'wheel' || (event.type !== 'dblclick' && event.button === 0);
+      })
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
-        
+
         const ghostNodeGroup = svg.select('.ghost-nodes');
         if (ghostNodeGroup.empty()) return;
 
@@ -220,32 +252,45 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
 
     // Add drag behavior
     const drag = d3.drag<SVGGElement, GraphNode>()
-      .clickDistance(12)
+      .clickDistance(4) // Smaller threshold for better click detection
+      .filter((event) => event.button === 0) // Only allow left-click dragging
       .on('start', (event, d) => {
         isDragging = false;
         dragStartPos = { x: event.x, y: event.y };
-        if (!event.active) simulation.alphaTarget(0.1).restart();
-        d.fx = d.x;
-        d.fy = d.y;
+        // Don't do anything yet - wait to see if it's a real drag
       })
       .on('drag', (event, d) => {
         // Check if we've moved enough to be considered a drag
         const dx = Math.abs(event.x - dragStartPos.x);
         const dy = Math.abs(event.y - dragStartPos.y);
-        if (dx > 10 || dy > 10) {
-          isDragging = true;
+
+        // Only start dragging if movement exceeds threshold
+        if (dx > 5 || dy > 5) {
+          if (!isDragging) {
+            // First time crossing threshold - keep simulation running smoothly
+            isDragging = true;
+            if (!event.active) simulation.alphaTarget(0.5).restart(); // Higher alpha for smoother physics
+            d.fx = d.x;
+            d.fy = d.y;
+          }
+          // Update position only if we're actually dragging
+          d.fx = event.x;
+          d.fy = event.y;
         }
-        d.fx = event.x;
-        d.fy = event.y;
       })
       .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
+        // Only reset simulation if we were actually dragging
+        if (isDragging) {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+          // Give the simulation a stronger kick to settle nicely
+          simulation.alpha(0.5).restart();
+        }
         // Reset drag flag after a short delay
         setTimeout(() => {
           isDragging = false;
-        }, 10);
+        }, 50);
       });
 
     node.call(drag);
@@ -283,19 +328,35 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
           setSelectedNodeId(d.id);
         }
 
-        if (onNodeClick) onNodeClick(d);
+        if (onNodeClickRef.current) onNodeClickRef.current(d);
       }
     });
 
     node.on('dblclick', (event, d) => {
       event.stopPropagation();
-      if (onNodeDoubleClick) onNodeDoubleClick(d);
+      if (onNodeDoubleClickRef.current) onNodeDoubleClickRef.current(d);
+    });
+
+    // Prevent any mouse events on right-click from affecting the simulation
+    node.on('mousedown', function(event) {
+      if (event.button === 2) { // Right-click
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
     });
 
     node.on('contextmenu', function(event, d) {
       event.preventDefault();
-      // event.stopPropagation(); // Allow click-outside to work
-      if (onNodeContextMenu) {
+      event.stopPropagation();
+      event.stopImmediatePropagation(); // Stop all event propagation
+
+      // Don't trigger context menu if we were dragging
+      if (isDragging) {
+        return;
+      }
+
+      if (onNodeContextMenuRef.current) {
         // Create a synthetic React event
         const syntheticEvent = {
           preventDefault: () => {},
@@ -303,7 +364,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
           clientX: event.clientX,
           clientY: event.clientY
         } as React.MouseEvent;
-        onNodeContextMenu(syntheticEvent, d);
+        onNodeContextMenuRef.current(syntheticEvent, d);
       }
     });
 
@@ -342,7 +403,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     });
 
     node.on('mouseleave', function() {
-      applyHighlighting();
+      applyHighlighting(selectedNodeId);
     });
 
     // Update positions on each tick
@@ -360,8 +421,8 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     });
 
     // Apply highlighting based on selected node
-    const applyHighlighting = () => {
-      if (!selectedNodeId) {
+    const applyHighlighting = (nodeId: string | null) => {
+      if (!nodeId) {
         // Reset all nodes and links to normal
         node.select('circle')
           .transition()
@@ -381,14 +442,14 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
           .attr('stroke-width', d => d.type === 'structural' ? 2 : 2.5);
       } else {
         // Get connected nodes
-        const connectedNodes = getConnectedNodeIds(selectedNodeId);
+        const connectedNodes = getConnectedNodeIds(nodeId);
 
         // Highlight/dim nodes
         node.select('circle')
           .transition()
           .duration(300)
           .style('opacity', (d: any) => connectedNodes.has(d.id) ? 1 : 0.15)
-          .attr('stroke-width', (d: any) => d.id === selectedNodeId ? 4 : 2);
+          .attr('stroke-width', (d: any) => d.id === nodeId ? 4 : 2);
 
         node.select('text')
           .transition()
@@ -414,8 +475,11 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
       }
     };
 
-    // Apply highlighting whenever selection changes
-    applyHighlighting();
+    // Store the highlighting function in ref so it can be called from outside this effect
+    highlightingRef.current = applyHighlighting;
+
+    // Apply initial highlighting
+    applyHighlighting(selectedNodeId);
 
     // Clear selection when clicking on background
     svg.on('click', () => {
@@ -428,9 +492,14 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     return () => {
       simulation.stop();
     };
-  }, [data, dimensions, onNodeClick, onNodeDoubleClick, onNodeContextMenu, selectedNodeId, hiddenNodes]);
+  }, [data, dimensions, hiddenNodes]);
 
-  
+  // Separate effect to handle highlighting when selection changes (without recreating the simulation)
+  useEffect(() => {
+    if (highlightingRef.current) {
+      highlightingRef.current(selectedNodeId);
+    }
+  }, [selectedNodeId]);
 
   return (
     <div ref={containerRef} className="graph-engine-container">
