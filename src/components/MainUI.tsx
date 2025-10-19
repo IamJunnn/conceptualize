@@ -694,12 +694,26 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     setActivePane('right')
   }
 
-  const handleCloseSplitView = () => {
-    if (isDev) console.log('Closing split view')
+  const handleCloseSplitView = (filesToTransfer?: OpenFile[], tabToActivate?: string) => {
+    console.log('[CLOSE SPLIT] 🔄 Closing split view')
+
+    // Use provided files or fall back to current state
+    const finalFiles = filesToTransfer || leftPaneFiles;
+    const finalTab = tabToActivate || leftPaneTab;
+
+    console.log('[CLOSE SPLIT] 📋 Current state:', {
+      leftPaneFiles: leftPaneFiles.map(f => f.name),
+      leftPaneTab,
+      rightPaneFiles: rightPaneFiles.map(f => f.name),
+      rightPaneTab,
+      filesToTransfer: filesToTransfer?.map(f => f.name),
+      tabToActivate
+    });
 
     // Transfer left pane files back to single pane
-    setOpenFiles(leftPaneFiles)
-    setActiveTab(leftPaneTab)
+    console.log('[CLOSE SPLIT] ➡️ Transferring files to single pane:', finalFiles.map(f => f.name))
+    setOpenFiles(finalFiles)
+    setActiveTab(finalTab)
 
     // Clear split view state
     setSplitView(false)
@@ -708,6 +722,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     setRightPaneFiles([])
     setRightPaneTab('graph')
     setActivePane('left')
+
+    console.log('[CLOSE SPLIT] ✅ Split view closed')
   }
 
   // Handle tab drop
@@ -768,19 +784,35 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           // Drop on LEFT pane
           if (sourcePane === 'right') {
             // Move from right to left
+            console.log('[DRAG] 📦 Moving from RIGHT to LEFT');
+            console.log('[DRAG] 📋 Current state:', {
+              leftPaneFiles: leftPaneFiles.map(f => f.name),
+              rightPaneFiles: rightPaneFiles.map(f => f.name),
+              draggedFile: fileName
+            });
+
             const newRightFiles = rightPaneFiles.filter(f => f.path !== filePath);
+            console.log('[DRAG] ➡️ New right pane files after removal:', newRightFiles.map(f => f.name));
             setRightPaneFiles(newRightFiles);
 
             const existingInLeft = leftPaneFiles.find(f => f.path === filePath);
+            console.log('[DRAG] 🔍 File already exists in left?', !!existingInLeft);
+
+            let newLeftFiles = leftPaneFiles;
             if (!existingInLeft) {
-              setLeftPaneFiles([...leftPaneFiles, { path: filePath, name: fileName }]);
+              newLeftFiles = [...leftPaneFiles, { path: filePath, name: fileName }];
+              console.log('[DRAG] ⬅️ New left pane files after adding:', newLeftFiles.map(f => f.name));
+              setLeftPaneFiles(newLeftFiles);
             }
             setLeftPaneTab(filePath);
             setActivePane('left');
 
             // Close split if right pane is empty
             if (newRightFiles.length === 0) {
-              handleCloseSplitView();
+              console.log('[DRAG] ⚠️ Right pane is now empty - closing split view!');
+              console.log('[DRAG] 📊 Passing updated files to handleCloseSplitView:', newLeftFiles.map(f => f.name));
+              // Pass the updated files directly to avoid stale state
+              handleCloseSplitView(newLeftFiles, filePath);
             }
           }
           // If already in left pane, do nothing
