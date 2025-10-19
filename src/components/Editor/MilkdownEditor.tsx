@@ -49,6 +49,16 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   const [hasNavigated, setHasNavigated] = useState(false) // Track if user has used arrow keys
   const pendingCursorPosRef = useRef<number | null>(null) // Store cursor position to restore after re-render
 
+  // Close autocomplete when editor becomes inactive (switching tabs/panes)
+  useEffect(() => {
+    if (!isActive && autocompleteVisible) {
+      setAutocompleteVisible(false);
+      setSearchQuery('');
+      setSelectedIndex(-1);
+      setHasNavigated(false);
+    }
+  }, [isActive, autocompleteVisible, editorId]);
+
   // Track when isActive changes and restore cursor if needed
   useEffect(() => {
     if (isActive && pendingCursorPosRef.current !== null && editorRef.current) {
@@ -146,6 +156,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       // Only respond to events from this editor
       if (event.detail.editorId !== editorId) return
 
+      console.log(`[EDITOR ${editorId}] 🔄 Autocomplete UPDATE - query:`, event.detail.searchQuery);
       setSearchQuery(event.detail.searchQuery)
       setSelectedIndex(-1) // Reset selection when search changes
       setHasNavigated(false) // Reset navigation state
@@ -155,6 +166,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       // Only respond to events from this editor (or global close)
       if (event.detail && event.detail.editorId && event.detail.editorId !== editorId) return
 
+      console.log(`[EDITOR ${editorId}] ❌ Autocomplete CLOSING`);
       setAutocompleteVisible(false)
       setSearchQuery('')
       setSelectedIndex(-1)
@@ -419,6 +431,10 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   // Stub functions for WikiLinkAutocomplete props (not actually used, handled by event system)
   const handleNavigate = () => {}
   const handleClose = () => {}
+  const handleClickOutsideClose = () => {
+    // This is called when autocomplete closes via click-outside
+    // The actual blocking logic is now in the wikiLinkAutocompletePlugin
+  }
 
   const handleContainerClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
@@ -524,6 +540,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         files={files}
         onSelect={handleFileSelect}
         onClose={handleClose}
+        onClickOutsideClose={handleClickOutsideClose}
         selectedIndex={selectedIndex}
         onNavigate={handleNavigate}
       />
