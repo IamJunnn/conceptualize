@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDragDrop, EditorPane } from '../../contexts/DragDropContext';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import { DocumentIcon, StarIcon } from '@heroicons/react/24/outline';
+import { DocumentIcon, StarIcon, ClipboardDocumentListIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { isImportantNote, toggleImportantNote } from '../../utils/importantNotes';
 import './TabBar.css';
 
@@ -21,6 +21,7 @@ interface TabBarProps {
   setDragStartPos: (pos: { x: number; y: number } | null) => void;
   isPaneActive?: boolean; // Track if this pane is the active one
   onRevealInTree?: (filePath: string) => void; // New prop to reveal file in tree
+  onPaneActivate?: () => void; // New prop to activate this pane when a tab is clicked
 }
 
 interface TabContextMenuState {
@@ -41,6 +42,7 @@ export function TabBar({
   setDragStartPos,
   isPaneActive = true, // Default to true for single pane mode
   onRevealInTree,
+  onPaneActivate,
 }: TabBarProps) {
   const { draggedTab, setDraggedTab } = useDragDrop();
   const [contextMenu, setContextMenu] = useState<TabContextMenuState | null>(null);
@@ -133,7 +135,10 @@ export function TabBar({
       {showGraphTab && (
         <button
           className={`tab ${activeTab === 'graph' ? 'active' : ''} ${isPaneActive ? 'pane-active' : 'pane-inactive'}`}
-          onClick={() => onTabClick('graph')}
+          onClick={() => {
+            onTabClick('graph');
+            onPaneActivate?.();
+          }}
           title="Graph"
         >
           Graph
@@ -143,6 +148,15 @@ export function TabBar({
       {openFiles.map((file) => {
         const displayName = file.name.replace(/\.md$/, '');
         const isDragging = draggedTab?.filePath === file.path && dragStartPos !== null;
+        const isSpecialTab = file.path.startsWith('special://');
+
+        // Get icon for special tabs
+        let SpecialIcon = null;
+        if (file.path === 'special://todos') {
+          SpecialIcon = ClipboardDocumentListIcon;
+        } else if (file.path === 'special://timeline') {
+          SpecialIcon = CalendarIcon;
+        }
 
         return (
           <div
@@ -150,18 +164,25 @@ export function TabBar({
             className={`tab file-tab ${activeTab === file.path ? 'active' : ''} ${isPaneActive ? 'pane-active' : 'pane-inactive'} ${isDragging ? 'dragging' : ''}`}
             onMouseDown={(e) => handleTabMouseDown(e, file.path, file.name)}
             onContextMenu={(e) => handleTabContextMenu(e, file.path)}
-            onClick={(e) => {
+            onClick={() => {
               // Don't trigger click if we were dragging
               if (!isDragging) {
                 onTabClick(file.path);
+                onPaneActivate?.();
               }
             }}
             title={displayName}
           >
-            {importantNotes.has(file.path) && (
+            {!isSpecialTab && importantNotes.has(file.path) && (
               <StarSolidIcon
                 className="tab-star-icon"
                 style={{ width: '14px', height: '14px', color: '#fbbf24', flexShrink: 0 }}
+              />
+            )}
+            {SpecialIcon && (
+              <SpecialIcon
+                className="tab-icon"
+                style={{ width: '14px', height: '14px', flexShrink: 0 }}
               />
             )}
             <span className="tab-name">{displayName}</span>

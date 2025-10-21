@@ -353,3 +353,45 @@
   color: #fff;
   font-weight: 500;
 }
+
+/* Quick Action Buttons */
+.sidebar-quick-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #333;
+  background-color: #1e1e1e;
+  margin-top: auto;
+}
+
+.quick-action-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: #252525;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #cccccc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.quick-action-button:hover {
+  background-color: #2a2a2a;
+  border-color: #007acc;
+  color: #007acc;
+}
+
+.quick-action-button:active {
+  transform: scale(0.98);
+}
+
+.quick-action-icon {
+  width: 16px;
+  height: 16px;
+}

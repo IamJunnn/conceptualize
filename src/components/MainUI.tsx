@@ -10,6 +10,9 @@ import { TabBar, OpenFile } from './UI/TabBar'
 import { DropZoneOverlay } from './UI/DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import { getFilesWithIncomingLinks } from '../utils/graphUtils'
+// TODO: Re-enable for full release
+// import TodoPanel from './Todo/TodoPanel'
+// import NoteTodosView from './Todo/NoteTodosView'
 import './MainUI.css'
 
 // Development mode flag
@@ -40,12 +43,7 @@ interface ContextMenuState {
   itemName: string;
 }
 
-// Helper function to check if a file can be viewed (editable or previewable)
-function isFileViewable(fileName: string): boolean {
-  const ext = fileName.toLowerCase().split('.').pop();
-  const viewableExtensions = ['md', 'txt', 'pdf', 'png', 'jpg', 'jpeg', 'svg', 'gif', 'webp', 'bmp', 'ico', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
-  return viewableExtensions.includes(ext || '');
-}
+// Helper function removed - was unused
 
 function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
@@ -210,14 +208,22 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         e.preventDefault() // Prevent browser from closing tab/window
 
         if (!splitView) {
-          // Single pane mode: close active file
-          if (activeTab !== 'graph' && activeTab !== 'timeline') {
-            handleCloseFile(activeTab)
+          // Single pane mode: close active file or special tab
+          if (activeTab !== 'graph') {
+            if (activeTab.startsWith('special://')) {
+              // Close special tab (Todos/Timeline)
+              const newFiles = openFiles.filter(f => f.path !== activeTab)
+              setOpenFiles(newFiles)
+              setActiveTab(newFiles.length > 0 ? newFiles[0].path : 'graph')
+            } else {
+              // Close regular file
+              handleCloseFile(activeTab)
+            }
           }
         } else {
           // Split view mode: close active file in active pane
           if (activePane === 'left') {
-            if (leftPaneTab !== 'graph' && leftPaneTab !== 'timeline') {
+            if (leftPaneTab !== 'graph') {
               const newFiles = leftPaneFiles.filter(f => f.path !== leftPaneTab)
               setLeftPaneFiles(newFiles)
               if (newFiles.length > 0) {
@@ -227,7 +233,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               }
             }
           } else if (activePane === 'right') {
-            if (rightPaneTab !== 'graph' && rightPaneTab !== 'timeline') {
+            if (rightPaneTab !== 'graph') {
               const newFiles = rightPaneFiles.filter(f => f.path !== rightPaneTab)
               setRightPaneFiles(newFiles)
               if (newFiles.length > 0) {
@@ -579,7 +585,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
   }
 
-  const handleRenameItem = (itemPath: string, itemName: string) => {
+  const handleRenameItem = (itemPath: string) => {
     setEditing({ path: itemPath, type: 'rename' })
   }
 
@@ -892,10 +898,14 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               setDragStartPos={setDragStartPos}
               isPaneActive={true}
               onRevealInTree={handleRevealInTree}
+              onPaneActivate={() => setActivePane('left')}
             />
-            <div className="tab-content">
+            <div className="tab-content" onClick={() => setActivePane('left')}>
               {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} />}
-              {openFiles.map((file) => {
+              {/* TODO: Re-enable for full release */}
+              {/* {activeTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={handleSelectFile} />} */}
+              {/* {activeTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />} */}
+              {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                 const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                 return activeTab === file.path && (
                   isEditable ? (
@@ -958,10 +968,14 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 setDragStartPos={setDragStartPos}
                 isPaneActive={activePane === 'left'}
                 onRevealInTree={handleRevealInTree}
+                onPaneActivate={() => setActivePane('left')}
               />
-              <div className="tab-content">
+              <div className="tab-content" onClick={() => setActivePane('left')}>
                 {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} />}
-                {leftPaneFiles.map((file) => {
+                {/* TODO: Re-enable for full release */}
+                {/* {leftPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} />} */}
+                {/* {leftPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />} */}
+                {leftPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return leftPaneTab === file.path && (
                     isEditable ? (
@@ -1031,10 +1045,14 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 setDragStartPos={setDragStartPos}
                 isPaneActive={activePane === 'right'}
                 onRevealInTree={handleRevealInTree}
+                onPaneActivate={() => setActivePane('right')}
               />
-              <div className="tab-content">
+              <div className="tab-content" onClick={() => setActivePane('right')}>
                 {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
-                {rightPaneFiles.map((file) => {
+                {/* TODO: Re-enable for full release */}
+                {/* {rightPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} />} */}
+                {/* {rightPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />} */}
+                {rightPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return rightPaneTab === file.path && (
                     isEditable ? (

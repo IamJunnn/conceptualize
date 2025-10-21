@@ -54,7 +54,12 @@
       "Bash(powershell -Command \"Get-Content \"\"$env:APPDATA\\com.microgrid.app\\config.json\"\"\")",
       "Bash(powershell -Command \"Get-Content ''C:\\Users\\Owner\\AppData\\Roaming\\com.microgrid.app\\config.json''\")",
       "Bash(mv:*)",
-      "Bash(npm search @milkdown/plugin-table)"
+      "Bash(npm search @milkdown/plugin-table)",
+      "Bash(ollama --version)",
+      "Bash(ollama list)",
+      "Bash(ollama pull nomic-embed-text)",
+      "Bash(cmd /c \"taskkill /IM node.exe /F & taskkill /IM app.exe /F\")",
+      "Bash(cmd /c \"taskkill /IM node.exe /F & taskkill /IM app.exe /F & taskkill /IM cargo.exe /F\")"
     ],
     "deny": [],
     "ask": []
