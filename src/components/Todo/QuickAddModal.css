@@ -1,0 +1,374 @@
+.quick-add-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.quick-add-modal {
+  background: #2a2a2a;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 550px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: #fff;
+}
+
+.quick-add-modal form {
+  padding: 24px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.task-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: #1e1e1e;
+  border: 2px solid #3a3a3a;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 15px;
+  transition: border-color 0.2s;
+}
+
+.task-input:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.task-input::placeholder {
+  color: #666;
+}
+
+/* Quick Actions */
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #2a2a2a;
+  border-color: #4a4a4a;
+  color: #fff;
+}
+
+.action-btn.active {
+  background: #2a3f5f;
+  border-color: #4a9eff;
+  color: #4a9eff;
+}
+
+.action-btn .icon-small {
+  width: 16px;
+  height: 16px;
+}
+
+/* Advanced Options */
+.advanced-options {
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.form-section {
+  margin-bottom: 16px;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.form-section label {
+  display: block;
+  margin-bottom: 8px;
+  color: #aaa;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.form-section small {
+  display: block;
+  margin-top: 6px;
+  color: #666;
+  font-size: 12px;
+}
+
+/* Priority Buttons */
+.priority-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.priority-btn {
+  padding: 8px 16px;
+  background: #2a2a2a;
+  border: 2px solid #3a3a3a;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.priority-btn:hover {
+  background: #333;
+  border-color: #4a4a4a;
+}
+
+.priority-btn.active {
+  background: #2a2a2a;
+  font-weight: 700;
+}
+
+.clear-btn {
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.clear-btn:hover {
+  color: #aaa;
+}
+
+/* Date Buttons */
+.date-quick-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.date-quick-buttons button {
+  padding: 6px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #aaa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-quick-buttons button:hover {
+  background: #333;
+  border-color: #4a4a4a;
+  color: #fff;
+}
+
+.date-inputs {
+  display: flex;
+  gap: 12px;
+}
+
+.date-input-group {
+  flex: 1;
+}
+
+.date-input-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #888;
+  font-size: 12px;
+}
+
+.date-input-group input[type="date"] {
+  width: 100%;
+  padding: 8px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.date-input-group input[type="date"]:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.date-input-group input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* Select */
+.form-section select {
+  width: 100%;
+  padding: 10px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.form-section select:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.form-section select option {
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+/* Text Input */
+.form-section input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.form-section input[type="text"]:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.form-section input[type="text"]::placeholder {
+  color: #666;
+}
+
+/* Footer */
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 16px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.cancel-btn,
+.submit-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn {
+  background: #2a2a2a;
+  color: #aaa;
+}
+
+.cancel-btn:hover {
+  background: #333;
+  color: #fff;
+}
+
+.submit-btn {
+  background: #4a9eff;
+  color: #ffffff;
+}
+
+.submit-btn:hover {
+  background: #3a8eef;
+}
+
+.submit-btn:disabled {
+  background: #3a3a3a;
+  color: #666;
+  cursor: not-allowed;
+}
+
+/* Scrollbar */
+.quick-add-modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.quick-add-modal::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.quick-add-modal::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 4px;
+}
+
+.quick-add-modal::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}

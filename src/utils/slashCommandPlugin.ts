@@ -26,6 +26,8 @@ const commands: SlashCommand[] = [
   // List category
   { label: 'Bullet List', icon: '•', command: 'bulletList', category: 'list' },
   { label: 'Ordered List', icon: '1.', command: 'orderedList', category: 'list' },
+  // TODO: Re-enable for full release
+  // { label: 'Todo', icon: '✓', command: 'todo', category: 'list' },
 
   // Advanced category
   { label: 'Code Block', icon: '</>', command: 'codeBlock', category: 'advanced' },
@@ -521,6 +523,16 @@ export const slashCommandPlugin = () => {
           } else if (schema.nodes.hr) {
             node = schema.nodes.hr.create()
           }
+          break
+        case 'todo':
+          // Insert a checkbox with metadata template
+          // Instead of creating a node, we'll insert raw text that the user can edit
+          const todoText = '- [ ] Task title {priority: 1, start: 2025-01-15, end: 2025-01-20}'
+          const todoNode = schema.text(todoText)
+
+          // We need to insert this as text, not as a node
+          // Let's create a paragraph with the text
+          node = schema.nodes.paragraph.create(null, todoNode)
           break
         case 'image':
           // For now, just insert a paragraph and let user add image manually

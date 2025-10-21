@@ -674,6 +674,27 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           </div>
         </div>
       )}
+
+      {/* Quick Action Buttons */}
+      {/* TODO: Re-enable for full release */}
+      {/* <div className="sidebar-quick-actions">
+        <button
+          className="quick-action-button"
+          onClick={() => onSelectFile('special://todos', 'Todos')}
+          title="Todo Lists"
+        >
+          <ClipboardDocumentListIcon className="quick-action-icon" />
+          <span>Todos</span>
+        </button>
+        <button
+          className="quick-action-button"
+          onClick={() => onSelectFile('special://timeline', 'Timeline')}
+          title="Timeline"
+        >
+          <CalendarIcon className="quick-action-icon" />
+          <span>Timeline</span>
+        </button>
+      </div> */}
     </div>
   );
 });

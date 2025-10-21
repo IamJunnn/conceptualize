@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import SetupScreen from './components/SetupScreen'
 import MainUI from './components/MainUI'
+// TODO: Re-enable for full release
+// import AIChat from './components/AI/AIChat'
 import { DragDropProvider } from './contexts/DragDropContext'
 import { GraphVisibilityProvider } from './contexts/GraphVisibilityContext'
 import './App.css'
@@ -70,6 +72,7 @@ function App() {
       <DragDropProvider>
         <div className="app-transition fade-in">
           <MainUI rootPath={rootPath} onRootPathChange={handleRootPathChange} />
+          {/* <AIChat rootPath={rootPath} /> */}
         </div>
       </DragDropProvider>
     </GraphVisibilityProvider>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
 export type EditorPane = 'left' | 'right';
 export type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center';

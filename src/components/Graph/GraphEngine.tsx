@@ -66,6 +66,12 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
       ).length;
     };
 
+    // Helper function to truncate long labels
+    const truncateLabel = (name: string, maxLength: number = 30): string => {
+      if (name.length <= maxLength) return name;
+      return name.substring(0, maxLength) + '...';
+    };
+
     // Create main group for zoom/pan
     const g = svg.append('g');
 
@@ -96,26 +102,34 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
 
-        const ghostNodeGroup = svg.select('.ghost-nodes');
-        if (ghostNodeGroup.empty()) return;
-
-        if (event.transform.k > 0.9) {
-          ghostNodeGroup.style('opacity', 1);
-        } else {
-          ghostNodeGroup.style('opacity', 0);
-        }
+        // Ghost nodes remain hidden at all zoom levels
+        // They are only shown when user clicks "Show All" button
       });
 
     svg.call(zoom);
 
+    // Pin root node to center (fixed position)
+    // This ensures the root stays centered and other nodes arrange around it
+    const rootNode = data.nodes.find(n => n.type === 'root');
+    if (rootNode) {
+      // Fix root node position at center (fx/fy = fixed x/y coordinates)
+      rootNode.fx = width / 2;
+      rootNode.fy = height / 2;
+
+      // Set initial zoom transform to center the viewport
+      // Since root is fixed at (width/2, height/2), we need identity transform (no translation)
+      const initialTransform = d3.zoomIdentity.translate(0, 0).scale(1.0);
+      svg.call(zoom.transform as any, initialTransform);
+    }
+
     // Create force simulation with adjusted parameters for more nodes
+    // Note: No forceCenter needed since root is pinned via fx/fy
     const simulation = d3.forceSimulation<GraphNode>(data.nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(data.links)
         .id(d => d.id)
         .distance(d => (d as GraphLink).type === 'structural' ? 80 : 120) // Shorter structural links
         .strength(d => (d as GraphLink).type === 'structural' ? 0.5 : 0.3)) // Weaker structural links
       .force('charge', d3.forceManyBody().strength(-400))
-      .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<GraphNode>().radius(d => {
         if ((d as GraphNode).type === 'root') return 28;
         return 25;
@@ -155,9 +169,9 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
         return Math.min(baseSize + conceptualConnections * 1.5, maxSize);
       })
       .attr('fill', d => {
-        // Root folder is purple #64c8ca
+        // Root folder is pink/magenta
         if (d.type === 'root') {
-          return '#4b64ae'; // purple
+          return '#bb2289'; // pink/magenta
         }
         // Subfolders are pastel purple
         if (d.type === 'folder') {
@@ -181,24 +195,28 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
 
     // Add labels with type-specific styling (excluding root)
     node.append('text')
-      .text(d => d.type === 'root' ? '' : d.name) // Don't show label for root
+      .text(d => d.type === 'root' ? '' : truncateLabel(d.name)) // Truncate long labels
       .attr('class', 'node-label')
       .attr('dx', 12)
       .attr('dy', 4)
       .style('font-size', d => d.type === 'root' ? '14px' : '12px')
       .style('font-weight', d => (d.type === 'root' || d.type === 'folder') ? '600' : '400')
       .style('fill', d => {
-        if (d.type === 'root') return '#64c8ca'; // purple for root
-        if (d.type === 'folder') return 'white'; // pastel purple for folders
+        if (d.type === 'root') return '#bb2289'; // pink/magenta for root
+        if (d.type === 'folder') return 'white'; // white for folders
         return '#d4d4d4'; // gray for files
       })
       .style('pointer-events', 'none')
       .style('user-select', 'none');
 
-    // Create ghost nodes for hidden items (shown when zoomed > 0.9)
+    // Add tooltips to show full name on hover
+    node.append('title')
+      .text(d => d.name);
+
+    // Create ghost nodes for hidden items (only shown when user clicks "Show All")
     const ghostNodeGroup = g.append('g')
       .attr('class', 'ghost-nodes')
-      .style('opacity', 0); // Initially hidden
+      .style('opacity', 0); // Always hidden unless "Show All" is clicked
 
     const ghostNode = ghostNodeGroup
       .selectAll<SVGGElement, GraphNode>('g')
@@ -217,7 +235,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
         return Math.min(baseSize + conceptualConnections * 1.5, maxSize);
       })
       .attr('fill', d => {
-        if (d.type === 'root') return '#64c8ca';
+        if (d.type === 'root') return '#bb2289';
         if (d.type === 'folder') return '#dc7361';
         if (d.fileType === 'markdown') return '#3b82f6';
         return '#6b7280';
@@ -230,7 +248,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
 
     // Add ghost labels
     ghostNode.append('text')
-      .text(d => d.type === 'root' ? '' : d.name)
+      .text(d => d.type === 'root' ? '' : truncateLabel(d.name))
       .attr('class', 'ghost-node-label')
       .attr('dx', 12)
       .attr('dy', 4)
