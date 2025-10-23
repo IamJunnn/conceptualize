@@ -1,0 +1,235 @@
+.gantt-timeline-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: transparent;
+  padding: 20px;
+}
+
+/* Scrollbar Styling - Conceptualize Theme */
+.gantt-timeline-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.gantt-timeline-container::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.gantt-timeline-container::-webkit-scrollbar-thumb {
+  background: #3e3e3e;
+  border-radius: 5px;
+}
+
+.gantt-timeline-container::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* Scrollbar for the timeline scroll area */
+.timeline-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.timeline-scroll-area::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.timeline-scroll-area::-webkit-scrollbar-thumb {
+  background: #3e3e3e;
+  border-radius: 5px;
+}
+
+.timeline-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+svg {
+  display: block;
+  background: transparent;
+  border-radius: 8px;
+}
+
+.empty-timeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #6b7280;
+}
+
+.empty-timeline-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-timeline-text {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.empty-timeline-hint {
+  font-size: 14px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* Unscheduled todos section */
+.unscheduled-todos {
+  margin-top: 32px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.unscheduled-todos-title {
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.unscheduled-todos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unscheduled-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.unscheduled-todo-item:hover {
+  background: #333;
+  border-color: #444;
+  transform: translateX(4px);
+}
+
+.unscheduled-todo-indicator {
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.unscheduled-todo-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.unscheduled-todo-text {
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unscheduled-todo-meta {
+  color: #6b7280;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* D3 axis styling */
+.x-axis text {
+  font-size: 12px;
+  fill: #9ca3af;
+}
+
+.x-axis line,
+.x-axis path {
+  stroke: #374151;
+}
+
+/* Bar styling */
+.bar-group {
+  transition: all 0.2s ease;
+}
+
+.bar-group:hover rect {
+  filter: brightness(1.2);
+}
+
+.task-bar {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.task-bar.bar-hovered {
+  opacity: 1 !important;
+  transform: translate(0, -2px);
+}
+
+/* Tooltip */
+.gantt-tooltip {
+  position: fixed;
+  background: #1e1e1e;
+  border: 1px solid #3e3e3e;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #e5e7eb;
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 10000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  max-width: 320px;
+}
+
+.gantt-tooltip-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #fff;
+}
+
+.gantt-tooltip-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.gantt-tooltip-label {
+  color: #9ca3af;
+  min-width: 70px;
+}
+
+.gantt-tooltip-value {
+  color: #e5e7eb;
+}
+
+.gantt-tooltip-priority {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 10px;
+  color: white;
+}
+
+.gantt-tooltip-description {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #3e3e3e;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

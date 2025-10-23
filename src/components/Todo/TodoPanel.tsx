@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { XMarkIcon, PlusIcon, CheckIcon, TrashIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import './TodoPanel.css'
 import QuickAddModal, { TodoFormData } from './QuickAddModal'
+import GanttTimeline from '../Timeline/GanttTimeline'
 
 type ViewMode = 'list' | 'timeline'
 
@@ -460,113 +461,12 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
           {/* Timeline View */}
           {viewMode === 'timeline' && (
             <div className="timeline-view">
-              <div className="timeline-header">
-                <h3 className="timeline-title">
-                  <CalendarIcon className="timeline-title-icon" />
-                  Timeline
-                </h3>
-                <input
-                  type="text"
-                  placeholder="+ Add todo with date..."
-                  value={newTodoText}
-                  onChange={(e) => setNewTodoText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && selectedDate) {
-                      handleAddTodoWithDate(selectedDate)
-                    }
+              <GanttTimeline
+                  lists={todoData.lists}
+                  onTodoClick={(todo) => {
+                    // TODO: Open todo edit modal
                   }}
-                  className="timeline-add-input"
                 />
-              </div>
-
-              <div className="timeline-content">
-                {sortedDateKeys.length === 0 ? (
-                  <div className="empty-state">
-                    <CalendarIcon className="empty-icon" />
-                    <p>No scheduled todos</p>
-                    <p className="empty-hint">Add due dates to your todos to see them here</p>
-                  </div>
-                ) : (
-                  sortedDateKeys.map(dateKey => {
-                    const date = new Date(dateKey)
-                    const now = new Date()
-                    const isPast = date < new Date(now.getFullYear(), now.getMonth(), now.getDate())
-                    const isToday = date.toDateString() === now.toDateString()
-
-                    return (
-                      <div key={dateKey} className={`date-group ${isPast ? 'past' : ''} ${isToday ? 'today' : ''}`}>
-                        <div className="date-header">
-                          <h4>{formatDate(todosByDate[dateKey][0].dueDate) || date.toLocaleDateString()}</h4>
-                          <span className="date-count">{todosByDate[dateKey].length} todos</span>
-                        </div>
-
-                        <div className="date-todos">
-                          {todosByDate[dateKey].map(todo => {
-                            const listId = todo.listId || ''
-                            return (
-                              <div key={todo.id} className={`timeline-todo ${todo.completed ? 'completed' : ''}`}>
-                                <button
-                                  className="todo-checkbox"
-                                  onClick={() => handleToggleTodo(listId, todo.id, todo.completed)}
-                                >
-                                  {todo.completed && <CheckIcon className="icon-small" />}
-                                </button>
-                                <div className="todo-info">
-                                  <span className="todo-text">{todo.text}</span>
-                                  {todo.description && (
-                                    <div className="todo-description">
-                                      {expandedDescriptions.has(todo.id) || todo.description.length <= 100 ? (
-                                        <>
-                                          {todo.description}
-                                          {todo.description.length > 100 && (
-                                            <button
-                                              className="description-toggle-btn"
-                                              onClick={() => {
-                                                const newExpanded = new Set(expandedDescriptions)
-                                                newExpanded.delete(todo.id)
-                                                setExpandedDescriptions(newExpanded)
-                                              }}
-                                            >
-                                              Show less
-                                            </button>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <>
-                                          {todo.description.slice(0, 100)}...
-                                          <button
-                                            className="description-toggle-btn"
-                                            onClick={() => {
-                                              const newExpanded = new Set(expandedDescriptions)
-                                              newExpanded.add(todo.id)
-                                              setExpandedDescriptions(newExpanded)
-                                            }}
-                                          >
-                                            Read more
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
-                                  <span className="todo-list-badge">
-                                    {todo.listIcon} {todo.listName}
-                                  </span>
-                                </div>
-                                <button
-                                  className="todo-delete"
-                                  onClick={() => handleDeleteTodo(listId, todo.id)}
-                                >
-                                  <TrashIcon className="icon-small" />
-                                </button>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
             </div>
           )}
         </div>
