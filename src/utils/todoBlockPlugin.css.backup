@@ -1,0 +1,114 @@
+/* Hide the {{todo:id}} marker text completely */
+.todo-hidden-marker {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Todo Block Styles */
+.todo-block-container {
+  display: block !important;
+  width: 100% !important;
+  margin: 8px 0;
+  user-select: none;
+  clear: both;
+}
+
+.todo-block {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: flex-start;
+}
+
+.todo-block:hover {
+  background: #323232;
+  border-color: #4a4a4a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.todo-block-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+}
+
+.todo-checkbox {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #4CAF50;
+  flex-shrink: 0;
+}
+
+.todo-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #e0e0e0;
+  word-break: break-word;
+}
+
+.todo-text.completed {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.todo-text.todo-error {
+  color: #e74c3c;
+  font-style: italic;
+}
+
+.todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.todo-priority {
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.todo-due-date {
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.todo-has-description {
+  cursor: help;
+  opacity: 0.7;
+}
+
+.todo-has-description:hover {
+  opacity: 1;
+}
+
+/* When todo block is being edited or selected */
+.todo-block.editing {
+  border-color: #2196F3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3);
+}

@@ -85,57 +85,18 @@
 
 .task-input:focus {
   outline: none;
-  border-color: #4a9eff;
+  border-color: #64c8ca;
 }
 
 .task-input::placeholder {
   color: #666;
 }
 
-/* Quick Actions */
-.quick-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
-  color: #aaa;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn:hover {
-  background: #2a2a2a;
-  border-color: #4a4a4a;
-  color: #fff;
-}
-
-.action-btn.active {
-  background: #2a3f5f;
-  border-color: #4a9eff;
-  color: #4a9eff;
-}
-
-.action-btn .icon-small {
-  width: 16px;
-  height: 16px;
-}
-
-/* Advanced Options */
-.advanced-options {
+/* Form Options - Always Visible */
+.form-options {
   background: #1e1e1e;
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
   margin-bottom: 16px;
 }
 
@@ -224,9 +185,17 @@
 }
 
 .date-quick-buttons button:hover {
-  background: #333;
-  border-color: #4a4a4a;
-  color: #fff;
+  background: #64c8ca;
+  border-color: #64c8ca;
+  color: #000;
+  font-weight: 500;
+}
+
+.date-quick-buttons button.active {
+  background: #64c8ca;
+  border-color: #64c8ca;
+  color: #000;
+  font-weight: 600;
 }
 
 .date-inputs {
@@ -247,23 +216,53 @@
 
 .date-input-group input[type="date"] {
   width: 100%;
-  padding: 8px 12px;
-  background: #2a2a2a;
+  padding: 10px 12px;
+  background: #1a1a1a;
   border: 1px solid #3a3a3a;
   border-radius: 6px;
   color: #ffffff;
   font-size: 13px;
-  transition: border-color 0.2s;
+  transition: all 0.2s;
+  cursor: pointer;
+  color-scheme: dark; /* This makes the calendar picker use dark theme */
 }
 
 .date-input-group input[type="date"]:focus {
   outline: none;
-  border-color: #4a9eff;
+  border-color: #64c8ca;
+  background: #252525;
 }
 
 .date-input-group input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
+  filter: invert(0.7) sepia(1) saturate(3) hue-rotate(150deg);
   cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.date-input-group input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(0.8) sepia(1) saturate(3) hue-rotate(150deg) brightness(1.2);
+  background: #333;
+}
+
+/* Dark theme for date picker calendar popup */
+.date-input-group input[type="date"]::-webkit-datetime-edit {
+  color: #ffffff;
+}
+
+.date-input-group input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: #ffffff;
+}
+
+.date-input-group input[type="date"]::-webkit-datetime-edit-text {
+  color: #888;
+}
+
+.date-input-group input[type="date"]::-webkit-datetime-edit-month-field,
+.date-input-group input[type="date"]::-webkit-datetime-edit-day-field,
+.date-input-group input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #ffffff;
 }
 
 /* Select */
@@ -281,7 +280,7 @@
 
 .form-section select:focus {
   outline: none;
-  border-color: #4a9eff;
+  border-color: #64c8ca;
 }
 
 .form-section select option {
@@ -303,11 +302,210 @@
 
 .form-section input[type="text"]:focus {
   outline: none;
-  border-color: #4a9eff;
+  border-color: #64c8ca;
 }
 
 .form-section input[type="text"]::placeholder {
   color: #666;
+}
+
+/* Note Link Wrapper */
+.note-link-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.note-link-wrapper input {
+  flex: 1;
+  padding-right: 40px; /* Make room for clear button */
+}
+
+.clear-note-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.clear-note-btn:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.icon-tiny {
+  width: 14px;
+  height: 14px;
+}
+
+/* Checkbox Label */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  color: #ddd;
+  font-size: 13px;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #64c8ca;
+}
+
+.checkbox-label span {
+  color: #ddd;
+}
+
+.checkbox-label:hover span {
+  color: #fff;
+}
+
+/* Textarea */
+.form-section textarea {
+  width: 100%;
+  padding: 10px 12px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+  min-height: 60px;
+}
+
+.form-section textarea:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.form-section textarea::placeholder {
+  color: #666;
+}
+
+/* Dark theme scrollbar for textarea */
+.form-section textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.form-section textarea::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 0 6px 6px 0;
+}
+
+.form-section textarea::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 4px;
+}
+
+.form-section textarea::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}
+
+/* Note Autocomplete Dropdown */
+.note-autocomplete-dropdown {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10001;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Note Autocomplete Dropdown - Inline variant */
+.note-autocomplete-dropdown-inline {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Dark theme scrollbar for dropdown */
+.note-autocomplete-dropdown-inline::-webkit-scrollbar {
+  width: 8px;
+}
+
+.note-autocomplete-dropdown-inline::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 0 6px 6px 0;
+}
+
+.note-autocomplete-dropdown-inline::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 4px;
+}
+
+.note-autocomplete-dropdown-inline::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}
+
+.note-autocomplete-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.note-folder-path {
+  color: #888;
+  font-size: 12px;
+}
+
+.note-path-separator {
+  color: #666;
+  margin: 0 2px;
+}
+
+.note-file-name {
+  color: #64c8ca;
+  font-weight: 500;
+}
+
+.note-autocomplete-item:hover,
+.note-autocomplete-item.selected {
+  background: #64c8ca;
+}
+
+.note-autocomplete-item:hover .note-folder-path,
+.note-autocomplete-item.selected .note-folder-path {
+  color: #000;
+}
+
+.note-autocomplete-item:hover .note-path-separator,
+.note-autocomplete-item.selected .note-path-separator {
+  color: #333;
+}
+
+.note-autocomplete-item:hover .note-file-name,
+.note-autocomplete-item.selected .note-file-name {
+  color: #000;
+  font-weight: 600;
 }
 
 /* Footer */
@@ -341,12 +539,13 @@
 }
 
 .submit-btn {
-  background: #4a9eff;
-  color: #ffffff;
+  background: #64c8ca;
+  color: #000;
+  font-weight: 600;
 }
 
 .submit-btn:hover {
-  background: #3a8eef;
+  background: #7dd3d5;
 }
 
 .submit-btn:disabled {

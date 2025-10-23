@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react'
-import { XMarkIcon, CalendarIcon, FlagIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import React, { useState, useEffect, useRef } from 'react'
+import { XMarkIcon } from '@heroicons/react/24/outline'
+import { invoke } from '@tauri-apps/api/core'
 import './QuickAddModal.css'
 
 interface QuickAddModalProps {
   isOpen: boolean
   onClose: () => void
   onSubmit: (data: TodoFormData) => void
-  lists: { id: string; name: string; icon: string }[]
-  activeListId: string | null
+  rootPath?: string
+  context?: 'editor' | 'fab' // Where the modal was opened from
+  currentNotePath?: string // Current note path if opened from editor
 }
 
 export interface TodoFormData {
@@ -15,60 +17,331 @@ export interface TodoFormData {
   priority: number | null
   startDate: string | null
   endDate: string | null
-  listId: string
-  noteName: string | null
+  linkedNotePath: string | null
+  linkedNoteName: string | null
+  description: string | null
+}
+
+interface FileItem {
+  name: string
+  path: string
+  type: 'md' | 'svg' | 'pdf' | 'png' | 'jpg' | 'other'
 }
 
 const QuickAddModal: React.FC<QuickAddModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  lists,
-  activeListId
+  rootPath,
+  context = 'fab',
+  currentNotePath
 }) => {
   const [text, setText] = useState('')
   const [priority, setPriority] = useState<number | null>(null)
   const [startDate, setStartDate] = useState<string | null>(null)
   const [endDate, setEndDate] = useState<string | null>(null)
-  const [selectedListId, setSelectedListId] = useState<string>(activeListId || '')
-  const [noteName, setNoteName] = useState<string | null>(null)
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [linkedNotePath, setLinkedNotePath] = useState<string | null>(null)
+  const [linkedNoteName, setLinkedNoteName] = useState<string | null>(null)
+  const [noteSearchQuery, setNoteSearchQuery] = useState('')
+  const [description, setDescription] = useState<string | null>(null)
+  const [files, setFiles] = useState<FileItem[]>([])
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const [autocompletePosition, setAutocompletePosition] = useState({ top: 0, left: 0 })
+  const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0)
+  const noteInputRef = useRef<HTMLInputElement>(null)
+  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Load files when modal opens
   useEffect(() => {
-    if (activeListId) {
-      setSelectedListId(activeListId)
+    if (isOpen && rootPath) {
+      loadFiles()
     }
-  }, [activeListId])
+  }, [isOpen, rootPath])
 
+  // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      // Reset form when modal opens
       setText('')
       setPriority(null)
       setStartDate(null)
       setEndDate(null)
-      setNoteName(null)
-      setShowAdvanced(false)
-      if (activeListId) {
-        setSelectedListId(activeListId)
+
+      // If opened from editor, auto-set the current note
+      if (context === 'editor' && currentNotePath) {
+        setLinkedNotePath(currentNotePath)
+        const fileName = currentNotePath.split(/[/\\]/).pop() || ''
+        setLinkedNoteName(fileName.replace(/\.md$/, ''))
+        setNoteSearchQuery(`[[${fileName.replace(/\.md$/, '')}]]`)
+      } else {
+        setLinkedNotePath(null)
+        setLinkedNoteName(null)
+        setNoteSearchQuery('')
+      }
+
+      setDescription(null)
+      setShowAutocomplete(false)
+    }
+  }, [isOpen, context, currentNotePath])
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
       }
     }
-  }, [isOpen, activeListId])
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [isOpen, onClose])
+
+  const loadFiles = async () => {
+    if (!rootPath) {
+      console.log('⚠️ No rootPath provided, cannot load files')
+      return
+    }
+    console.log('📂 Loading files from:', rootPath)
+    try {
+      const result = await invoke<{ files: Array<{ path: string; content: string }> }>('get_markdown_files', { rootPath })
+
+      // Convert to FileItem format
+      const fileList: FileItem[] = result.files.map(file => {
+        const fileName = file.path.split(/[/\\]/).pop() || ''
+        const extension = fileName.split('.').pop()?.toLowerCase()
+
+        let type: FileItem['type'] = 'other'
+        if (extension === 'md') type = 'md'
+        else if (extension === 'svg') type = 'svg'
+        else if (extension === 'pdf') type = 'pdf'
+        else if (extension === 'png') type = 'png'
+        else if (extension === 'jpg' || extension === 'jpeg') type = 'jpg'
+
+        return {
+          name: fileName,
+          path: file.path,
+          type
+        }
+      })
+
+      console.log('✅ Files loaded successfully:', fileList.length, 'total files')
+      console.log('📝 MD files loaded:', fileList.filter(f => f.type === 'md').length)
+      setFiles(fileList)
+    } catch (error) {
+      console.error('❌ Failed to load files:', error)
+    }
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!text.trim() || !selectedListId) return
+    if (!text.trim()) return
 
     onSubmit({
       text: text.trim(),
       priority,
       startDate,
       endDate,
-      listId: selectedListId,
-      noteName
+      linkedNotePath,
+      linkedNoteName,
+      description
     })
 
     onClose()
+  }
+
+  const handleNoteInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setNoteSearchQuery(value)
+    setSelectedAutocompleteIndex(0)
+
+    // Check if user completed [[something]]
+    const bracketMatch = value.match(/\[\[(.*?)\]\]/)
+
+    if (bracketMatch) {
+      // User has completed [[something]], select that note if it exists
+      const noteName = bracketMatch[1]
+      const matchedFile = files.find(f =>
+        f.type === 'md' && f.name.replace(/\.md$/, '').toLowerCase() === noteName.toLowerCase()
+      )
+
+      if (matchedFile) {
+        setLinkedNotePath(matchedFile.path)
+        setLinkedNoteName(matchedFile.name.replace(/\.md$/, ''))
+      }
+      setShowAutocomplete(false)
+    } else if (!value.trim()) {
+      // If input is cleared, reset linked note
+      setLinkedNotePath(null)
+      setLinkedNoteName(null)
+    }
+  }
+
+  const handleNoteInputFocus = () => {
+    console.log('🎯 Note input focused!')
+    console.log('📁 Total files loaded:', files.length)
+    console.log('📝 MD files:', files.filter(f => f.type === 'md').length)
+    console.log('🔍 Current search query:', noteSearchQuery)
+
+    // Clear any pending blur timeout
+    if (blurTimeoutRef.current) {
+      console.log('🚫 Clearing blur timeout')
+      clearTimeout(blurTimeoutRef.current)
+      blurTimeoutRef.current = null
+    }
+
+    setShowAutocomplete(true)
+    setSelectedAutocompleteIndex(0)
+
+    console.log('✅ Set showAutocomplete to TRUE')
+
+    // Update autocomplete position
+    if (noteInputRef.current) {
+      const rect = noteInputRef.current.getBoundingClientRect()
+      setAutocompletePosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX
+      })
+    }
+  }
+
+  const handleFileSelect = (file: FileItem) => {
+    // Get the relative path from rootPath (including subfolders)
+    const { folder, name } = getFileFolderAndName(file.path)
+    // Store without .md extension - path like "conceptualize/testing" or just "testing"
+    const noteName = folder ? `${folder}/${name}` : name
+
+    setLinkedNotePath(file.path)
+    setLinkedNoteName(noteName) // Store WITHOUT .md extension
+    // Display with [[ ]] brackets in the input (show just the name for readability)
+    setNoteSearchQuery(`[[${name}]]`)
+    setShowAutocomplete(false)
+  }
+
+  const getFilteredFiles = () => {
+    if (!noteSearchQuery.trim()) {
+      return files.filter(f => f.type === 'md')
+    }
+
+    const searchTerm = noteSearchQuery.toLowerCase().trim()
+    const mdFiles = files.filter(f => f.type === 'md')
+
+    // Rank each file based on match quality
+    const rankedFiles = mdFiles.map(file => {
+      const fileName = file.name.toLowerCase().replace(/\.md$/, '')
+      const folderPath = getFileFolderAndName(file.path).folder.toLowerCase()
+      const fullPath = folderPath ? `${folderPath}/${fileName}` : fileName
+
+      let score = 0
+
+      // 1. Exact match (highest priority) - score: 1000
+      if (fileName === searchTerm) {
+        score = 1000
+      }
+      // 2. Starts with (high priority) - score: 500
+      else if (fileName.startsWith(searchTerm)) {
+        score = 500
+      }
+      // 3. Contains in name (medium priority) - score: 300
+      else if (fileName.includes(searchTerm)) {
+        score = 300
+      }
+      // 4. Contains in folder path (lower priority) - score: 200
+      else if (folderPath.includes(searchTerm)) {
+        score = 200
+      }
+      // 5. Contains in full path (lowest priority) - score: 100
+      else if (fullPath.includes(searchTerm)) {
+        score = 100
+      }
+      // 6. Fuzzy match (very low priority) - score: 50
+      else if (fuzzyMatch(fileName, searchTerm)) {
+        score = 50
+      }
+
+      return { file, score }
+    })
+
+    // Filter out non-matches (score 0) and sort by score descending
+    return rankedFiles
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(item => item.file)
+  }
+
+  // Simple fuzzy matching - checks if search characters appear in order
+  const fuzzyMatch = (text: string, search: string): boolean => {
+    let searchIndex = 0
+    for (let i = 0; i < text.length && searchIndex < search.length; i++) {
+      if (text[i] === search[searchIndex]) {
+        searchIndex++
+      }
+    }
+    return searchIndex === search.length
+  }
+
+  const getFileFolderAndName = (filePath: string) => {
+    if (!rootPath) return { folder: '', name: filePath }
+
+    // Remove rootPath from the beginning to get relative path
+    let relativePath = filePath
+    if (filePath.startsWith(rootPath)) {
+      relativePath = filePath.substring(rootPath.length)
+    }
+
+    // Remove leading slashes/backslashes
+    relativePath = relativePath.replace(/^[/\\]+/, '')
+
+    // Split by slash or backslash
+    const parts = relativePath.split(/[/\\]/)
+
+    // The last part is the file name
+    const fileName = parts[parts.length - 1].replace(/\.md$/, '')
+
+    // Everything before the last part is the folder path
+    const folderPath = parts.slice(0, -1).join('/')
+
+    return {
+      folder: folderPath,
+      name: fileName
+    }
+  }
+
+  const handleAutocompleteNavigate = (direction: 'up' | 'down') => {
+    const filteredFiles = getFilteredFiles()
+    const maxIndex = filteredFiles.length - 1
+
+    if (direction === 'down') {
+      setSelectedAutocompleteIndex(prev => Math.min(prev + 1, maxIndex))
+    } else {
+      setSelectedAutocompleteIndex(prev => Math.max(prev - 1, 0))
+    }
+  }
+
+  const handleNoteInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showAutocomplete) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      handleAutocompleteNavigate('down')
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      handleAutocompleteNavigate('up')
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const filteredFiles = getFilteredFiles()
+      if (filteredFiles[selectedAutocompleteIndex]) {
+        handleFileSelect(filteredFiles[selectedAutocompleteIndex])
+      }
+    } else if (e.key === 'Escape') {
+      setShowAutocomplete(false)
+    }
+  }
+
+  const handleNoteInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    console.log('👋 Input blur triggered')
+    // Delay closing to allow click on dropdown items
+    blurTimeoutRef.current = setTimeout(() => {
+      console.log('⏰ Closing dropdown after blur delay')
+      setShowAutocomplete(false)
+    }, 300)
   }
 
   const getPriorityColor = (p: number) => {
@@ -115,11 +388,38 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
     setEndDate(date.toISOString())
   }
 
+  const isQuickDateActive = (type: 'today' | 'tomorrow' | 'next-week') => {
+    if (!endDate) return false
+
+    const selectedDate = new Date(endDate)
+    const now = new Date()
+
+    // Normalize to date only (ignore time)
+    const normalizeDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    const normalizedSelected = normalizeDate(selectedDate)
+    const normalizedNow = normalizeDate(now)
+
+    switch (type) {
+      case 'today':
+        return normalizedSelected.getTime() === normalizedNow.getTime()
+      case 'tomorrow':
+        const tomorrow = new Date(normalizedNow)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        return normalizedSelected.getTime() === tomorrow.getTime()
+      case 'next-week':
+        const nextWeek = new Date(normalizedNow)
+        nextWeek.setDate(nextWeek.getDate() + 7)
+        return normalizedSelected.getTime() === nextWeek.getTime()
+      default:
+        return false
+    }
+  }
+
   if (!isOpen) return null
 
   return (
-    <div className="quick-add-modal-overlay" onClick={onClose}>
-      <div className="quick-add-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="quick-add-modal-overlay">
+      <div className="quick-add-modal">
         <div className="modal-header">
           <h3>Add Task</h3>
           <button className="close-btn" onClick={onClose}>
@@ -139,132 +439,164 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
             />
           </div>
 
-          {/* Quick Actions */}
-          <div className="quick-actions">
-            <button
-              type="button"
-              className={`action-btn ${endDate ? 'active' : ''}`}
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              <CalendarIcon className="icon-small" />
-              {endDate ? new Date(endDate).toLocaleDateString() : 'Due date'}
-            </button>
+          {/* Options - Always Visible */}
+          <div className="form-options">
+            {/* Priority Selector */}
+            <div className="form-section">
+              <label>Priority</label>
+              <div className="priority-buttons">
+                {[1, 2, 3, 4].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`priority-btn ${priority === p ? 'active' : ''}`}
+                    onClick={() => setPriority(priority === p ? null : p)}
+                    style={{
+                      borderColor: priority === p ? getPriorityColor(p) : undefined,
+                      color: priority === p ? getPriorityColor(p) : undefined
+                    }}
+                  >
+                    P{p}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            <button
-              type="button"
-              className={`action-btn ${priority ? 'active' : ''}`}
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              <FlagIcon className="icon-small" style={{ color: priority ? getPriorityColor(priority) : undefined }} />
-              {priority ? getPriorityLabel(priority) : 'Priority'}
-            </button>
+            {/* Date Selector */}
+            <div className="form-section">
+              <label>Due Date</label>
+              <div className="date-quick-buttons">
+                <button
+                  type="button"
+                  className={isQuickDateActive('today') ? 'active' : ''}
+                  onClick={() => handleQuickDate('today')}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className={isQuickDateActive('tomorrow') ? 'active' : ''}
+                  onClick={() => handleQuickDate('tomorrow')}
+                >
+                  Tomorrow
+                </button>
+                <button
+                  type="button"
+                  className={isQuickDateActive('next-week') ? 'active' : ''}
+                  onClick={() => handleQuickDate('next-week')}
+                >
+                  Next Week
+                </button>
+              </div>
+              <div className="date-inputs">
+                <div className="date-input-group">
+                  <label>Start</label>
+                  <input
+                    type="date"
+                    value={formatDateForInput(startDate)}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  />
+                </div>
+                <div className="date-input-group">
+                  <label>End</label>
+                  <input
+                    type="date"
+                    value={formatDateForInput(endDate)}
+                    min={startDate ? formatDateForInput(startDate) : new Date().toISOString().split('T')[0]} // Can't select before start date (or today if no start date)
+                    onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value).toISOString() : null)}
+                  />
+                </div>
+              </div>
+            </div>
 
-            <button
-              type="button"
-              className={`action-btn ${noteName ? 'active' : ''}`}
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              <DocumentTextIcon className="icon-small" />
-              {noteName || 'Note'}
-            </button>
-          </div>
-
-          {/* Advanced Options */}
-          {showAdvanced && (
-            <div className="advanced-options">
-              {/* Priority Selector */}
-              <div className="form-section">
-                <label>Priority</label>
-                <div className="priority-buttons">
-                  {[1, 2, 3, 4].map((p) => (
+            {/* Link to Note - Only show when opened from FAB */}
+            {context === 'fab' && (
+              <div className="form-section" style={{ position: 'relative' }}>
+                <label>Link to Note (optional)</label>
+                <div className="note-link-wrapper">
+                  <input
+                    ref={noteInputRef}
+                    type="text"
+                    placeholder="Click to search notes..."
+                    value={noteSearchQuery}
+                    onChange={handleNoteInputChange}
+                    onFocus={handleNoteInputFocus}
+                    onBlur={handleNoteInputBlur}
+                    onKeyDown={handleNoteInputKeyDown}
+                  />
+                  {linkedNotePath && (
                     <button
-                      key={p}
                       type="button"
-                      className={`priority-btn ${priority === p ? 'active' : ''}`}
-                      onClick={() => setPriority(priority === p ? null : p)}
-                      style={{
-                        borderColor: priority === p ? getPriorityColor(p) : undefined,
-                        color: priority === p ? getPriorityColor(p) : undefined
+                      className="clear-note-btn"
+                      onClick={() => {
+                        setLinkedNotePath(null)
+                        setLinkedNoteName(null)
+                        setNoteSearchQuery('')
                       }}
+                      title="Clear linked note"
                     >
-                      P{p}
-                    </button>
-                  ))}
-                  {priority && (
-                    <button
-                      type="button"
-                      className="clear-btn"
-                      onClick={() => setPriority(null)}
-                    >
-                      Clear
+                      <XMarkIcon className="icon-tiny" />
                     </button>
                   )}
                 </div>
-              </div>
 
-              {/* Date Selector */}
-              <div className="form-section">
-                <label>Due Date</label>
-                <div className="date-quick-buttons">
-                  <button type="button" onClick={() => handleQuickDate('today')}>Today</button>
-                  <button type="button" onClick={() => handleQuickDate('tomorrow')}>Tomorrow</button>
-                  <button type="button" onClick={() => handleQuickDate('next-week')}>Next Week</button>
-                </div>
-                <div className="date-inputs">
-                  <div className="date-input-group">
-                    <label>Start</label>
-                    <input
-                      type="date"
-                      value={formatDateForInput(startDate)}
-                      onChange={(e) => setStartDate(e.target.value ? new Date(e.target.value).toISOString() : null)}
-                    />
-                  </div>
-                  <div className="date-input-group">
-                    <label>End</label>
-                    <input
-                      type="date"
-                      value={formatDateForInput(endDate)}
-                      onChange={(e) => setEndDate(e.target.value ? new Date(e.target.value).toISOString() : null)}
-                    />
-                  </div>
-                </div>
-              </div>
+                {/* Autocomplete dropdown - positioned relative to this section */}
+                {showAutocomplete && (() => {
+                  const filteredFiles = getFilteredFiles().slice(0, 10)
 
-              {/* List Selector */}
-              <div className="form-section">
-                <label>List</label>
-                <select
-                  value={selectedListId}
-                  onChange={(e) => setSelectedListId(e.target.value)}
-                >
-                  {lists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.icon} {list.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  if (filteredFiles.length === 0) {
+                    return null
+                  }
 
-              {/* Note Name */}
-              <div className="form-section">
-                <label>Save to Note (optional)</label>
-                <input
-                  type="text"
-                  placeholder="Note name (e.g., Quick Todos)"
-                  value={noteName || ''}
-                  onChange={(e) => setNoteName(e.target.value || null)}
-                />
-                <small>Leave empty to use default "Quick Todos" note</small>
+                  return (
+                    <div className="note-autocomplete-dropdown-inline">
+                      {filteredFiles.map((file, index) => {
+                        const { folder, name } = getFileFolderAndName(file.path)
+                        return (
+                          <div
+                            key={file.path}
+                            className={`note-autocomplete-item ${index === selectedAutocompleteIndex ? 'selected' : ''}`}
+                            onMouseDown={(e) => {
+                              // Use onMouseDown instead of onClick to fire before onBlur
+                              e.preventDefault()
+                              handleFileSelect(file)
+                            }}
+                          >
+                            {folder && (
+                              <>
+                                <span className="note-folder-path">{folder}</span>
+                                <span className="note-path-separator">/</span>
+                              </>
+                            )}
+                            <span className="note-file-name">{name}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
+            )}
+
+            {/* Description */}
+            <div className="form-section">
+              <label>Description (optional)</label>
+              <textarea
+                placeholder="Add notes or details..."
+                value={description || ''}
+                onChange={(e) => setDescription(e.target.value || null)}
+                rows={3}
+              />
             </div>
-          )}
+          </div>
 
           {/* Footer */}
           <div className="modal-footer">
             <button type="button" className="cancel-btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="submit-btn" disabled={!text.trim() || !selectedListId}>
+            <button type="submit" className="submit-btn" disabled={!text.trim()}>
               Add Task
             </button>
           </div>

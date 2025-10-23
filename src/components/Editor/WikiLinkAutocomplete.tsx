@@ -82,41 +82,46 @@ export default function WikiLinkAutocomplete({
     }
   }, [visible, position, filteredFiles])
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!visible) return
+  // Close dropdown when clicking outside - TEMPORARILY DISABLED FOR DEBUGGING
+  // useEffect(() => {
+  //   if (!visible) return
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        // Stop the event from propagating to prevent it from reopening the autocomplete
-        event.stopImmediatePropagation()
+  //   const handleClickOutside = (event: MouseEvent) => {
+  //     if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+  //       // Stop the event from propagating to prevent it from reopening the autocomplete
+  //       event.stopImmediatePropagation()
 
-        // Dispatch close event with clickOutside flag to notify the plugin
-        window.dispatchEvent(
-          new CustomEvent('wiki-link-autocomplete-close', {
-            detail: { clickOutside: true },
-          })
-        )
+  //       // Dispatch close event with clickOutside flag to notify the plugin
+  //       window.dispatchEvent(
+  //         new CustomEvent('wiki-link-autocomplete-close', {
+  //           detail: { clickOutside: true },
+  //         })
+  //       )
 
-        // Call the click-outside callback
-        if (onClickOutsideCloseRef.current) {
-          onClickOutsideCloseRef.current()
-        }
+  //       // Call the click-outside callback
+  //       if (onClickOutsideCloseRef.current) {
+  //         onClickOutsideCloseRef.current()
+  //       }
 
-        // Close the autocomplete
-        onCloseRef.current()
-      }
-    }
+  //       // Close the autocomplete
+  //       onCloseRef.current()
+  //     }
+  //   }
 
-    // Use capture phase to handle the event before it reaches other handlers
-    document.addEventListener('mousedown', handleClickOutside, true)
+  //   // Delay adding the listener to prevent immediate closure from the same event that opened it
+  //   const timeoutId = setTimeout(() => {
+  //     document.addEventListener('mousedown', handleClickOutside, true)
+  //   }, 150)
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside, true)
-    }
-  }, [visible])
+  //   return () => {
+  //     clearTimeout(timeoutId)
+  //     document.removeEventListener('mousedown', handleClickOutside, true)
+  //   }
+  // }, [visible])
 
-  if (!visible || filteredFiles.length === 0) return null
+  if (!visible || filteredFiles.length === 0) {
+    return null
+  }
 
   // Format the display path as "parent_folder / filename"
   const formatDisplayPath = (file: FileItem) => {

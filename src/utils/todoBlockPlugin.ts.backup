@@ -1,0 +1,200 @@
+import { $prose } from '@milkdown/utils'
+import { Plugin, PluginKey } from '@milkdown/prose/state'
+import { Decoration, DecorationSet } from '@milkdown/prose/view'
+
+const todoBlockKey = new PluginKey('todoBlock')
+
+export const todoBlockPlugin = $prose(() => {
+    return new Plugin({
+      key: todoBlockKey,
+      state: {
+        init(_, { doc }) {
+          return findTodoBlocks(doc)
+        },
+        apply(tr, oldState) {
+          return findTodoBlocks(tr.doc)
+        }
+      },
+      props: {
+        decorations(state) {
+          return this.getState(state)
+        }
+      }
+    })
+
+    function findTodoBlocks(doc: any) {
+      const decorations: Decoration[] = []
+      const regex = /\{\{todo:([a-zA-Z0-9-]+)\}\}/g
+
+      doc.descendants((node: any, pos: number) => {
+        if (!node.isText) return
+
+        const text = node.text
+        if (!text) return
+
+        let match
+        while ((match = regex.exec(text)) !== null) {
+          const start = pos + match.index
+          const end = start + match[0].length
+          const todoId = match[1]
+
+          // Hide the {{todo:id}} text completely using CSS that removes it from layout
+          decorations.push(
+            Decoration.inline(start, end, {
+              nodeName: 'span',
+              class: 'todo-hidden-marker',
+              style: 'font-size: 0 !important; line-height: 0 !important; display: inline !important; width: 0 !important; height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; visibility: hidden !important; position: absolute !important; left: -9999px !important;'
+            })
+          )
+
+          // Create a widget decoration that renders as a block element
+          const decoration = Decoration.widget(
+            start,
+            () => {
+              const container = document.createElement('div')
+              container.className = 'todo-block-container'
+              container.contentEditable = 'false'
+              container.setAttribute('data-todo-id', todoId)
+              // Force block-level rendering
+              container.style.display = 'block'
+              container.style.width = '100%'
+              container.style.clear = 'both'
+
+              // Create the todo block UI
+              const todoBlock = document.createElement('div')
+              todoBlock.className = 'todo-block'
+              todoBlock.innerHTML = `
+                <div class="todo-block-content">
+                  <input type="checkbox" class="todo-checkbox" data-todo-id="${todoId}">
+                  <span class="todo-text">Loading...</span>
+                  <div class="todo-meta"></div>
+                </div>
+              `
+
+              container.appendChild(todoBlock)
+
+              // Load todo data asynchronously
+              loadTodoData(todoId, container)
+
+              return container
+            },
+            {
+              side: 0,
+              // Ensure the widget breaks the line
+              stopEvent: () => true
+            }
+          )
+
+          decorations.push(decoration)
+        }
+      })
+
+      return DecorationSet.create(doc, decorations)
+    }
+
+    async function loadTodoData(todoId: string, container: HTMLElement) {
+      try {
+        // Import invoke dynamically to avoid circular dependencies
+        const { invoke } = await import('@tauri-apps/api/core')
+
+        const todos = await invoke<any[]>('get_all_todos')
+        const todo = todos.find((t: any) => t.id === todoId)
+
+        if (todo) {
+          updateTodoUI(container, todo)
+        } else {
+          // Todo not found
+          const textSpan = container.querySelector('.todo-text')
+          if (textSpan) {
+            textSpan.textContent = 'Todo not found'
+            textSpan.classList.add('todo-error')
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load todo:', error)
+        const textSpan = container.querySelector('.todo-text')
+        if (textSpan) {
+          textSpan.textContent = 'Failed to load todo'
+          textSpan.classList.add('todo-error')
+        }
+      }
+    }
+
+    function updateTodoUI(container: HTMLElement, todo: any) {
+      const checkbox = container.querySelector('.todo-checkbox') as HTMLInputElement
+      const textSpan = container.querySelector('.todo-text')
+      const metaDiv = container.querySelector('.todo-meta')
+
+      if (checkbox) {
+        checkbox.checked = todo.completed
+        checkbox.onclick = async (e) => {
+          e.stopPropagation()
+          // Toggle todo completion
+          const { invoke } = await import('@tauri-apps/api/core')
+          await invoke('toggle_todo_completion', { todoId: todo.id })
+          checkbox.checked = !checkbox.checked
+          if (textSpan) {
+            textSpan.classList.toggle('completed', checkbox.checked)
+          }
+        }
+      }
+
+      if (textSpan) {
+        textSpan.textContent = todo.text
+        if (todo.completed) {
+          textSpan.classList.add('completed')
+        }
+      }
+
+      if (metaDiv) {
+        const metaParts: string[] = []
+
+        // Priority
+        if (todo.priority) {
+          const priorityColors: Record<number, string> = {
+            1: '#e74c3c',
+            2: '#ff9800',
+            3: '#ffd700',
+            4: '#ffffff'
+          }
+          const priorityLabels: Record<number, string> = {
+            1: 'P1',
+            2: 'P2',
+            3: 'P3',
+            4: 'P4'
+          }
+          const color = priorityColors[todo.priority] || '#888'
+          const label = priorityLabels[todo.priority] || `P${todo.priority}`
+          metaParts.push(`<span class="todo-priority" style="color: ${color}">${label}</span>`)
+        }
+
+        // Due date
+        if (todo.endDate) {
+          const date = new Date(todo.endDate)
+          const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          metaParts.push(`<span class="todo-due-date">📅 ${formatted}</span>`)
+        }
+
+        // Description (show icon if exists)
+        if (todo.description) {
+          metaParts.push(`<span class="todo-has-description" title="${todo.description}">📝</span>`)
+        }
+
+        metaDiv.innerHTML = metaParts.join(' ')
+      }
+
+      // Add edit click handler to the whole block
+      const todoBlock = container.querySelector('.todo-block')
+      if (todoBlock) {
+        todoBlock.addEventListener('click', (e) => {
+          // Don't trigger if clicking checkbox
+          if ((e.target as HTMLElement).classList.contains('todo-checkbox')) return
+
+          // Dispatch event to open edit modal
+          window.dispatchEvent(new CustomEvent('editTodo', {
+            detail: { todoId: todo.id }
+          }))
+        })
+      }
+    }
+  })

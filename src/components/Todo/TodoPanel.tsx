@@ -14,6 +14,7 @@ interface Todo {
   createdAt: string
   linkedNote?: string
   listId?: string
+  description?: string
 }
 
 interface TodoList {
@@ -42,6 +43,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showQuickAddModal, setShowQuickAddModal] = useState(false)
+  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set())
 
   // Load todos on mount
   useEffect(() => {
@@ -224,31 +226,33 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
 
   const handleQuickAddSubmit = async (data: TodoFormData) => {
     try {
-      if (!rootPath) {
-        // Fallback to regular todo if no root path
-        await invoke('add_todo', {
-          listId: data.listId,
+      // If addAsCheckbox is true and there's a linked note, write checkbox to note
+      if (data.addAsCheckbox && data.linkedNotePath) {
+        await invoke('add_todo_to_note', {
+          notePath: data.linkedNotePath,
           text: data.text,
-          dueDate: data.endDate,
-          linkedNote: data.noteName
+          priority: data.priority,
+          startDate: data.startDate,
+          endDate: data.endDate
         })
       } else {
-        // Use unified todo creation (writes to both systems)
+        // Otherwise create a standalone todo (with optional note reference)
         await invoke('add_unified_todo', {
-          listId: data.listId,
+          listId: 'default', // Default list ID
           text: data.text,
           priority: data.priority,
           startDate: data.startDate,
           endDate: data.endDate,
-          rootPath: rootPath,
-          noteName: data.noteName
+          rootPath: rootPath || '',
+          noteName: data.linkedNoteName,
+          description: data.description
         })
       }
 
       await loadTodos()
       setShowQuickAddModal(false)
     } catch (error) {
-      console.error('Failed to add unified todo:', error)
+      console.error('Failed to add todo:', error)
     }
   }
 
@@ -262,8 +266,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
           isOpen={showQuickAddModal}
           onClose={() => setShowQuickAddModal(false)}
           onSubmit={handleQuickAddSubmit}
-          lists={todoData.lists}
-          activeListId={activeListId}
+          rootPath={rootPath}
         />
 
         {/* Floating Action Button */}
@@ -423,7 +426,16 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
                         >
                           {todo.completed && <CheckIcon className="icon-small" />}
                         </button>
-                        <span className="todo-text">{todo.text}</span>
+                        <div className="todo-content-wrapper">
+                          <span className="todo-text">{todo.text}</span>
+                          {todo.description && (
+                            <div className="todo-description-preview">
+                              {todo.description.length > 50
+                                ? `${todo.description.slice(0, 50)}...`
+                                : todo.description}
+                            </div>
+                          )}
+                        </div>
                         {todo.dueDate && (
                           <span className="todo-due-date">{formatDate(todo.dueDate)}</span>
                         )}
@@ -501,6 +513,41 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
                                 </button>
                                 <div className="todo-info">
                                   <span className="todo-text">{todo.text}</span>
+                                  {todo.description && (
+                                    <div className="todo-description">
+                                      {expandedDescriptions.has(todo.id) || todo.description.length <= 100 ? (
+                                        <>
+                                          {todo.description}
+                                          {todo.description.length > 100 && (
+                                            <button
+                                              className="description-toggle-btn"
+                                              onClick={() => {
+                                                const newExpanded = new Set(expandedDescriptions)
+                                                newExpanded.delete(todo.id)
+                                                setExpandedDescriptions(newExpanded)
+                                              }}
+                                            >
+                                              Show less
+                                            </button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          {todo.description.slice(0, 100)}...
+                                          <button
+                                            className="description-toggle-btn"
+                                            onClick={() => {
+                                              const newExpanded = new Set(expandedDescriptions)
+                                              newExpanded.add(todo.id)
+                                              setExpandedDescriptions(newExpanded)
+                                            }}
+                                          >
+                                            Read more
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
                                   <span className="todo-list-badge">
                                     {todo.listIcon} {todo.listName}
                                   </span>

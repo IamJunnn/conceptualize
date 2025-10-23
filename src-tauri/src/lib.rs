@@ -18,6 +18,12 @@ struct Todo {
     linked_note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     list_id: Option<String>, // Which list this todo belongs to
+    #[serde(skip_serializing_if = "Option::is_none")]
+    priority: Option<u8>, // 1-4: 1=urgent, 2=high, 3=medium, 4=low
+    #[serde(skip_serializing_if = "Option::is_none")]
+    start_date: Option<String>, // ISO 8601 format
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>, // Optional description/notes
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -44,6 +50,8 @@ struct NoteTodo {
     start_date: Option<String>, // ISO 8601 format
     #[serde(skip_serializing_if = "Option::is_none")]
     end_date: Option<String>, // ISO 8601 format
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>, // Optional description/notes
     note_path: String, // Which note this todo is embedded in
     line_number: usize, // Line number in the note where this todo appears
     created_at: String,
@@ -723,6 +731,9 @@ fn add_todo(app: tauri::AppHandle, list_id: String, text: String, due_date: Opti
         created_at: chrono::Utc::now().to_rfc3339(),
         linked_note,
         list_id: Some(list_id.clone()),
+        priority: None,
+        start_date: None,
+        description: None,
     };
 
     // Find the list and add the todo
@@ -736,7 +747,18 @@ fn add_todo(app: tauri::AppHandle, list_id: String, text: String, due_date: Opti
 }
 
 #[tauri::command]
-fn update_todo(app: tauri::AppHandle, list_id: String, todo_id: String, text: Option<String>, completed: Option<bool>, due_date: Option<String>, root_path: Option<String>) -> Result<(), String> {
+fn update_todo(
+    app: tauri::AppHandle,
+    list_id: String,
+    todo_id: String,
+    text: Option<String>,
+    completed: Option<bool>,
+    due_date: Option<String>,
+    root_path: Option<String>,
+    priority: Option<u8>,
+    start_date: Option<String>,
+    description: Option<String>
+) -> Result<(), String> {
     let mut data = get_todos(app.clone())?;
 
     if let Some(list) = data.lists.iter_mut().find(|l| l.id == list_id) {
@@ -781,6 +803,15 @@ fn update_todo(app: tauri::AppHandle, list_id: String, todo_id: String, text: Op
             if let Some(d) = due_date {
                 todo.due_date = Some(d);
             }
+            if let Some(p) = priority {
+                todo.priority = Some(p);
+            }
+            if let Some(s) = start_date {
+                todo.start_date = Some(s);
+            }
+            if let Some(desc) = description {
+                todo.description = Some(desc);
+            }
             save_todos(app, data)?;
             return Ok(());
         }
@@ -816,6 +847,7 @@ struct UnifiedTodo {
     start_date: Option<String>,
     end_date: Option<String>,
     note_path: Option<String>,
+    description: Option<String>,
 }
 
 #[tauri::command]
@@ -827,7 +859,9 @@ fn add_unified_todo(
     start_date: Option<String>,
     end_date: Option<String>,
     root_path: String,
-    note_name: Option<String>,
+    note_name: Option<String>, // If provided, writes todo to this note file
+    description: Option<String>,
+    linked_note: Option<String>, // Just a reference, doesn't write to file
 ) -> Result<UnifiedTodo, String> {
     // 1. Add to standalone todos
     let mut data = get_todos(app.clone())?;
@@ -841,8 +875,11 @@ fn add_unified_todo(
         completed: false,
         due_date: end_date.clone(), // Use end_date as due_date for backwards compatibility
         created_at: created_at.clone(),
-        linked_note: note_name.clone(),
+        linked_note: linked_note.clone(), // Use the new linked_note parameter
         list_id: Some(list_id.clone()),
+        priority: priority.clone(),
+        start_date: start_date.clone(),
+        description: description.clone(),
     };
 
     if let Some(list) = data.lists.iter_mut().find(|l| l.id == list_id) {
@@ -852,36 +889,46 @@ fn add_unified_todo(
         return Err("List not found".to_string());
     }
 
-    // 2. Write to note file (creates or appends)
-    let note_file_name = note_name.as_deref().unwrap_or("Quick Todos");
-    let note_path = PathBuf::from(&root_path).join(format!("{}.md", note_file_name));
+    // 2. Write to note file ONLY if note_name is provided (creates or appends)
+    let note_path_str = if let Some(note_file_name) = note_name.as_deref() {
+        let note_path = PathBuf::from(&root_path).join(format!("{}.md", note_file_name));
 
-    // Build the markdown todo line with metadata
-    let mut metadata_parts = Vec::new();
-    if let Some(p) = priority {
-        metadata_parts.push(format!("priority: {}", p));
-    }
-    if let Some(s) = &start_date {
-        metadata_parts.push(format!("start: {}", s));
-    }
-    if let Some(e) = &end_date {
-        metadata_parts.push(format!("end: {}", e));
-    }
+        // Build the markdown todo line with metadata
+        let mut metadata_parts = Vec::new();
+        if let Some(p) = priority {
+            metadata_parts.push(format!("priority: {}", p));
+        }
+        if let Some(s) = &start_date {
+            metadata_parts.push(format!("start: {}", s));
+        }
+        if let Some(e) = &end_date {
+            metadata_parts.push(format!("end: {}", e));
+        }
+        if let Some(d) = &description {
+            // Escape quotes in description
+            let escaped_desc = d.replace('"', "\\\"");
+            metadata_parts.push(format!("desc: \"{}\"", escaped_desc));
+        }
 
-    let todo_line = if metadata_parts.is_empty() {
-        format!("- [ ] {}\n", text)
+        let todo_line = if metadata_parts.is_empty() {
+            format!("- [ ] {}\n", text)
+        } else {
+            format!("- [ ] {} {{{}}}\n", text, metadata_parts.join(", "))
+        };
+
+        // Append to note file (or create if doesn't exist)
+        if note_path.exists() {
+            let content = fs::read_to_string(&note_path).map_err(|e| e.to_string())?;
+            let new_content = format!("{}\n{}", content, todo_line);
+            fs::write(&note_path, new_content).map_err(|e| e.to_string())?;
+        } else {
+            fs::write(&note_path, todo_line).map_err(|e| e.to_string())?;
+        }
+
+        Some(note_path.to_string_lossy().to_string())
     } else {
-        format!("- [ ] {} {{{}}}\n", text, metadata_parts.join(", "))
+        None
     };
-
-    // Append to note file (or create if doesn't exist)
-    if note_path.exists() {
-        let content = fs::read_to_string(&note_path).map_err(|e| e.to_string())?;
-        let new_content = format!("{}\n{}", content, todo_line);
-        fs::write(&note_path, new_content).map_err(|e| e.to_string())?;
-    } else {
-        fs::write(&note_path, todo_line).map_err(|e| e.to_string())?;
-    }
 
     // 3. Return unified todo
     Ok(UnifiedTodo {
@@ -890,12 +937,13 @@ fn add_unified_todo(
         completed: false,
         due_date: end_date.clone(),
         created_at,
-        linked_note: Some(note_file_name.to_string()),
+        linked_note: note_name.clone(),
         list_id: Some(list_id),
         priority,
         start_date,
         end_date,
-        note_path: Some(note_path.to_string_lossy().to_string()),
+        note_path: note_path_str,
+        description,
     })
 }
 
@@ -903,8 +951,8 @@ fn add_unified_todo(
 use regex::Regex;
 use chrono::Utc;
 
-fn parse_todo_metadata(line: &str) -> (String, Option<u8>, Option<String>, Option<String>) {
-    // Parse: - [ ] Title {priority: 1, start: 2025-01-15, end: 2025-01-20}
+fn parse_todo_metadata(line: &str) -> (String, Option<u8>, Option<String>, Option<String>, Option<String>) {
+    // Parse: - [ ] Title {priority: 1, start: 2025-01-15, end: 2025-01-20, desc: "Some description"}
     let re = Regex::new(r"^-\s*\[([ x])\]\s*(.+?)(?:\s*\{(.+?)\})?$").unwrap();
 
     if let Some(caps) = re.captures(line) {
@@ -914,6 +962,7 @@ fn parse_todo_metadata(line: &str) -> (String, Option<u8>, Option<String>, Optio
         let mut priority = None;
         let mut start_date = None;
         let mut end_date = None;
+        let mut description = None;
 
         if let Some(meta) = metadata_str {
             // Parse priority
@@ -934,11 +983,16 @@ fn parse_todo_metadata(line: &str) -> (String, Option<u8>, Option<String>, Optio
             if let Some(e_match) = Regex::new(r"end:\s*([0-9-]+)").unwrap().captures(meta) {
                 end_date = Some(e_match[1].to_string());
             }
+
+            // Parse description
+            if let Some(d_match) = Regex::new(r#"desc:\s*"([^"]+)""#).unwrap().captures(meta) {
+                description = Some(d_match[1].to_string());
+            }
         }
 
-        (title, priority, start_date, end_date)
+        (title, priority, start_date, end_date, description)
     } else {
-        (String::new(), None, None, None)
+        (String::new(), None, None, None, None)
     }
 }
 
@@ -969,7 +1023,10 @@ fn scan_note_todos(root_path: String) -> Result<Vec<NoteTodo>, String> {
     let root = Path::new(&root_path);
     let mut todos = Vec::new();
 
-    fn scan_directory(dir: &Path, todos: &mut Vec<NoteTodo>) -> Result<(), String> {
+    use std::collections::HashSet;
+    let mut seen_ids: HashSet<String> = HashSet::new();
+
+    fn scan_directory(dir: &Path, todos: &mut Vec<NoteTodo>, seen_ids: &mut HashSet<String>) -> Result<(), String> {
         let entries = fs::read_dir(dir).map_err(|e| e.to_string())?;
 
         for entry in entries {
@@ -977,28 +1034,46 @@ fn scan_note_todos(root_path: String) -> Result<Vec<NoteTodo>, String> {
             let path = entry.path();
 
             if path.is_dir() {
-                scan_directory(&path, todos)?;
+                scan_directory(&path, todos, seen_ids)?;
             } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                println!("📖 Reading markdown file: {:?}", path);
+                println!("   File name: {:?}", path.file_name());
+                println!("   Full path string: {:?}", path.to_string_lossy().to_string());
                 // Parse markdown file for todos
                 let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
 
                 for (line_num, line) in content.lines().enumerate() {
                     if line.trim_start().starts_with("- [") {
-                        let (title, priority, start_date, end_date) = parse_todo_metadata(line);
+                        let (title, priority, start_date, end_date, description) = parse_todo_metadata(line);
 
                         if !title.is_empty() {
                             let completed = line.contains("- [x]") || line.contains("- [X]");
 
                             // Only include active todos (not completed)
                             if !completed {
+                                // Create unique ID based on file path and line number (1-indexed)
+                                let id = format!("{}:{}", path.display(), line_num + 1);
+
+                                // LOG: Check for duplicates
+                                if seen_ids.contains(&id) {
+                                    println!("⚠️ DUPLICATE FOUND: {} - '{}'", id, title);
+                                    continue;
+                                }
+                                println!("✅ Adding todo: {} - '{}'", id, title);
+                                seen_ids.insert(id.clone());
+
+                                let note_path_str = path.to_string_lossy().to_string();
+                                println!("📁 File path for todo: '{}'", note_path_str);
+
                                 todos.push(NoteTodo {
-                                    id: format!("{}:{}", path.display(), line_num),
+                                    id,
                                     title,
                                     completed: false,
                                     priority,
                                     start_date,
                                     end_date,
-                                    note_path: path.to_string_lossy().to_string(),
+                                    description,
+                                    note_path: note_path_str,
                                     line_number: line_num + 1,
                                     created_at: Utc::now().to_rfc3339(),
                                     completed_at: None,
@@ -1013,7 +1088,7 @@ fn scan_note_todos(root_path: String) -> Result<Vec<NoteTodo>, String> {
         Ok(())
     }
 
-    scan_directory(root, &mut todos)?;
+    scan_directory(root, &mut todos, &mut seen_ids)?;
     Ok(todos)
 }
 
@@ -1031,17 +1106,44 @@ fn get_note_todos(app: tauri::AppHandle, root_path: String) -> Result<NoteTodosR
 // Get unified todos: combines note todos AND todos.json todos
 #[tauri::command]
 fn get_unified_todos(app: tauri::AppHandle, root_path: String) -> Result<NoteTodosResult, String> {
+    println!("🔍 get_unified_todos called");
+
     // 1. Get note-based todos
-    let mut note_todos_active = scan_note_todos(root_path.clone())?;
+    let note_todos_active = scan_note_todos(root_path.clone())?;
+    println!("📋 Found {} note todos (active)", note_todos_active.len());
+
     let archive = load_archive(&app)?;
-    let mut note_todos_archived = archive.todos;
+    let note_todos_archived = archive.todos;
+    println!("📦 Found {} archived todos", note_todos_archived.len());
 
     // 2. Get todos.json todos
-    let todo_data = get_todos(app)?;
+    let mut todo_data = get_todos(app.clone())?;
 
-    // 3. Convert todos.json todos to NoteTodo format
-    for list in todo_data.lists {
-        for todo in list.todos {
+    // 3. Create a set of (note_path, todo_text) pairs for deduplication
+    use std::collections::HashSet;
+    let mut note_todo_signatures: HashSet<(String, String)> = HashSet::new();
+
+    for todo in &note_todos_active {
+        if !todo.note_path.is_empty() {
+            note_todo_signatures.insert((todo.note_path.clone(), todo.title.clone()));
+        }
+    }
+
+    for todo in &note_todos_archived {
+        if !todo.note_path.is_empty() {
+            note_todo_signatures.insert((todo.note_path.clone(), todo.title.clone()));
+        }
+    }
+
+    // 4. Clean up duplicates from todos.json and build result
+    let mut final_active = note_todos_active;
+    let mut final_archived = note_todos_archived;
+    let mut needs_save = false;
+
+    for list in &mut todo_data.lists {
+        // Filter out duplicate todos
+        let original_len = list.todos.len();
+        list.todos.retain(|todo| {
             // Determine note path if linked
             let note_path = if let Some(note_name) = &todo.linked_note {
                 PathBuf::from(&root_path).join(format!("{}.md", note_name)).to_string_lossy().to_string()
@@ -1049,30 +1151,53 @@ fn get_unified_todos(app: tauri::AppHandle, root_path: String) -> Result<NoteTod
                 String::new()
             };
 
+            // Check if this todo already exists in notes
+            let signature = (note_path.clone(), todo.text.clone());
+            !note_todo_signatures.contains(&signature)
+        });
+
+        if list.todos.len() != original_len {
+            needs_save = true;
+        }
+
+        // Add remaining todos to result
+        for todo in &list.todos {
+            let note_path = if let Some(note_name) = &todo.linked_note {
+                PathBuf::from(&root_path).join(format!("{}.md", note_name)).to_string_lossy().to_string()
+            } else {
+                String::new()
+            };
+
             let note_todo = NoteTodo {
-                id: todo.id,
-                title: todo.text,
+                id: todo.id.clone(),
+                title: todo.text.clone(),
                 completed: todo.completed,
-                priority: None, // todos.json doesn't have priority yet
-                start_date: None, // todos.json doesn't have start_date yet
-                end_date: todo.due_date,
+                priority: todo.priority.clone(),
+                start_date: todo.start_date.clone(),
+                end_date: todo.due_date.clone(),
+                description: todo.description.clone(),
                 note_path: note_path.clone(),
-                line_number: 0, // Not applicable for todos.json todos
-                created_at: todo.created_at,
+                line_number: 0,
+                created_at: todo.created_at.clone(),
                 completed_at: None,
             };
 
             if todo.completed {
-                note_todos_archived.push(note_todo);
+                final_archived.push(note_todo);
             } else {
-                note_todos_active.push(note_todo);
+                final_active.push(note_todo);
             }
         }
     }
 
+    // 5. Save cleaned todos.json if duplicates were removed
+    if needs_save {
+        save_todos(app.clone(), todo_data)?;
+    }
+
     Ok(NoteTodosResult {
-        active: note_todos_active,
-        archived: note_todos_archived,
+        active: final_active,
+        archived: final_archived,
     })
 }
 
@@ -1083,13 +1208,25 @@ fn toggle_note_todo(
     line_number: usize,
     completed: bool,
 ) -> Result<(), String> {
-    // Read the note file
+    // If line_number is 0 or note_path is empty, this is a todos.json entry (not a note todo)
+    // In this case, we only update todos.json without trying to read/write a note file
+    if line_number == 0 || note_path.trim().is_empty() {
+        println!("⚠️ toggle_note_todo called with line_number=0 or empty note_path - this should be handled via update_todo instead");
+        return Err("This todo is not embedded in a note. Use update_todo command instead.".to_string());
+    }
+
+    // Verify file exists before trying to read it
     let path = Path::new(&note_path);
-    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    if !path.exists() {
+        return Err(format!("Note file does not exist: {}", note_path));
+    }
+
+    // Read the note file
+    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read file {}: {}", note_path, e))?;
     let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
 
-    if line_number == 0 || line_number > lines.len() {
-        return Err("Invalid line number".to_string());
+    if line_number > lines.len() {
+        return Err(format!("Invalid line number {} (file has {} lines)", line_number, lines.len()));
     }
 
     let line_idx = line_number - 1;
@@ -1106,10 +1243,10 @@ fn toggle_note_todo(
 
     // Write back to file
     let new_content = lines.join("\n");
-    fs::write(path, new_content).map_err(|e| e.to_string())?;
+    fs::write(path, new_content).map_err(|e| format!("Failed to write file {}: {}", note_path, e))?;
 
     // Parse todo metadata
-    let (title, priority, start_date, end_date) = parse_todo_metadata(&line);
+    let (title, priority, start_date, end_date, description) = parse_todo_metadata(&line);
     let todo_id = format!("{}:{}", note_path, line_number);
 
     // SYNC WITH TODOS.JSON
@@ -1140,6 +1277,7 @@ fn toggle_note_todo(
             priority,
             start_date,
             end_date,
+            description,
             note_path: note_path.clone(),
             line_number,
             created_at: Utc::now().to_rfc3339(),
@@ -1265,6 +1403,103 @@ fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, S
     Ok(results)
 }
 
+// New todo commands for inline todo blocks
+#[tauri::command]
+fn create_todo(
+    app: tauri::AppHandle,
+    text: String,
+    priority: Option<u8>,
+    start_date: Option<String>,
+    end_date: Option<String>,
+    linked_note_path: Option<String>,
+    _linked_note_name: Option<String>,
+    description: Option<String>,
+    completed: bool,
+) -> Result<serde_json::Value, String> {
+    let mut data = get_todos(app.clone())?;
+
+    // Generate ID
+    let todo_id = uuid::Uuid::new_v4().to_string();
+    let created_at = chrono::Utc::now().to_rfc3339();
+
+    // Create todo in the first list (or create a default list if none exists)
+    if data.lists.is_empty() {
+        // Create a default "Inbox" list
+        let inbox_id = uuid::Uuid::new_v4().to_string();
+        data.lists.push(TodoList {
+            id: inbox_id.clone(),
+            name: "Inbox".to_string(),
+            icon: "📥".to_string(),
+            todos: vec![],
+        });
+    }
+
+    let list_id = data.lists[0].id.clone();
+
+    let new_todo = Todo {
+        id: todo_id.clone(),
+        text: text.clone(),
+        completed,
+        due_date: end_date.clone(),
+        created_at,
+        linked_note: linked_note_path.clone(),
+        list_id: Some(list_id.clone()),
+        priority,
+        start_date,
+        description,
+    };
+
+    if let Some(list) = data.lists.iter_mut().find(|l| l.id == list_id) {
+        list.todos.push(new_todo.clone());
+        save_todos(app, data)?;
+    }
+
+    Ok(serde_json::json!({
+        "success": true,
+        "id": todo_id
+    }))
+}
+
+#[tauri::command]
+fn get_all_todos(app: tauri::AppHandle) -> Result<Vec<serde_json::Value>, String> {
+    let data = get_todos(app)?;
+
+    let mut all_todos = Vec::new();
+    for list in data.lists {
+        for todo in list.todos {
+            all_todos.push(serde_json::json!({
+                "id": todo.id,
+                "text": todo.text,
+                "completed": todo.completed,
+                "priority": todo.priority,
+                "startDate": todo.start_date,
+                "endDate": todo.due_date,
+                "description": todo.description,
+                "linkedNote": todo.linked_note,
+                "listId": todo.list_id,
+                "createdAt": todo.created_at,
+            }));
+        }
+    }
+
+    Ok(all_todos)
+}
+
+#[tauri::command]
+fn toggle_todo_completion(app: tauri::AppHandle, todo_id: String) -> Result<(), String> {
+    let mut data = get_todos(app.clone())?;
+
+    for list in data.lists.iter_mut() {
+        if let Some(todo) = list.todos.iter_mut().find(|t| t.id == todo_id) {
+            todo.completed = !todo.completed;
+            save_todos(app, data)?;
+            return Ok(());
+        }
+    }
+
+    Err("Todo not found".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1285,7 +1520,9 @@ pub fn run() {
             // New note-embedded todo commands
             scan_note_todos, get_note_todos, toggle_note_todo,
             // Unified todo commands
-            add_unified_todo, get_unified_todos
+            add_unified_todo, get_unified_todos,
+            // Inline todo block commands
+            create_todo, get_all_todos, toggle_todo_completion
         ])
         // AI commands temporarily disabled: ai_chat, index_notes, search_notes, ai_chat_with_context
         .run(tauri::generate_context!())
