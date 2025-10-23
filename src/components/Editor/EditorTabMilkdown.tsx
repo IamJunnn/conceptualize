@@ -320,6 +320,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
           onChange={handleChange}
           onWikiLinkClick={handleWikiLinkClick}
           rootPath={rootPath}
+          filePath={filePath}
           editorId={editorId}
           onPaneActivate={onPaneActivate}
           isActive={isActive}

@@ -10,9 +10,8 @@ import { TabBar, OpenFile } from './UI/TabBar'
 import { DropZoneOverlay } from './UI/DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import { getFilesWithIncomingLinks } from '../utils/graphUtils'
-// TODO: Re-enable for full release
-// import TodoPanel from './Todo/TodoPanel'
-// import NoteTodosView from './Todo/NoteTodosView'
+import TodoPanel from './Todo/TodoPanel'
+import NoteTodosView from './Todo/NoteTodosView'
 import './MainUI.css'
 
 // Development mode flag
@@ -63,6 +62,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [graphKey, setGraphKey] = useState(0) // For forcing graph refresh
   const [activeGuide, setActiveGuide] = useState<'shortcuts' | 'markdown' | null>(null)
   const [filesWithIncomingLinks, setFilesWithIncomingLinks] = useState<Set<string>>(new Set())
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; itemPath: string; itemName: string } | null>(null)
 
   // Helper function to extract all paths from file tree
   const getAllPaths = (nodes: FileTreeNode[]): string[] => {
@@ -560,11 +560,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     })
   }
 
-  const handleDeleteItem = async (itemPath: string) => {
-    const confirmMessage = `Are you sure you want to delete this item? This action cannot be undone.`
-    if (!window.confirm(confirmMessage)) {
-      return
-    }
+  const handleDeleteItem = (itemPath: string, itemName: string) => {
+    setDeleteConfirmation({ show: true, itemPath, itemName })
+  }
+
+  const confirmDeleteItem = async () => {
+    if (!deleteConfirmation) return
+
+    const itemPath = deleteConfirmation.itemPath
+    setDeleteConfirmation(null)
 
     try {
       const result = await invoke<{ success: boolean; error?: string }>('delete_item', {
@@ -902,9 +906,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             />
             <div className="tab-content" onClick={() => setActivePane('left')}>
               {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} />}
-              {/* TODO: Re-enable for full release */}
-              {/* {activeTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={handleSelectFile} />} */}
-              {/* {activeTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />} */}
+              {activeTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={handleSelectFile} />}
+              {activeTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                 const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                 return activeTab === file.path && (
@@ -930,6 +933,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                         loadFileTree()
                         setGraphKey(prev => prev + 1)
                       }}
+                      isActive={true}
                     />
                   ) : (
                     <FileViewer
@@ -972,9 +976,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               />
               <div className="tab-content" onClick={() => setActivePane('left')}>
                 {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} />}
-                {/* TODO: Re-enable for full release */}
-                {/* {leftPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} />} */}
-                {/* {leftPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />} */}
+                {leftPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} />}
+                {leftPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />}
                 {leftPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return leftPaneTab === file.path && (
@@ -1049,9 +1052,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               />
               <div className="tab-content" onClick={() => setActivePane('right')}>
                 {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
-                {/* TODO: Re-enable for full release */}
-                {/* {rightPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} />} */}
-                {/* {rightPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />} */}
+                {rightPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} />}
+                {rightPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />}
                 {rightPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return rightPaneTab === file.path && (

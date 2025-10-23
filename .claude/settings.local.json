@@ -59,7 +59,17 @@
       "Bash(ollama list)",
       "Bash(ollama pull nomic-embed-text)",
       "Bash(cmd /c \"taskkill /IM node.exe /F & taskkill /IM app.exe /F\")",
-      "Bash(cmd /c \"taskkill /IM node.exe /F & taskkill /IM app.exe /F & taskkill /IM cargo.exe /F\")"
+      "Bash(cmd /c \"taskkill /IM node.exe /F & taskkill /IM app.exe /F & taskkill /IM cargo.exe /F\")",
+      "Read(//c/Users/Owner/Desktop/cp_testing/CP_TESTING/**)",
+      "Bash(powershell -Command \"Get-Content \"\"$env:APPDATA\\com.microgrid.app\\todos.json\"\"\")",
+      "Bash(powershell -Command \"Get-Content ''$env:APPDATA\\com.microgrid.app\\todos.json''\")",
+      "Read(//c/Users/Owner/AppData/Roaming/**)",
+      "Read(//c/Users/Owner/AppData/**)",
+      "Bash(powershell -Command \"Get-Content ''''$env:APPDATA\\com.microgrid.app\\todos.json''''\")",
+      "Bash(powershell -Command:*)",
+      "Bash(cmd /c \"dir /b C:\\Users\\Owner\\Desktop\\cp_testing\\CP_TESTING\\conceptualize\\*.md\")",
+      "Bash(cmd /c \"dir /b C:\\Users\\Owner\\Desktop\\cp_testing\\CP_TESTING\\*.md\")",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
