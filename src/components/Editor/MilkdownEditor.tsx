@@ -15,17 +15,21 @@ import { wikiLinkAutocompletePlugin } from '../../utils/wikiLinkAutocompletePlug
 import { imageResizePlugin } from '../../utils/imageResizePlugin'
 import { slashCommandPlugin } from '../../utils/slashCommandPlugin'
 import { tableWidgetPlugin } from '../../utils/tableCommandsPlugin'
+import { todoBlockPlugin } from '../../utils/todoBlockPlugin'
 import WikiLinkAutocomplete from './WikiLinkAutocomplete'
 import TableWidget from './TableWidget'
+import QuickAddModal, { TodoFormData } from '../Todo/QuickAddModal'
 import { invoke } from '@tauri-apps/api/core'
 import '@milkdown/theme-nord/style.css'
 import './MilkdownEditor.css'
+import '../../utils/todoBlockPlugin.css'
 
 interface MilkdownEditorProps {
   content: string
   onChange: (content: string) => void
   onWikiLinkClick?: (noteName: string) => void
   rootPath?: string
+  filePath?: string // Current file path for todo creation
   editorId?: string // Unique ID to scope autocomplete per pane
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
   isActive?: boolean // Whether this pane is currently active
@@ -37,7 +41,7 @@ interface FileItem {
   type: 'md' | 'svg' | 'pdf' | 'png' | 'jpg' | 'other'
 }
 
-function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, editorId = 'default', onPaneActivate, isActive }: MilkdownEditorProps) {
+function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, filePath, editorId = 'default', onPaneActivate, isActive }: MilkdownEditorProps) {
   const editorRef = useRef<Editor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [autocompleteVisible, setAutocompleteVisible] = useState(false)
@@ -48,6 +52,11 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
   const [triggerPos, setTriggerPos] = useState(0)
   const [hasNavigated, setHasNavigated] = useState(false) // Track if user has used arrow keys
   const pendingCursorPosRef = useRef<number | null>(null) // Store cursor position to restore after re-render
+
+  // Todo modal state
+  const [showTodoModal, setShowTodoModal] = useState(false)
+  const [todoInsertPosition, setTodoInsertPosition] = useState<number | null>(null)
+  const [currentNotePath, setCurrentNotePath] = useState<string | null>(null)
 
   // Close autocomplete when editor becomes inactive (switching tabs/panes)
   useEffect(() => {
@@ -138,6 +147,21 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
     fetchFiles()
   }, [rootPath])
 
+  // Listen for todo modal event
+  useEffect(() => {
+    const handleOpenTodoModal = (event: any) => {
+      console.log('🎯 openTodoModal event received:', event.detail)
+      setTodoInsertPosition(event.detail.cursorPosition)
+      setCurrentNotePath(filePath || null)
+      setShowTodoModal(true)
+    }
+
+    window.addEventListener('openTodoModal', handleOpenTodoModal)
+    return () => {
+      window.removeEventListener('openTodoModal', handleOpenTodoModal)
+    }
+  }, [filePath])
+
   // Listen for autocomplete events (scoped to this editor)
   useEffect(() => {
     const handleOpen = (event: any) => {
@@ -156,7 +180,6 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       // Only respond to events from this editor
       if (event.detail.editorId !== editorId) return
 
-      console.log(`[EDITOR ${editorId}] 🔄 Autocomplete UPDATE - query:`, event.detail.searchQuery);
       setSearchQuery(event.detail.searchQuery)
       setSelectedIndex(-1) // Reset selection when search changes
       setHasNavigated(false) // Reset navigation state
@@ -164,9 +187,10 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
 
     const handleClose = (event: any) => {
       // Only respond to events from this editor (or global close)
-      if (event.detail && event.detail.editorId && event.detail.editorId !== editorId) return
+      if (event.detail && event.detail.editorId && event.detail.editorId !== editorId) {
+        return
+      }
 
-      console.log(`[EDITOR ${editorId}] ❌ Autocomplete CLOSING`);
       setAutocompleteVisible(false)
       setSearchQuery('')
       setSelectedIndex(-1)
@@ -340,6 +364,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
       .use(wikiLinkAutocompletePlugin())
       .use(imageResizePlugin())
       .use(tableWidgetPlugin)
+      .use(todoBlockPlugin)
 
     editorRef.current = editor
     return editor
@@ -517,12 +542,64 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         // Move cursor to end of document
         const { state, dispatch } = view
         const endPos = state.doc.content.size
-        const tr = state.tr.setSelection(state.selection.constructor.near(state.doc.resolve(endPos)))
+        const tr = state.tr.setSelection(TextSelection.create(state.doc, endPos - 1))
         dispatch(tr)
       }
     } catch (error) {
       console.error(`[MilkdownEditor] ${editorId} - Error handling click:`, error)
     }
+  }
+
+  // Handle todo creation from modal
+  const handleTodoSubmit = async (data: TodoFormData) => {
+    console.log('📝 Todo submitted:', data)
+
+    try {
+      // 1. Create todo in central system
+      const result = await invoke<{ success: boolean; id?: string; error?: string }>('create_todo', {
+        text: data.text,
+        priority: data.priority,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        linkedNotePath: currentNotePath,
+        linkedNoteName: data.linkedNoteName,
+        description: data.description,
+        completed: false
+      })
+
+      if (result.success && result.id && editorRef.current && todoInsertPosition !== null) {
+        // 2. Insert todo reference at cursor position
+        const editor = editorRef.current
+        const view = editor.ctx.get(editorViewCtx)
+        const { state, dispatch } = view
+
+        // Insert the todo reference as a special syntax: {{todo:id}}
+        // Insert it as a paragraph on a new line for proper rendering
+        const todoReference = `{{todo:${result.id}}}`
+        const todoTextNode = state.schema.text(todoReference)
+        const todoParagraph = state.schema.nodes.paragraph.create(null, todoTextNode)
+
+        // Insert the paragraph at the cursor position
+        const tr = state.tr.insert(todoInsertPosition, todoParagraph)
+
+        // Move cursor after the inserted todo block
+        const newCursorPos = todoInsertPosition + todoParagraph.nodeSize
+        tr.setSelection(TextSelection.create(tr.doc, newCursorPos))
+
+        dispatch(tr)
+
+        console.log('✅ Todo created and inserted at position:', todoInsertPosition)
+      } else {
+        console.error('❌ Failed to create todo:', result.error)
+      }
+    } catch (error) {
+      console.error('❌ Error creating todo:', error)
+    }
+
+    // Close modal
+    setShowTodoModal(false)
+    setTodoInsertPosition(null)
+    setCurrentNotePath(null)
   }
 
   return (
@@ -545,14 +622,26 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, edi
         onNavigate={handleNavigate}
       />
       <TableWidget editor={editorRef.current} />
+      <QuickAddModal
+        isOpen={showTodoModal}
+        onClose={() => {
+          setShowTodoModal(false)
+          setTodoInsertPosition(null)
+          setCurrentNotePath(null)
+        }}
+        onSubmit={handleTodoSubmit}
+        rootPath={rootPath}
+        context="editor"
+        currentNotePath={currentNotePath || undefined}
+      />
     </div>
   )
 }
 
-export default function MilkdownEditor({ content, onChange, onWikiLinkClick, rootPath, editorId, onPaneActivate, isActive }: MilkdownEditorProps) {
+export default function MilkdownEditor({ content, onChange, onWikiLinkClick, rootPath, filePath, editorId, onPaneActivate, isActive }: MilkdownEditorProps) {
   return (
     <MilkdownProvider>
-      <MilkdownEditorInner content={content} onChange={onChange} onWikiLinkClick={onWikiLinkClick} rootPath={rootPath} editorId={editorId} onPaneActivate={onPaneActivate} isActive={isActive} />
+      <MilkdownEditorInner content={content} onChange={onChange} onWikiLinkClick={onWikiLinkClick} rootPath={rootPath} filePath={filePath} editorId={editorId} onPaneActivate={onPaneActivate} isActive={isActive} />
     </MilkdownProvider>
   )
 }

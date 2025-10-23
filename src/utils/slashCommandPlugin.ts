@@ -26,8 +26,7 @@ const commands: SlashCommand[] = [
   // List category
   { label: 'Bullet List', icon: '•', command: 'bulletList', category: 'list' },
   { label: 'Ordered List', icon: '1.', command: 'orderedList', category: 'list' },
-  // TODO: Re-enable for full release
-  // { label: 'Todo', icon: '✓', command: 'todo', category: 'list' },
+  { label: 'Todo', icon: '✓', command: 'todos', category: 'list' },
 
   // Advanced category
   { label: 'Code Block', icon: '</>', command: 'codeBlock', category: 'advanced' },
@@ -524,6 +523,18 @@ export const slashCommandPlugin = () => {
             node = schema.nodes.hr.create()
           }
           break
+        case 'todos':
+          // Delete the / and any typed text first
+          view.dispatch(tr)
+
+          // Dispatch custom event to open the todo modal
+          // Store the cursor position so we can insert the todo there later
+          const cursorPos = from
+          window.dispatchEvent(new CustomEvent('openTodoModal', {
+            detail: { cursorPosition: cursorPos }
+          }))
+          closeMenu(view)
+          return // Don't insert any node, just return
         case 'todo':
           // Insert a checkbox with metadata template
           // Instead of creating a node, we'll insert raw text that the user can edit

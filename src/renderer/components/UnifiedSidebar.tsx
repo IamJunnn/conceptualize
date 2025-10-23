@@ -1,4 +1,4 @@
-import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon, ClipboardDocumentListIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { isImportantNote } from '../../utils/importantNotes';
 import React from 'react';
@@ -676,8 +676,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       )}
 
       {/* Quick Action Buttons */}
-      {/* TODO: Re-enable for full release */}
-      {/* <div className="sidebar-quick-actions">
+      <div className="sidebar-quick-actions">
         <button
           className="quick-action-button"
           onClick={() => onSelectFile('special://todos', 'Todos')}
@@ -686,15 +685,16 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           <ClipboardDocumentListIcon className="quick-action-icon" />
           <span>Todos</span>
         </button>
-        <button
+        {/* Timeline button - hidden for now, will work on it soon */}
+        {/* <button
           className="quick-action-button"
           onClick={() => onSelectFile('special://timeline', 'Timeline')}
           title="Timeline"
         >
           <CalendarIcon className="quick-action-icon" />
           <span>Timeline</span>
-        </button>
-      </div> */}
+        </button> */}
+      </div>
     </div>
   );
 });
