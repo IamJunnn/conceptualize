@@ -1,0 +1,304 @@
+/**
+ * Todo Block Widget Styles
+ *
+ * Inline todo blocks that appear in the editor from {{todo:id}} syntax.
+ * Layout structure:
+ *   ┌─────────────────────────────────┐
+ *   │ [✓] title P1                    │  ← todo-block-top
+ *   │     description                  │
+ *   │     End: Oct 22      [edit][del] │  ← todo-block-bottom
+ *   └─────────────────────────────────┘
+ *
+ * Features:
+ * - Compact design matching TodoPanel styling
+ * - Flexible height based on content
+ * - Edit/delete buttons visible on hover
+ * - Custom dark-themed delete confirmation modal
+ */
+
+/* Wrapper Container */
+.todo-block-wrapper {
+  display: inline-block !important;
+  width: 100% !important;
+  vertical-align: top !important;
+  margin: 2px 0 !important;
+}
+
+/* Main Todo Block Container */
+.todo-block {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 3px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  position: relative;
+}
+
+.todo-block:hover {
+  background: #323232;
+  border-color: #4a4a4a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Layout: Top Row (checkbox + title + description) */
+.todo-block-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Layout: Bottom Row (end date + actions) */
+.todo-block-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding-left: 26px; /* Align with title (checkbox width + gap) */
+}
+
+/* Checkbox */
+.todo-checkbox {
+  margin-top: 0px;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #4CAF50;
+  flex-shrink: 0;
+}
+
+/* Main Content Area (title + description) */
+.todo-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+}
+
+/* Title Row (title text + priority badge) */
+.todo-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 1px;
+  flex-wrap: wrap;
+}
+
+.todo-title-text {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #e0e0e0;
+  word-break: break-word;
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-title-text.completed {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.todo-title.todo-error .todo-title-text {
+  color: #e74c3c;
+  font-style: italic;
+}
+
+/* Description */
+.todo-description {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 1px;
+}
+
+/* Metadata (end date) */
+.todo-metadata {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.todo-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.todo-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Priority Badge */
+.todo-priority {
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 2px;
+  border: 1px solid;
+  font-size: 9px;
+}
+
+/* Date Styling */
+.todo-date-label {
+  color: #888;
+  font-weight: 500;
+  font-size: 9px;
+}
+
+.todo-date {
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-size: 9px;
+}
+
+/* Action Buttons (edit/delete) */
+.todo-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.todo-block:hover .todo-actions {
+  opacity: 1;
+}
+
+.todo-edit-btn,
+.todo-delete-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.todo-edit-btn:hover {
+  background: rgba(100, 181, 246, 0.1);
+  color: #64b5f6;
+}
+
+.todo-delete-btn:hover {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+}
+
+.todo-edit-btn svg,
+.todo-delete-btn svg {
+  display: block;
+}
+
+/* Delete Confirmation Modal */
+.todo-delete-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+}
+
+.todo-delete-modal {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  min-width: 400px;
+  max-width: 500px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: modalFadeIn 0.2s ease;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.todo-delete-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.todo-delete-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.todo-delete-modal-body {
+  padding: 20px 24px;
+}
+
+.todo-delete-modal-body p {
+  margin: 0;
+  font-size: 14px;
+  color: #aaa;
+  line-height: 1.5;
+}
+
+.todo-delete-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #3a3a3a;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.todo-modal-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  outline: none;
+}
+
+.todo-modal-btn-cancel {
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #3a3a3a;
+}
+
+.todo-modal-btn-cancel:hover {
+  background: #3a3a3a;
+  color: #e0e0e0;
+}
+
+.todo-modal-btn-delete {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.todo-modal-btn-delete:hover {
+  background: #c0392b;
+}
