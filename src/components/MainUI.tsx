@@ -561,21 +561,35 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleDeleteItem = (itemPath: string, itemName: string) => {
+    console.log('🎯 handleDeleteItem called');
+    console.log('   itemPath:', itemPath);
+    console.log('   itemName:', itemName);
     setDeleteConfirmation({ show: true, itemPath, itemName })
+    console.log('   Delete confirmation dialog should be shown now');
   }
 
   const confirmDeleteItem = async () => {
-    if (!deleteConfirmation) return
+    console.log('✅ confirmDeleteItem called');
+    console.log('   deleteConfirmation:', deleteConfirmation);
+
+    if (!deleteConfirmation) {
+      console.log('   ❌ No deleteConfirmation, returning');
+      return;
+    }
 
     const itemPath = deleteConfirmation.itemPath
+    console.log('   🗑️ Attempting to delete:', itemPath);
     setDeleteConfirmation(null)
 
     try {
+      console.log('   📞 Invoking delete_item backend command...');
       const result = await invoke<{ success: boolean; error?: string }>('delete_item', {
         itemPath
       })
+      console.log('   📦 Result from backend:', result);
 
       if (result.success) {
+        console.log('   ✅ Delete successful, refreshing file tree...');
         await loadFileTree()
         await updateFilesWithIncomingLinks()
         if (isDev) console.log('Deleted item:', itemPath)
@@ -1119,6 +1133,35 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           onOpenInSecondPane={handleOpenInSecondPane}
           allPaths={getAllPaths(fileTree)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation && (
+        <div className="delete-modal-overlay">
+          <div className="delete-modal">
+            <div className="delete-modal-header">
+              <h3>Delete {deleteConfirmation.itemName.endsWith('.md') ? 'Note' : 'Item'}</h3>
+            </div>
+            <div className="delete-modal-body">
+              <p>Are you sure you want to delete "{deleteConfirmation.itemName}"?</p>
+              <p className="delete-modal-hint">This action cannot be undone.</p>
+            </div>
+            <div className="delete-modal-footer">
+              <button
+                className="delete-modal-cancel"
+                onClick={() => setDeleteConfirmation(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="delete-modal-confirm"
+                onClick={confirmDeleteItem}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Help Modal */}

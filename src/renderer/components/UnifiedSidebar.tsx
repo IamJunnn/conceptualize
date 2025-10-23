@@ -685,15 +685,14 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           <ClipboardDocumentListIcon className="quick-action-icon" />
           <span>Todos</span>
         </button>
-        {/* Timeline button - hidden for now, will work on it soon */}
-        {/* <button
+        <button
           className="quick-action-button"
           onClick={() => onSelectFile('special://timeline', 'Timeline')}
           title="Timeline"
         >
           <CalendarIcon className="quick-action-icon" />
           <span>Timeline</span>
-        </button> */}
+        </button>
       </div>
     </div>
   );

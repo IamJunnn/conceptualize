@@ -22,7 +22,7 @@ interface ContextMenuProps {
   itemType: 'file' | 'folder';
   itemName: string;
   onClose: () => void;
-  onDelete: (path: string) => void;
+  onDelete: (path: string, name: string) => void;
   onRename: (path: string, name: string) => void;
   onCreateNote: (parentPath: string) => void;
   onCreateFolder: (parentPath: string) => void;
@@ -230,7 +230,12 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       <div className="context-menu-separator" />
       <div
         className="context-menu-item danger"
-        onClick={() => handleAction(() => onDelete(itemPath))}
+        onClick={() => {
+          console.log('🗑️ Delete button clicked');
+          console.log('   itemPath:', itemPath);
+          console.log('   itemName:', itemName);
+          handleAction(() => onDelete(itemPath, itemName));
+        }}
       >
         <TrashIcon className="menu-icon" />
         Delete
