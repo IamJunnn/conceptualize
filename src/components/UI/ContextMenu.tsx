@@ -230,12 +230,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       <div className="context-menu-separator" />
       <div
         className="context-menu-item danger"
-        onClick={() => {
-          console.log('🗑️ Delete button clicked');
-          console.log('   itemPath:', itemPath);
-          console.log('   itemName:', itemName);
-          handleAction(() => onDelete(itemPath, itemName));
-        }}
+        onClick={() => handleAction(() => onDelete(itemPath, itemName))}
       >
         <TrashIcon className="menu-icon" />
         Delete

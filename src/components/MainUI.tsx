@@ -561,35 +561,21 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleDeleteItem = (itemPath: string, itemName: string) => {
-    console.log('🎯 handleDeleteItem called');
-    console.log('   itemPath:', itemPath);
-    console.log('   itemName:', itemName);
     setDeleteConfirmation({ show: true, itemPath, itemName })
-    console.log('   Delete confirmation dialog should be shown now');
   }
 
   const confirmDeleteItem = async () => {
-    console.log('✅ confirmDeleteItem called');
-    console.log('   deleteConfirmation:', deleteConfirmation);
-
-    if (!deleteConfirmation) {
-      console.log('   ❌ No deleteConfirmation, returning');
-      return;
-    }
+    if (!deleteConfirmation) return
 
     const itemPath = deleteConfirmation.itemPath
-    console.log('   🗑️ Attempting to delete:', itemPath);
     setDeleteConfirmation(null)
 
     try {
-      console.log('   📞 Invoking delete_item backend command...');
       const result = await invoke<{ success: boolean; error?: string }>('delete_item', {
         itemPath
       })
-      console.log('   📦 Result from backend:', result);
 
       if (result.success) {
-        console.log('   ✅ Delete successful, refreshing file tree...');
         await loadFileTree()
         await updateFilesWithIncomingLinks()
         if (isDev) console.log('Deleted item:', itemPath)
