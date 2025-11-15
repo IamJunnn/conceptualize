@@ -31,7 +31,7 @@
 }
 
 .create-team-btn {
-  background: #20c997;
+  background: #64c8ca;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -43,7 +43,7 @@
 }
 
 .create-team-btn:hover {
-  background: #17a77e;
+  background: #4fb5b8;
 }
 
 /* Loading State */
@@ -83,7 +83,7 @@
 }
 
 .create-team-btn-large {
-  background: #20c997;
+  background: #64c8ca;
   color: white;
   border: none;
   padding: 15px 30px;
@@ -96,7 +96,7 @@
 }
 
 .create-team-btn-large:hover {
-  background: #17a77e;
+  background: #4fb5b8;
 }
 
 /* Team Content Layout */
