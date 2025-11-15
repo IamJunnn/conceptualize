@@ -5,6 +5,7 @@
   flex-direction: column;
   background: #1e1e1e;
   color: #e0e0e0;
+  overflow: hidden;
 }
 
 /* Header */
@@ -30,18 +31,19 @@
 }
 
 .create-team-btn {
-  background: #007acc;
+  background: #20c997;
   color: white;
   border: none;
   padding: 10px 20px;
   border-radius: 5px;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 600;
   transition: background 0.2s;
 }
 
 .create-team-btn:hover {
-  background: #005a9e;
+  background: #17a77e;
 }
 
 /* Loading State */
@@ -81,19 +83,20 @@
 }
 
 .create-team-btn-large {
-  background: #007acc;
+  background: #20c997;
   color: white;
   border: none;
   padding: 15px 30px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
+  font-weight: 600;
   margin-top: 20px;
   transition: background 0.2s;
 }
 
 .create-team-btn-large:hover {
-  background: #005a9e;
+  background: #17a77e;
 }
 
 /* Team Content Layout */

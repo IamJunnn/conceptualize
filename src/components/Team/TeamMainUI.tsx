@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User } from '../../services/authServiceTauri';
 import { getUserTeams, Team } from '../../services/teamService';
+import TitleBar from '../UI/TitleBar';
 import './TeamMainUI.css';
 
 interface TeamMainUIProps {
@@ -38,6 +39,7 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
   if (loading) {
     return (
       <div className="team-main-ui">
+        <TitleBar onSettingsClick={() => {}} />
         <div className="loading-state">
           <p>Loading your teams...</p>
         </div>
@@ -47,6 +49,8 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
 
   return (
     <div className="team-main-ui">
+      <TitleBar onSettingsClick={() => {}} />
+
       {/* Header */}
       <div className="team-header">
         <div className="team-header-left">
