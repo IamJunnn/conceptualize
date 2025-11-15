@@ -4,12 +4,12 @@ use reqwest;
 #[derive(Debug, Serialize, Deserialize)]
 struct EmbeddingRequest {
     model: String,
-    input: String,
+    prompt: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct EmbeddingResponse {
-    embeddings: Vec<Vec<f32>>,
+    embedding: Vec<f32>,
 }
 
 /// Generate embedding vector for a given text using Ollama
@@ -18,25 +18,35 @@ pub async fn generate_embedding(text: &str) -> Result<Vec<f32>, String> {
 
     let request_body = EmbeddingRequest {
         model: "nomic-embed-text".to_string(),
-        input: text.to_string(),
+        prompt: text.to_string(),
     };
 
     match client
-        .post("http://localhost:11434/api/embed")
+        .post("http://localhost:11434/api/embeddings")
         .json(&request_body)
         .send()
         .await
     {
         Ok(response) => {
-            match response.json::<EmbeddingResponse>().await {
+            // Get response text first for debugging
+            let response_text = response.text().await
+                .map_err(|e| format!("Failed to read response text: {}", e))?;
+
+            eprintln!("📥 Embedding API response (first 200 chars): {}",
+                &response_text.chars().take(200).collect::<String>());
+
+            // Try to parse the JSON
+            match serde_json::from_str::<EmbeddingResponse>(&response_text) {
                 Ok(embedding_response) => {
-                    if let Some(embedding) = embedding_response.embeddings.first() {
-                        Ok(embedding.clone())
-                    } else {
-                        Err("No embedding returned".to_string())
-                    }
+                    eprintln!("✅ Successfully parsed embedding with {} dimensions",
+                        embedding_response.embedding.len());
+                    Ok(embedding_response.embedding)
                 }
-                Err(e) => Err(format!("Failed to parse embedding response: {}", e)),
+                Err(e) => {
+                    eprintln!("❌ JSON parse error: {}", e);
+                    eprintln!("📄 Full response: {}", &response_text);
+                    Err(format!("Failed to parse embedding response: {}", e))
+                }
             }
         }
         Err(e) => Err(format!("Failed to connect to Ollama: {}", e)),

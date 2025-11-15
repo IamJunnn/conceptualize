@@ -13,10 +13,11 @@ interface SearchResult {
 interface TitleBarProps {
   onSearchResultClick: (filePath: string, fileName: string, line?: number) => void
   onGuideOpen?: (guideName: 'shortcuts' | 'markdown') => void
+  onSettingsOpen?: () => void
   rootPath: string
 }
 
-function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps) {
+function TitleBar({ onSearchResultClick, onGuideOpen, onSettingsOpen, rootPath }: TitleBarProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
@@ -256,32 +257,42 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
       {/* Drag Region (right) */}
       <div className="titlebar-drag-region-right" data-tauri-drag-region onMouseDown={handleDragStart}></div>
 
+      {/* Settings Button */}
+      {onSettingsOpen && (
+        <button className="titlebar-button settings" onClick={onSettingsOpen} title="Settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      )}
+
       {/* Window Controls */}
       <div className="titlebar-controls">
         <button className="titlebar-button minimize" onClick={handleMinimize} title="Minimize">
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <rect x="0" y="5" width="12" height="2" fill="currentColor" />
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <rect x="2" y="6" width="10" height="2" fill="currentColor" />
           </svg>
         </button>
         <button className="titlebar-button maximize" onClick={handleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
           {isMaximized ? (
-            // Restore icon - two overlapping rectangles
-            <svg width="12" height="12" viewBox="0 0 12 12">
+            // Restore icon - two overlapping squares
+            <svg width="14" height="14" viewBox="0 0 14 14">
               <g fill="none" stroke="currentColor" strokeWidth="1.2">
-                <rect x="3" y="3" width="7" height="7" />
-                <path d="M2 2 L2 0 L12 0 L12 10 L10 10" />
+                <rect x="3" y="3" width="6" height="6" />
+                <polyline points="4,4 4,2 12,2 12,10 10,10" />
               </g>
             </svg>
           ) : (
-            // Maximize icon - single rectangle
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            // Maximize icon - single square
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <rect x="2" y="2" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.2" />
             </svg>
           )}
         </button>
         <button className="titlebar-button close" onClick={handleClose} title="Close">
-          <svg width="12" height="12" viewBox="0 0 12 12">
-            <path d="M1 1 L11 11 M11 1 L1 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <path d="M2 2 L12 12 M12 2 L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
       </div>

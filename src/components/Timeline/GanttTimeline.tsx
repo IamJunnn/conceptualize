@@ -4,6 +4,7 @@ import { scaleTime } from 'd3-scale';
 import { axisBottom } from 'd3-axis';
 import { timeDay, timeWeek } from 'd3-time';
 import { timeFormat } from 'd3-time-format';
+import { CalendarIcon } from '@heroicons/react/24/outline';
 import './GanttTimeline.css';
 
 interface Todo {
@@ -515,7 +516,9 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
         </div>
       ) : (
         <div className="empty-timeline">
-          <div className="empty-timeline-icon">📅</div>
+          <div className="empty-timeline-icon">
+            <CalendarIcon style={{ width: '64px', height: '64px', opacity: 0.5 }} />
+          </div>
           <p className="empty-timeline-text">No scheduled todos</p>
           <p className="empty-timeline-hint">Add due dates to your todos to see them here</p>
         </div>

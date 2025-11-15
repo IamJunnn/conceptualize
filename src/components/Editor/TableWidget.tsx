@@ -233,7 +233,7 @@ export default function TableWidget({ editor }: TableWidgetProps) {
         try {
           const insertType = hoveredLine.insertType
           const currentView = editor.ctx.get(editorViewCtx)
-          const { state, dispatch } = currentView
+          const { state } = currentView
 
           // Make sure we're in a table
           if (!isInTable(state)) {
