@@ -199,6 +199,15 @@
   color: white;
 }
 
+.titlebar-button.settings {
+  margin-right: 8px;
+}
+
+.titlebar-button.settings:hover {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
 .titlebar-button svg {
   pointer-events: none;
 }

@@ -12,6 +12,12 @@ import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import { getFilesWithIncomingLinks } from '../utils/graphUtils'
 import TodoPanel from './Todo/TodoPanel'
 import NoteTodosView from './Todo/NoteTodosView'
+import SettingsPanel from './Settings/SettingsPanel'
+import AdminDashboard from './Workspace/AdminDashboard'
+import LeaderDashboard from './Workspace/LeaderDashboard'
+import { useAuth } from '../contexts/AuthContext'
+import { getUserWorkspace, Workspace, getMemberRole, WorkspaceRole } from '../services/workspaceService'
+// import AISuggestionsPanel from './AI/AISuggestionsPanel'
 import './MainUI.css'
 
 // Development mode flag
@@ -60,9 +66,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [editing, setEditing] = useState<EditingState | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [graphKey, setGraphKey] = useState(0) // For forcing graph refresh
+  const [todoKey, setTodoKey] = useState(0) // For forcing todo views refresh
   const [activeGuide, setActiveGuide] = useState<'shortcuts' | 'markdown' | null>(null)
   const [filesWithIncomingLinks, setFilesWithIncomingLinks] = useState<Set<string>>(new Set())
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ show: boolean; itemPath: string; itemName: string } | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false)
+  const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [userRole, setUserRole] = useState<WorkspaceRole | null>(null)
+  const { user } = useAuth()
 
   // Helper function to extract all paths from file tree
   const getAllPaths = (nodes: FileTreeNode[]): string[] => {
@@ -99,6 +111,28 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     isDraggingRef.current = isDragging;
     dropZoneRef.current = dropZone;
   }, [isDragging, dropZone]);
+
+  // Load workspace for team mode
+  useEffect(() => {
+    const loadWorkspace = async () => {
+      if (user) {
+        try {
+          const userWorkspace = await getUserWorkspace(user.uid);
+          setWorkspace(userWorkspace);
+
+          // Get user's role in workspace
+          if (userWorkspace) {
+            const role = await getMemberRole(userWorkspace.id, user.uid);
+            setUserRole(role);
+          }
+        } catch (error) {
+          console.error('Error loading workspace:', error);
+        }
+      }
+    };
+
+    loadWorkspace();
+  }, [user]);
 
   // Debug: Log split view state changes
   useEffect(() => {
@@ -857,6 +891,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       <TitleBar
         onSearchResultClick={handleSelectFile}
         onGuideOpen={handleGuideOpen}
+        onSettingsOpen={() => setShowSettings(true)}
         rootPath={rootPath}
       />
 
@@ -906,8 +941,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             />
             <div className="tab-content" onClick={() => setActivePane('left')}>
               {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} />}
-              {activeTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={handleSelectFile} />}
-              {activeTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />}
+              {activeTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={handleSelectFile} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
+              {activeTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                 const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                 return activeTab === file.path && (
@@ -976,8 +1011,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               />
               <div className="tab-content" onClick={() => setActivePane('left')}>
                 {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} />}
-                {leftPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} />}
-                {leftPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />}
+                {leftPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
+                {leftPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {leftPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return leftPaneTab === file.path && (
@@ -1052,8 +1087,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               />
               <div className="tab-content" onClick={() => setActivePane('right')}>
                 {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
-                {rightPaneTab === 'special://todos' && <NoteTodosView rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} />}
-                {rightPaneTab === 'special://timeline' && <TodoPanel initialView="timeline" rootPath={rootPath} />}
+                {rightPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
+                {rightPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {rightPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return rightPaneTab === file.path && (
@@ -1157,6 +1192,47 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           onClose={() => setActiveGuide(null)}
         />
       )}
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          onOpenUserManagement={() => {
+            setShowSettings(false);
+            setShowAdminDashboard(true);
+          }}
+          onModeSwitch={() => {
+            setShowSettings(false);
+            window.location.reload();
+          }}
+        />
+      )}
+
+      {/* Admin/Leader Dashboard */}
+      {showAdminDashboard && workspace && userRole && (
+        <>
+          {userRole === 'admin' ? (
+            <AdminDashboard
+              workspace={workspace}
+              onClose={() => setShowAdminDashboard(false)}
+            />
+          ) : userRole === 'leader' ? (
+            <LeaderDashboard
+              workspace={workspace}
+              onClose={() => setShowAdminDashboard(false)}
+            />
+          ) : null}
+        </>
+      )}
+
+      {/* AI Smart Suggestions Panel - Hidden for now */}
+      {/* <AISuggestionsPanel
+        rootPath={rootPath}
+        onOpenFile={(filePath: string) => {
+          const fileName = filePath.split(/[\\/]/).pop() || filePath;
+          handleSelectFile(filePath, fileName);
+        }}
+      /> */}
     </div>
   )
 }

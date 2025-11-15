@@ -30,9 +30,10 @@ type ViewMode = 'active' | 'archive'
 interface NoteTodosViewProps {
   rootPath: string
   onOpenFile?: (filePath: string, fileName: string) => void
+  onTodoCreated?: () => void
 }
 
-const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile }) => {
+const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile, onTodoCreated }) => {
   const [todos, setTodos] = useState<NoteTodosResult>({ active: [], archived: [] })
   const [sortMode, setSortMode] = useState<SortMode>('date')
   const [viewMode, setViewMode] = useState<ViewMode>('active')
@@ -330,8 +331,9 @@ const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile }) =
       })
 
       console.log('✅ Todo created successfully')
-      await loadTodos()
       setShowQuickAddModal(false)
+      await loadTodos()
+      onTodoCreated?.() // Notify parent to refresh all todo views
     } catch (error) {
       console.error('❌ Failed to add todo:', error)
     }

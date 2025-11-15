@@ -2,8 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
-// use tauri::Emitter; // Temporarily unused - was for AI indexing progress
-// use regex::Regex; // Temporarily unused - was for markdown chunking
+use regex::Regex; // Still needed for todo parsing
+
+// OAuth module
+mod oauth;
+
+// Email module
+mod email;
 
 // Old Todo list data structures (to be deprecated)
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -70,7 +75,7 @@ struct NoteTodosResult {
     archived: Vec<NoteTodo>,
 }
 
-// AI features temporarily disabled - focusing on todo/timeline features
+// AI features for smart suggestions - Hidden for now
 // mod ai;
 // mod embeddings;
 // mod vector_db;
@@ -148,6 +153,45 @@ fn save_root_folder(app: tauri::AppHandle, folder_path: String) -> Result<String
     let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     fs::write(&config_path, content).map_err(|e| e.to_string())?;
     Ok(folder_path)
+}
+
+// Generic config commands for storing app settings
+#[tauri::command]
+fn get_config_value(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    let config_path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("config.json");
+    if !config_path.exists() { return Ok(None); }
+    let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    let config: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    Ok(config.get(&key).and_then(|v| v.as_str()).map(|s| s.to_string()))
+}
+
+#[tauri::command]
+fn set_config_value(app: tauri::AppHandle, key: String, value: String) -> Result<(), String> {
+    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
+    let config_path = config_dir.join("config.json");
+    let mut config = if config_path.exists() {
+        let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
+    } else { serde_json::json!({}) };
+    config[key] = serde_json::json!(value);
+    let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    fs::write(&config_path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_config_value(app: tauri::AppHandle, key: String) -> Result<(), String> {
+    let config_path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("config.json");
+    if !config_path.exists() { return Ok(()); }
+    let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+    let mut config: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    if let Some(obj) = config.as_object_mut() {
+        obj.remove(&key);
+    }
+    let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
+    fs::write(&config_path, content).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -677,6 +721,461 @@ fn find_file_by_name(root_path: String, file_name: String) -> CreateResult {
 //     // ... (RAG logic commented out)
 // }
 
+// AI Smart Suggestions - Cross-folder relationship discovery - Hidden for now
+/*
+use regex::Regex;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SmartSuggestion {
+    source_file: String,
+    target_file: String,
+    source_folder: String,
+    target_folder: String,
+    relationship: String,
+    confidence: f32,
+    reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IdeaAnalysis {
+    idea_file: String,
+    tech_stack_matches: Vec<String>,
+    advantages: Vec<String>,
+    disadvantages: Vec<String>,
+    complexity_score: u8, // 1-10
+}
+*/
+
+/*
+/// Chunk markdown content into semantic pieces with size limits
+fn chunk_markdown(content: &str) -> Vec<String> {
+    const MAX_CHUNK_SIZE: usize = 2000; // Characters (~500 tokens for safety)
+    const MIN_CHUNK_SIZE: usize = 50;
+
+    let heading_regex = Regex::new(r"(?m)^#{1,6}\s+(.+)$").unwrap();
+    let mut chunks = Vec::new();
+    let mut current_chunk = String::new();
+
+    for line in content.lines() {
+        // Start new chunk on heading if current chunk has content
+        if heading_regex.is_match(line) && !current_chunk.is_empty() {
+            // If chunk is too large, split it further
+            if current_chunk.len() > MAX_CHUNK_SIZE {
+                for sub_chunk in split_large_chunk(&current_chunk, MAX_CHUNK_SIZE) {
+                    if sub_chunk.len() >= MIN_CHUNK_SIZE {
+                        chunks.push(sub_chunk);
+                    }
+                }
+            } else if current_chunk.trim().len() >= MIN_CHUNK_SIZE {
+                chunks.push(current_chunk.trim().to_string());
+            }
+            current_chunk = String::new();
+        }
+
+        current_chunk.push_str(line);
+        current_chunk.push('\n');
+
+        // Force split if chunk gets too large
+        if current_chunk.len() > MAX_CHUNK_SIZE {
+            for sub_chunk in split_large_chunk(&current_chunk, MAX_CHUNK_SIZE) {
+                if sub_chunk.len() >= MIN_CHUNK_SIZE {
+                    chunks.push(sub_chunk);
+                }
+            }
+            current_chunk = String::new();
+        }
+    }
+
+    // Add remaining content
+    if current_chunk.trim().len() >= MIN_CHUNK_SIZE {
+        if current_chunk.len() > MAX_CHUNK_SIZE {
+            for sub_chunk in split_large_chunk(&current_chunk, MAX_CHUNK_SIZE) {
+                if sub_chunk.len() >= MIN_CHUNK_SIZE {
+                    chunks.push(sub_chunk);
+                }
+            }
+        } else {
+            chunks.push(current_chunk.trim().to_string());
+        }
+    }
+
+    chunks
+}
+
+/// Split a large chunk into smaller pieces at sentence boundaries
+fn split_large_chunk(text: &str, max_size: usize) -> Vec<String> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+
+    // Try to split at sentence boundaries (., !, ?, newline)
+    for sentence in text.split_inclusive(&['.', '!', '?', '\n']) {
+        if current.len() + sentence.len() > max_size && !current.is_empty() {
+            chunks.push(current.trim().to_string());
+            current = String::new();
+        }
+        current.push_str(sentence);
+    }
+
+    if !current.is_empty() {
+        chunks.push(current.trim().to_string());
+    }
+
+    chunks
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IndexProgress {
+    total: usize,
+    current: usize,
+    file_path: String,
+    status: String, // "indexing", "complete", "error"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IndexStatus {
+    indexed_files: i64,
+    total_chunks: i64,
+    needs_update: bool,
+}
+*/
+
+/*
+/// Smart incremental indexing - only indexes new/changed files
+#[tauri::command]
+async fn auto_index_notes(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<String, String> {
+    eprintln!("🔄 Starting auto-index for: {}", root_path);
+
+    let markdown_files = get_markdown_files_recursive(&root_path)
+        .map_err(|e| format!("Failed to read files: {}", e))?;
+
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("vector_db.sqlite");
+
+    // Ensure database directory exists
+    if let Some(parent) = db_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    let db = vector_db::VectorDB::new(db_path).map_err(|e| e.to_string())?;
+
+    let mut indexed_count = 0;
+    let mut skipped_count = 0;
+    let total = markdown_files.len();
+
+    for (idx, file_path) in markdown_files.iter().enumerate() {
+        let file_path_str = file_path.to_string_lossy().to_string();
+
+        // Get file modification time
+        let metadata = fs::metadata(file_path).map_err(|e| e.to_string())?;
+        let modified = metadata.modified()
+            .map_err(|e| e.to_string())?
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        // Check if file needs reindexing
+        let needs_indexing = db.needs_reindexing(&file_path_str, modified)
+            .map_err(|e| e.to_string())?;
+
+        if !needs_indexing {
+            skipped_count += 1;
+            eprintln!("  ⏭️  Skipping (up-to-date): {}", file_path_str);
+            continue;
+        }
+
+        // Emit progress event
+        let _ = app.emit("index-progress", IndexProgress {
+            total,
+            current: idx + 1,
+            file_path: file_path_str.clone(),
+            status: "indexing".to_string(),
+        });
+
+        eprintln!("  📄 Indexing [{}/{}]: {}", idx + 1, total, file_path_str);
+
+        // Delete old embeddings for this file
+        db.delete_file_embeddings(&file_path_str).map_err(|e| e.to_string())?;
+
+        // Read and chunk the file
+        let content = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
+        let chunks = chunk_markdown(&content);
+
+        // Index each chunk
+        for (chunk_idx, chunk) in chunks.iter().enumerate() {
+            // Generate embedding
+            match embeddings::generate_embedding(chunk).await {
+                Ok(embedding) => {
+                    let note_embedding = vector_db::NoteEmbedding {
+                        id: None,
+                        file_path: file_path_str.clone(),
+                        content: chunk.clone(),
+                        embedding,
+                        chunk_index: chunk_idx as i32,
+                        heading: None,
+                    };
+
+                    db.store_embedding(&note_embedding).map_err(|e| e.to_string())?;
+                }
+                Err(e) => {
+                    eprintln!("    ⚠️  Warning: Failed to embed chunk {}: {}", chunk_idx, e);
+                    // Continue with other chunks even if one fails
+                }
+            }
+        }
+
+        // Update file metadata
+        db.update_file_metadata(&file_path_str, modified, chunks.len() as i32)
+            .map_err(|e| e.to_string())?;
+
+        indexed_count += 1;
+    }
+
+    let (total_files, total_chunks) = db.get_index_status().map_err(|e| e.to_string())?;
+
+    let message = format!(
+        "✅ Indexing complete! Indexed {} files, skipped {} (up-to-date). Total: {} files, {} chunks.",
+        indexed_count, skipped_count, total_files, total_chunks
+    );
+
+    eprintln!("{}", message);
+
+    Ok(message)
+}
+
+/// Get current index status
+#[tauri::command]
+fn get_index_status(app: tauri::AppHandle) -> Result<IndexStatus, String> {
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("vector_db.sqlite");
+
+    if !db_path.exists() {
+        return Ok(IndexStatus {
+            indexed_files: 0,
+            total_chunks: 0,
+            needs_update: true,
+        });
+    }
+
+    let db = vector_db::VectorDB::new(db_path).map_err(|e| e.to_string())?;
+    let (files, chunks) = db.get_index_status().map_err(|e| e.to_string())?;
+
+    Ok(IndexStatus {
+        indexed_files: files,
+        total_chunks: chunks,
+        needs_update: files == 0,
+    })
+}
+
+/// Search for cross-folder suggestions (no indexing, just search)
+#[tauri::command]
+async fn find_cross_folder_suggestions(
+    app: tauri::AppHandle,
+    root_path: String,
+) -> Result<Vec<SmartSuggestion>, String> {
+    eprintln!("🔍 Searching for cross-folder suggestions...");
+
+    let db_path = app.path().app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("vector_db.sqlite");
+
+    if !db_path.exists() {
+        return Err("No index found. Please wait for auto-indexing to complete.".to_string());
+    }
+
+    let db = vector_db::VectorDB::new(db_path).map_err(|e| e.to_string())?;
+    let mut suggestions = Vec::new();
+
+    // Search using existing embeddings (much faster!)
+    // We'll get all embeddings and compute cross-folder similarities
+    use std::collections::HashMap;
+
+    // Group embeddings by file
+    let mut file_embeddings: HashMap<String, Vec<(i32, Vec<f32>)>> = HashMap::new();
+
+    // Get all embeddings from database
+    let all_embeddings = get_all_file_embeddings(&db).map_err(|e| e.to_string())?;
+
+    for (file_path, chunk_idx, embedding) in all_embeddings {
+        file_embeddings
+            .entry(file_path)
+            .or_insert_with(Vec::new)
+            .push((chunk_idx, embedding));
+    }
+
+    // Now compare files across different folders
+    for (source_file, source_chunks) in &file_embeddings {
+        let source_path = PathBuf::from(source_file);
+        let source_folder = source_path
+            .parent()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "root".to_string());
+
+        for (target_file, target_chunks) in &file_embeddings {
+            if source_file == target_file {
+                continue; // Skip self
+            }
+
+            let target_path = PathBuf::from(target_file);
+            let target_folder = target_path
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "root".to_string());
+
+            // Only compare across folders
+            if source_folder == target_folder {
+                continue;
+            }
+
+            // Find best similarity between any chunks
+            let mut best_similarity = 0.0;
+            for (_, source_emb) in source_chunks {
+                for (_, target_emb) in target_chunks {
+                    let similarity = embeddings::cosine_similarity(source_emb, target_emb);
+                    if similarity > best_similarity {
+                        best_similarity = similarity;
+                    }
+                }
+            }
+
+            // Only suggest if high similarity
+            if best_similarity > 0.75 {
+                suggestions.push(SmartSuggestion {
+                    source_file: source_file.clone(),
+                    target_file: target_file.clone(),
+                    source_folder: source_folder.clone(),
+                    target_folder,
+                    relationship: "semantic_similarity".to_string(),
+                    confidence: best_similarity,
+                    reason: format!(
+                        "These notes share similar concepts (similarity: {:.2}%)",
+                        best_similarity * 100.0
+                    ),
+                });
+            }
+        }
+    }
+
+    // Deduplicate suggestions
+    suggestions.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap());
+    suggestions.truncate(20); // Limit to top 20
+
+    eprintln!("✅ Found {} cross-folder suggestions", suggestions.len());
+
+    Ok(suggestions)
+}
+
+/// Helper function to get all embeddings from database
+fn get_all_file_embeddings(db: &vector_db::VectorDB) -> Result<Vec<(String, i32, Vec<f32>)>, String> {
+    db.get_all_embeddings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn analyze_idea(
+    idea_file_path: String,
+    tech_stack_notes: Vec<String>,
+) -> Result<IdeaAnalysis, String> {
+    // Read idea file
+    let idea_content = fs::read_to_string(&idea_file_path)
+        .map_err(|e| format!("Failed to read idea file: {}", e))?;
+
+    // Read tech stack files
+    let mut tech_content = String::new();
+    for tech_path in &tech_stack_notes {
+        if let Ok(content) = fs::read_to_string(tech_path) {
+            tech_content.push_str(&format!("\n\n--- {} ---\n", tech_path));
+            tech_content.push_str(&content);
+        }
+    }
+
+    // Build AI prompt
+    let prompt = format!(
+        "Analyze this project idea and provide structured feedback.\n\n\
+        IDEA:\n{}\n\n\
+        AVAILABLE TECH STACK:\n{}\n\n\
+        Provide a JSON response with:\n\
+        1. tech_stack_matches: which technologies from the tech stack are best suited\n\
+        2. advantages: positive aspects of this idea (3-5 points)\n\
+        3. disadvantages: potential challenges and drawbacks (3-5 points)\n\
+        4. complexity_score: rate 1-10 (1=simple, 10=very complex)\n\n\
+        Format as JSON only, no markdown:\n\
+        {{\n  \"tech_stack_matches\": [...],\n  \"advantages\": [...],\n  \"disadvantages\": [...],\n  \"complexity_score\": 5\n}}",
+        idea_content, tech_content
+    );
+
+    // Call AI
+    let ai_result = ai::ask_ai(prompt).await;
+
+    if !ai_result.success {
+        return Err(ai_result.error.unwrap_or_else(|| "AI analysis failed".to_string()));
+    }
+
+    let response_text = ai_result.response.unwrap_or_default();
+
+    // Try to parse JSON from response
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&response_text);
+
+    match parsed {
+        Ok(json) => Ok(IdeaAnalysis {
+            idea_file: idea_file_path,
+            tech_stack_matches: json["tech_stack_matches"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            advantages: json["advantages"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            disadvantages: json["disadvantages"]
+                .as_array()
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            complexity_score: json["complexity_score"].as_u64().unwrap_or(5) as u8,
+        }),
+        Err(_) => {
+            // Fallback: return raw text as disadvantages if JSON parsing fails
+            Ok(IdeaAnalysis {
+                idea_file: idea_file_path,
+                tech_stack_matches: vec![],
+                advantages: vec!["AI analysis completed".to_string()],
+                disadvantages: vec![response_text],
+                complexity_score: 5,
+            })
+        }
+    }
+}
+
+/// Helper to get all markdown files recursively
+fn get_markdown_files_recursive(root: &str) -> Result<Vec<PathBuf>, std::io::Error> {
+    let mut md_files = Vec::new();
+    let root_path = Path::new(root);
+
+    fn visit_dir(dir: &Path, md_files: &mut Vec<PathBuf>) -> Result<(), std::io::Error> {
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    visit_dir(&path, md_files)?;
+                } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
+                    md_files.push(path);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    visit_dir(root_path, &mut md_files)?;
+    Ok(md_files)
+}
+*/
+
 // Todo list commands
 #[tauri::command]
 fn get_todos(app: tauri::AppHandle) -> Result<TodoData, String> {
@@ -882,6 +1381,17 @@ fn add_unified_todo(
         description: description.clone(),
     };
 
+    // If list doesn't exist, create it (especially for 'default' list)
+    if !data.lists.iter().any(|l| l.id == list_id) {
+        let new_list = TodoList {
+            id: list_id.clone(),
+            name: if list_id == "default" { "My Todos".to_string() } else { list_id.clone() },
+            icon: "📋".to_string(),
+            todos: vec![],
+        };
+        data.lists.push(new_list);
+    }
+
     if let Some(list) = data.lists.iter_mut().find(|l| l.id == list_id) {
         list.todos.push(new_todo.clone());
         save_todos(app, data)?;
@@ -948,7 +1458,6 @@ fn add_unified_todo(
 }
 
 // Note-embedded todo functions
-use regex::Regex;
 use chrono::Utc;
 
 fn parse_todo_metadata(line: &str) -> (String, Option<u8>, Option<String>, Option<String>, Option<String>) {
@@ -1505,6 +2014,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())?;
@@ -1512,7 +2022,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_root_folder, select_folder, save_root_folder, get_file_tree, create_file, create_folder,
+            get_root_folder, select_folder, save_root_folder,
+            get_config_value, set_config_value, delete_config_value,
+            get_file_tree, create_file, create_folder,
             get_markdown_files, delete_item, rename_item, move_item, read_file, read_binary_file, write_file,
             reveal_in_explorer, open_file_external, find_file_by_name, search_files,
             // Old Todo commands (to be deprecated)
@@ -1522,9 +2034,14 @@ pub fn run() {
             // Unified todo commands
             add_unified_todo, get_unified_todos,
             // Inline todo block commands
-            create_todo, get_all_todos, toggle_todo_completion
+            create_todo, get_all_todos, toggle_todo_completion,
+            // OAuth commands
+            oauth::start_oauth_callback_server, oauth::open_oauth_url,
+            // Email commands
+            email::send_invitation_email,
+            // AI Smart Suggestions commands - Hidden for now
+            // auto_index_notes, get_index_status, find_cross_folder_suggestions, analyze_idea
         ])
-        // AI commands temporarily disabled: ai_chat, index_notes, search_notes, ai_chat_with_context
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

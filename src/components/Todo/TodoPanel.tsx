@@ -32,9 +32,10 @@ interface TodoData {
 interface TodoPanelProps {
   initialView?: ViewMode
   rootPath?: string
+  onTodoCreated?: () => void
 }
 
-const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath }) => {
+const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath, onTodoCreated }) => {
   const viewMode = initialView
   const [todoData, setTodoData] = useState<TodoData>({ lists: [] })
   const [newTodoText, setNewTodoText] = useState('')
@@ -228,7 +229,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
   const handleQuickAddSubmit = async (data: TodoFormData) => {
     try {
       // If addAsCheckbox is true and there's a linked note, write checkbox to note
-      if (data.addAsCheckbox && data.linkedNotePath) {
+      if ((data as any).addAsCheckbox && data.linkedNotePath) {
         await invoke('add_todo_to_note', {
           notePath: data.linkedNotePath,
           text: data.text,
@@ -250,8 +251,9 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath })
         })
       }
 
-      await loadTodos()
       setShowQuickAddModal(false)
+      await loadTodos()
+      onTodoCreated?.() // Notify parent to refresh all todo views
     } catch (error) {
       console.error('Failed to add todo:', error)
     }

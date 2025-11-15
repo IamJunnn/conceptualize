@@ -24,11 +24,11 @@
 }
 
 .sidebar-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #cccccc;
+  color: #e0e0e0;
   margin: 0;
   cursor: pointer;
   transition: color 0.15s ease;
@@ -48,24 +48,30 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
-  color: #cccccc;
+  transition: all 0.2s ease;
+  color: #808080;
 }
 
 .action-button:hover {
-  background-color: #3d3d3d;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.action-button:active {
+  transform: scale(0.95);
 }
 
 .action-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 /* File Tree Content */
@@ -392,6 +398,7 @@
 }
 
 .quick-action-icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }

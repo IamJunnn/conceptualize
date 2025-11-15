@@ -30,7 +30,7 @@ impl VectorDB {
     pub fn new(db_path: PathBuf) -> SqliteResult<Self> {
         let conn = Connection::open(db_path)?;
 
-        // Create table if it doesn't exist
+        // Create embeddings table if it doesn't exist
         conn.execute(
             "CREATE TABLE IF NOT EXISTS embeddings (
                 id INTEGER PRIMARY KEY,
@@ -40,6 +40,17 @@ impl VectorDB {
                 content TEXT NOT NULL,
                 embedding BLOB NOT NULL,
                 UNIQUE(file_path, chunk_index)
+            )",
+            [],
+        )?;
+
+        // Create file metadata tracking table
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS file_metadata (
+                file_path TEXT PRIMARY KEY,
+                last_modified INTEGER NOT NULL,
+                last_indexed INTEGER NOT NULL,
+                chunk_count INTEGER NOT NULL
             )",
             [],
         )?;
@@ -144,5 +155,90 @@ impl VectorDB {
     pub fn clear(&self) -> SqliteResult<()> {
         self.conn.execute("DELETE FROM embeddings", [])?;
         Ok(())
+    }
+
+    /// Update file metadata after indexing
+    pub fn update_file_metadata(
+        &self,
+        file_path: &str,
+        last_modified: i64,
+        chunk_count: i32,
+    ) -> SqliteResult<()> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO file_metadata (file_path, last_modified, last_indexed, chunk_count)
+             VALUES (?1, ?2, ?3, ?4)",
+            (file_path, last_modified, now, chunk_count),
+        )?;
+        Ok(())
+    }
+
+    /// Check if a file needs reindexing
+    pub fn needs_reindexing(&self, file_path: &str, current_modified: i64) -> SqliteResult<bool> {
+        let result: Result<i64, _> = self.conn.query_row(
+            "SELECT last_modified FROM file_metadata WHERE file_path = ?1",
+            [file_path],
+            |row| row.get(0),
+        );
+
+        match result {
+            Ok(stored_modified) => Ok(stored_modified != current_modified),
+            Err(_) => Ok(true), // File not in database, needs indexing
+        }
+    }
+
+    /// Delete embeddings for a specific file
+    pub fn delete_file_embeddings(&self, file_path: &str) -> SqliteResult<()> {
+        self.conn.execute(
+            "DELETE FROM embeddings WHERE file_path = ?1",
+            [file_path],
+        )?;
+        self.conn.execute(
+            "DELETE FROM file_metadata WHERE file_path = ?1",
+            [file_path],
+        )?;
+        Ok(())
+    }
+
+    /// Get indexing status
+    pub fn get_index_status(&self) -> SqliteResult<(i64, i64)> {
+        let total_files: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM file_metadata",
+            [],
+            |row| row.get(0),
+        )?;
+        let total_chunks: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM embeddings",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok((total_files, total_chunks))
+    }
+
+    /// Get all embeddings (for bulk similarity search)
+    pub fn get_all_embeddings(&self) -> SqliteResult<Vec<(String, i32, Vec<f32>)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT file_path, chunk_index, embedding FROM embeddings"
+        )?;
+
+        let results = stmt.query_map([], |row| {
+            let file_path: String = row.get(0)?;
+            let chunk_index: i32 = row.get(1)?;
+            let embedding_bytes: Vec<u8> = row.get(2)?;
+
+            // Convert bytes back to Vec<f32>
+            let embedding: Vec<f32> = embedding_bytes
+                .chunks_exact(4)
+                .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+                .collect();
+
+            Ok((file_path, chunk_index, embedding))
+        })?;
+
+        results.collect()
     }
 }
