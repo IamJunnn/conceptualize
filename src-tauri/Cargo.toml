@@ -25,9 +25,16 @@ tauri = { version = "2.8.5", features = ["protocol-asset"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
+tauri-plugin-deep-link = "2"
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+url = "2.5"
+opener = "0.7"
 rusqlite = { version = "0.32", features = ["bundled"] }
 regex = "1.10"
 uuid = { version = "1.0", features = ["v4"] }
 chrono = "0.4"
+lettre = { version = "0.11", features = ["tokio1-native-tls", "smtp-transport", "builder"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
+dotenv = "0.15"
