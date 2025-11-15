@@ -89,7 +89,7 @@ export const signInWithGoogle = async (): Promise<User> => {
     authUrl.searchParams.set('client_id', import.meta.env.VITE_GOOGLE_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'email profile openid');
+    authUrl.searchParams.set('scope', 'email profile openid https://www.googleapis.com/auth/drive.file');
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('access_type', 'offline');
     authUrl.searchParams.set('prompt', 'select_account');
@@ -129,6 +129,14 @@ export const signInWithGoogle = async (): Promise<User> => {
 
     const tokens = await tokenResponse.json();
     console.log('Received tokens, signing in to Firebase...');
+
+    // Store Google Drive tokens for later use
+    if (tokens.access_token && tokens.refresh_token) {
+      localStorage.setItem('google_access_token', tokens.access_token);
+      localStorage.setItem('google_refresh_token', tokens.refresh_token);
+      localStorage.setItem('google_token_expires_at', (Date.now() + (tokens.expires_in * 1000)).toString());
+      console.log('✅ Stored Google Drive tokens');
+    }
 
     // Create Firebase credential from Google token
     const credential = GoogleAuthProvider.credential(tokens.id_token);
