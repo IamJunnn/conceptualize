@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import SetupScreen from './components/SetupScreen'
 import MainUI from './components/MainUI'
+import TeamMainUI from './components/Team/TeamMainUI'
 import LoginScreen from './components/Auth/LoginScreen'
 import ModeSelectionScreen from './components/Auth/ModeSelectionScreen'
 import InviteAcceptScreen from './components/Auth/InviteAcceptScreen'
@@ -215,7 +216,12 @@ function AppContent() {
     return <LoginScreen onLoginSuccess={() => {}} onBack={handleBackToModeSelection} />
   }
 
-  // Show setup screen if no root path is configured
+  // TEAM MODE: Show TeamMainUI (Google Drive based)
+  if (appMode === 'team' && user) {
+    return <TeamMainUI user={user} />
+  }
+
+  // LOCAL MODE: Show setup screen if no root path is configured
   if (showSetup || !rootPath) {
     return (
       <div className={`app-transition ${showSetup && !rootPath ? 'fade-in' : 'fade-out'}`}>
@@ -224,7 +230,7 @@ function AppContent() {
     )
   }
 
-  // Main application UI
+  // LOCAL MODE: Main application UI (file-based)
   return (
     <GraphVisibilityProvider>
       <DragDropProvider>
