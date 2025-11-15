@@ -25,6 +25,7 @@ import './App.css'
 // Import test helpers in development
 if (import.meta.env.DEV) {
   import('./utils/testHelpers')
+  import('./utils/clearData')
 }
 
 function AppContent() {
