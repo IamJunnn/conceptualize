@@ -29,3 +29,21 @@ Thumbs.db
 
 # Vite
 .vite/
+
+# Rust/Cargo
+.cargo/
+src-tauri/.cargo/
+target/
+src-tauri/target/
+src-tauri/false/
+src-tauri/true/
+
+# Temp files
+nul
+*.tmp
+*.temp
+
+# Build artifacts
+latest.json
+latest.json.template
+.taurignore
