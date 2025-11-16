@@ -1,16 +1,35 @@
 .setup-screen {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1e1e1e;
+  background: linear-gradient(135deg, #c44fc4 0%, #8b5fbf 50%, #64c8ca 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 }
 
 .setup-content {
+  background: rgba(26, 32, 44, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   text-align: center;
   max-width: 500px;
-  padding: 40px;
+  padding: 48px 40px;
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .setup-logo {
@@ -22,26 +41,33 @@
 .setup-title {
   font-size: 32px;
   font-weight: 600;
-  color: #d4d4d4;
+  color: #ffffff;
   margin-bottom: 20px;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.setup-title-logo {
+  height: 40px;
+  width: auto;
 }
 
 .setup-description {
   font-size: 16px;
-  color: #9b9b9b;
+  color: #cbd5e0;
   line-height: 1.6;
   margin-bottom: 40px;
 }
 
 .setup-button {
-  background: linear-gradient(180deg, rgba(62, 81, 122, 0.14), rgba(62, 81, 122, 0.08));
-  border: 1px solid rgba(76, 103, 168, 0.18);
+  background: rgba(100, 200, 202, 0.15);
+  border: 2px solid rgba(100, 200, 202, 0.3);
   border-radius: 10px;
-  box-shadow:
-    0 6px 14px rgba(15, 15, 15, 0.6) inset,
-    0 1px 0 rgba(255, 255, 255, 0.02);
-  color: #d4d4d4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  color: #ffffff;
   font-size: 16px;
   font-weight: 500;
   padding: 14px 32px;
@@ -50,14 +76,12 @@
 }
 
 .setup-button:hover {
-  transform: scale(1.03);
-  border-color: #4c67a8;
-  box-shadow:
-    0 6px 14px rgba(15, 15, 15, 0.6) inset,
-    0 1px 0 rgba(255, 255, 255, 0.02),
-    0 0 20px rgba(76, 103, 168, 0.3);
+  transform: translateY(-2px);
+  border-color: #64c8ca;
+  background: rgba(100, 200, 202, 0.25);
+  box-shadow: 0 8px 20px rgba(100, 200, 202, 0.3);
 }
 
 .setup-button:active {
-  transform: translateY(1px);
+  transform: translateY(0);
 }

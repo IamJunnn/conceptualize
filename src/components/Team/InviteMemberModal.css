@@ -1,0 +1,140 @@
+/* Invite Member Modal */
+.invite-member-modal {
+  max-width: 600px;
+}
+
+.modal-subtitle {
+  color: #b0b0b0;
+  font-size: 14px;
+  margin: -10px 0 20px 0;
+}
+
+/* Success Message */
+.success-message {
+  background: rgba(40, 167, 69, 0.1);
+  border: 1px solid rgba(40, 167, 69, 0.3);
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 16px;
+  color: #4caf50;
+  font-size: 13px;
+}
+
+/* Current Members Section */
+.current-members {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #3d3d3d;
+}
+
+.current-members h3 {
+  color: #e0e0e0;
+  font-size: 16px;
+  margin: 0 0 16px 0;
+}
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.member-item:hover {
+  background: #353535;
+}
+
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  color: #1e1e1e;
+  flex-shrink: 0;
+}
+
+.member-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-name {
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-email {
+  color: #888;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-role {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.member-role.role-owner {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.member-role.role-admin {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+  border: 1px solid rgba(100, 200, 202, 0.3);
+}
+
+.member-role.role-member {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+/* Scrollbar for members list */
+.members-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.members-list::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 4px;
+}
+
+.members-list::-webkit-scrollbar-thumb {
+  background: #4d4d4d;
+  border-radius: 4px;
+}
+
+.members-list::-webkit-scrollbar-thumb:hover {
+  background: #5d5d5d;
+}

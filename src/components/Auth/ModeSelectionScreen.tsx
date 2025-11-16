@@ -1,4 +1,5 @@
 import React from 'react';
+import SimpleTitleBar from '../UI/SimpleTitleBar';
 import './ModeSelectionScreen.css';
 
 interface ModeSelectionScreenProps {
@@ -8,6 +9,7 @@ interface ModeSelectionScreenProps {
 const ModeSelectionScreen: React.FC<ModeSelectionScreenProps> = ({ onModeSelected }) => {
   return (
     <div className="mode-selection-screen">
+      <SimpleTitleBar />
       <div className="mode-selection-container">
         <div className="mode-header">
           <img src="/logo.svg" alt="Conceptualize" className="mode-logo" />

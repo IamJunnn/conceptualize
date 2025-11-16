@@ -150,6 +150,48 @@ export const switchMode = async (mode: 'local' | 'team') => {
   window.location.reload();
 };
 
+/**
+ * Check Google Drive token status
+ * Usage: checkDriveTokens()
+ */
+export const checkDriveTokens = async () => {
+  const { getTokenDebugInfo } = await import('../services/tokenStorage');
+  const info = getTokenDebugInfo();
+
+  console.log('='.repeat(50));
+  console.log('🔑 Google Drive Token Status');
+  console.log('='.repeat(50));
+  console.log('Has Access Token:', info.hasAccessToken ? '✅' : '❌');
+  console.log('Has Refresh Token:', info.hasRefreshToken ? '✅' : '❌');
+  console.log('Token Expired:', info.isExpired ? '⚠️ YES' : '✅ NO');
+  if (info.expiresAt) {
+    console.log('Expires At:', info.expiresAt.toLocaleString());
+  }
+  if (info.lastStored) {
+    console.log('Last Stored:', info.lastStored.toLocaleString());
+  }
+  console.log('='.repeat(50));
+
+  return info;
+};
+
+/**
+ * Manually refresh Google Drive access token
+ * Usage: await refreshDriveToken()
+ */
+export const refreshDriveToken = async () => {
+  try {
+    const { refreshAccessToken } = await import('../services/tokenStorage');
+    const newToken = await refreshAccessToken();
+    console.log('✅ Token refreshed successfully!');
+    console.log('New token:', newToken.substring(0, 20) + '...');
+    return newToken;
+  } catch (error: any) {
+    console.error('❌ Token refresh failed:', error.message);
+    throw error;
+  }
+};
+
 // Make functions available globally in development
 if (import.meta.env.DEV) {
   (window as any).testHelpers = {
@@ -161,7 +203,9 @@ if (import.meta.env.DEV) {
     generateTestToken,
     viewPendingInvite,
     clearPendingInvite,
-    switchMode
+    switchMode,
+    checkDriveTokens,
+    refreshDriveToken
   };
 
   console.log('%c🧪 Test Helpers Loaded!', 'color: #c44fc4; font-size: 16px; font-weight: bold;');
@@ -176,4 +220,6 @@ if (import.meta.env.DEV) {
   console.log('  - viewPendingInvite()');
   console.log('  - clearPendingInvite()');
   console.log('  - switchMode("local" | "team")');
+  console.log('  - checkDriveTokens()');
+  console.log('  - refreshDriveToken()');
 }

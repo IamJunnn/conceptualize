@@ -1,0 +1,230 @@
+.team-action-selection-screen {
+  width: 100vw;
+  height: 100vh;
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.team-action-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+}
+
+.back-button {
+  position: absolute;
+  top: 70px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(100, 200, 202, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(100, 200, 202, 0.2);
+  border-radius: 8px;
+  color: #64c8ca;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.back-button:hover {
+  background: rgba(100, 200, 202, 0.2);
+  border-color: #64c8ca;
+  transform: translateX(-2px);
+}
+
+.team-action-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.team-action-logo {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 15px;
+}
+
+.team-action-header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+}
+
+.team-action-subtitle {
+  font-size: 16px;
+  color: #aaaaaa;
+  margin: 0;
+}
+
+.team-action-content {
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 700px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.team-action-content h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.team-action-description {
+  font-size: 15px;
+  color: #aaaaaa;
+  text-align: center;
+  margin: 0 0 30px 0;
+}
+
+.team-action-options {
+  display: flex;
+  gap: 16px;
+  flex-direction: column;
+}
+
+.team-action-option {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  background: #1e1e1e;
+  border: 2px solid #333;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.team-action-option:hover {
+  border-color: #64c8ca;
+  background: #2a2a2a;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(100, 200, 202, 0.15);
+}
+
+.team-action-option:active {
+  transform: translateY(0);
+}
+
+.team-action-icon {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #64c8ca;
+  border-radius: 10px;
+  color: #1a1a1a;
+}
+
+.team-action-info {
+  flex: 1;
+}
+
+.team-action-info h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 6px 0;
+}
+
+.team-action-info p {
+  font-size: 14px;
+  color: #aaaaaa;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .team-action-container {
+    padding: 15px;
+  }
+
+  .back-button {
+    top: 60px;
+    left: 15px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .team-action-header h1 {
+    font-size: 28px;
+  }
+
+  .team-action-subtitle {
+    font-size: 14px;
+  }
+
+  .team-action-logo {
+    width: 50px;
+    height: 50px;
+  }
+
+  .team-action-content {
+    padding: 30px 20px;
+    max-width: 100%;
+  }
+
+  .team-action-content h2 {
+    font-size: 24px;
+  }
+
+  .team-action-description {
+    font-size: 14px;
+  }
+
+  .team-action-option {
+    padding: 20px;
+    gap: 15px;
+  }
+
+  .team-action-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .team-action-info h3 {
+    font-size: 18px;
+  }
+
+  .team-action-info p {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .team-action-content {
+    padding: 20px 15px;
+  }
+
+  .team-action-option {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .team-action-info h3 {
+    font-size: 17px;
+  }
+
+  .team-action-info p {
+    font-size: 12px;
+  }
+}

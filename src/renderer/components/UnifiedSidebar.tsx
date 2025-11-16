@@ -366,8 +366,11 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
   if (isDev) console.log('🔄 UnifiedSidebar render - onMoveItem is:', onMoveItem ? 'defined ✅' : 'undefined ❌');
 
-  const folderName = getRootPath().split(/\\/g).pop(); // Extract folder name from path
   const rootPath = getRootPath();
+  const folderName = rootPath.split(/\\/g).pop(); // Extract folder name from path
+
+  // Check if this is a Google Drive folder ID (long alphanumeric string)
+  const isGoogleDriveFolderId = folderName && folderName.length > 20 && /^[A-Za-z0-9_-]+$/.test(folderName);
 
   // Helper function to find all parent paths of a file
   const getParentPaths = (filePath: string, tree: FileTreeNode[]): string[] => {
@@ -566,15 +569,17 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     <div className="unified-sidebar">
       {/* Header */}
       <div className="sidebar-header">
-        <h2
-          className="sidebar-title"
-          title={`Current folder: ${rootPath}\n\nClick to change the root folder`}
-          onClick={onChangeFolderPath}
-        >
-          {folderName}
-        </h2>
+        {!isGoogleDriveFolderId && (
+          <h2
+            className="sidebar-title"
+            title={`Current folder: ${rootPath}\n\nClick to change the root folder`}
+            onClick={onChangeFolderPath}
+          >
+            {folderName}
+          </h2>
+        )}
         <div className="sidebar-actions">
-          {onChangeFolderPath && (
+          {onChangeFolderPath && !isGoogleDriveFolderId && (
             <button
               onClick={onChangeFolderPath}
               className="action-button"

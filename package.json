@@ -7,7 +7,8 @@
     "build": "tauri build",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "test:service-account": "node test-service-account.js"
   },
   "keywords": [
     "tauri",

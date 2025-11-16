@@ -10,6 +10,7 @@ import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { storeTokens, getTokenDebugInfo, clearTokens } from './tokenStorage';
 
 // User roles
 export type UserRole = "employee" | "leader" | "admin";
@@ -44,6 +45,8 @@ const FIREBASE_CONFIG = {
 export const signInWithGoogle = async (): Promise<User> => {
   try {
     console.log('🚀 Starting Google sign-in flow...');
+    console.log('🔑 Client ID:', import.meta.env.VITE_GOOGLE_CLIENT_ID ? 'EXISTS' : 'MISSING');
+    console.log('🔑 Client Secret:', import.meta.env.VITE_GOOGLE_CLIENT_SECRET ? 'EXISTS' : 'MISSING');
 
     // Set up listener for OAuth callback FIRST, before starting server
     let unlistenFn: (() => void) | null = null;
@@ -92,7 +95,7 @@ export const signInWithGoogle = async (): Promise<User> => {
     authUrl.searchParams.set('scope', 'email profile openid https://www.googleapis.com/auth/drive.file');
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('access_type', 'offline');
-    authUrl.searchParams.set('prompt', 'select_account');
+    authUrl.searchParams.set('prompt', 'consent'); // Force consent screen to get refresh token every time
 
     // Open the OAuth URL in system browser
     await invoke('open_oauth_url', { url: authUrl.toString() });
@@ -129,13 +132,39 @@ export const signInWithGoogle = async (): Promise<User> => {
 
     const tokens = await tokenResponse.json();
     console.log('Received tokens, signing in to Firebase...');
+    console.log('🔍 Token details:', {
+      has_access_token: !!tokens.access_token,
+      has_refresh_token: !!tokens.refresh_token,
+      has_id_token: !!tokens.id_token,
+      expires_in: tokens.expires_in,
+      token_type: tokens.token_type
+    });
 
     // Store Google Drive tokens for later use
-    if (tokens.access_token && tokens.refresh_token) {
-      localStorage.setItem('google_access_token', tokens.access_token);
-      localStorage.setItem('google_refresh_token', tokens.refresh_token);
-      localStorage.setItem('google_token_expires_at', (Date.now() + (tokens.expires_in * 1000)).toString());
-      console.log('✅ Stored Google Drive tokens');
+    if (tokens.access_token) {
+      // If we have a refresh token (first auth or consent screen), store it
+      // Otherwise, try to keep existing refresh token from storage
+      const existingTokens = await import('./tokenStorage').then(m => m.getTokens());
+      const refreshToken = tokens.refresh_token || existingTokens?.refreshToken || '';
+
+      if (tokens.refresh_token) {
+        console.log('✅ Received new refresh token from Google');
+      } else if (existingTokens?.refreshToken) {
+        console.log('⚠️ No new refresh token - using existing one from storage');
+      } else {
+        console.warn('⚠️ No refresh token available - Google Drive operations may fail when token expires');
+        console.log('💡 To get a refresh token: Sign out and sign in again (consent screen will appear)');
+      }
+
+      storeTokens({
+        accessToken: tokens.access_token,
+        refreshToken: refreshToken,
+        expiresAt: Date.now() + (tokens.expires_in * 1000),
+      });
+
+      // Debug: verify tokens were stored
+      const debugInfo = getTokenDebugInfo();
+      console.log('📊 Token storage debug:', debugInfo);
     }
 
     // Create Firebase credential from Google token
@@ -143,23 +172,36 @@ export const signInWithGoogle = async (): Promise<User> => {
     const result = await signInWithCredential(auth, credential);
     const firebaseUser = result.user;
 
-    // Check if user exists and is authorized in Firestore
+    // Check if user exists in Firestore
     const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
 
+    let userData;
+
     if (!userDoc.exists()) {
-      // User not authorized - sign them out
-      await firebaseSignOut(auth);
-      throw new Error("UNAUTHORIZED: Contact your administrator to get access.");
+      // New user - create their account automatically
+      console.log('📝 Creating new user account in Firestore...');
+
+      const newUserData = {
+        email: firebaseUser.email || "",
+        displayName: firebaseUser.displayName || "",
+        role: "employee" as UserRole, // Default role for new users
+        createdAt: Timestamp.now(),
+        lastLogin: Timestamp.now()
+      };
+
+      await setDoc(doc(db, "users", firebaseUser.uid), newUserData);
+      console.log('✅ New user account created successfully!');
+
+      userData = newUserData;
+    } else {
+      // Existing user - get their data and update last login
+      userData = userDoc.data();
+
+      await setDoc(doc(db, "users", firebaseUser.uid), {
+        ...userData,
+        lastLogin: Timestamp.now()
+      });
     }
-
-    // Get user data from Firestore
-    const userData = userDoc.data();
-
-    // Update last login
-    await setDoc(doc(db, "users", firebaseUser.uid), {
-      ...userData,
-      lastLogin: Timestamp.now()
-    });
 
     return {
       uid: firebaseUser.uid,
@@ -171,9 +213,6 @@ export const signInWithGoogle = async (): Promise<User> => {
     };
   } catch (error: any) {
     console.error('Sign in error:', error);
-    if (error.message?.includes("UNAUTHORIZED")) {
-      throw error;
-    }
     throw new Error(`Sign in failed: ${error.message}`);
   }
 };
@@ -183,6 +222,9 @@ export const signInWithGoogle = async (): Promise<User> => {
  */
 export const signOut = async (): Promise<void> => {
   try {
+    // Clear Google Drive tokens
+    clearTokens();
+    // Sign out from Firebase
     await firebaseSignOut(auth);
   } catch (error: any) {
     throw new Error(`Sign out failed: ${error.message}`);
@@ -192,11 +234,18 @@ export const signOut = async (): Promise<void> => {
 /**
  * Get current user from Firestore
  */
-export const getCurrentUser = async (firebaseUser: FirebaseUser): Promise<User | null> => {
+export const getCurrentUser = async (firebaseUser: FirebaseUser, retryCount = 0): Promise<User | null> => {
   try {
     const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
 
     if (!userDoc.exists()) {
+      // Retry up to 3 times with 1 second delay (for new user creation race condition)
+      if (retryCount < 3) {
+        console.log(`⏳ User document not found, retrying in 1 second... (attempt ${retryCount + 1}/3)`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return getCurrentUser(firebaseUser, retryCount + 1);
+      }
+      console.error('❌ User document not found after 3 retries');
       return null;
     }
 
@@ -221,8 +270,10 @@ export const getCurrentUser = async (firebaseUser: FirebaseUser): Promise<User |
  */
 export const onAuthStateChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, async (firebaseUser) => {
+    console.log('🔥 Firebase auth state changed:', firebaseUser ? `UID: ${firebaseUser.uid}, Email: ${firebaseUser.email}` : 'No user');
     if (firebaseUser) {
       const user = await getCurrentUser(firebaseUser);
+      console.log('👤 getCurrentUser result:', user ? `Email: ${user.email}, Role: ${user.role}` : 'null');
       callback(user);
     } else {
       callback(null);

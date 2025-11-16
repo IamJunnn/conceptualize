@@ -95,7 +95,11 @@
       "Bash(timeout 60 echo:*)",
       "Bash(cmd /c \"if exist src-tauri\\false rmdir /s /q src-tauri\\false & if exist src-tauri\\true rmdir /s /q src-tauri\\true\")",
       "Bash(git config:*)",
-      "Bash(git remote set-url:*)"
+      "Bash(git remote set-url:*)",
+      "Bash(firebase init:*)",
+      "Bash(cmd /c \"if exist scripts rmdir /s /q scripts\")",
+      "Bash(firebase deploy:*)",
+      "Bash(firebase login:*)"
     ],
     "deny": [],
     "ask": []

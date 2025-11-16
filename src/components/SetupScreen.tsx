@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import SimpleTitleBar from './UI/SimpleTitleBar'
 import './SetupScreen.css'
 
 interface SetupScreenProps {
@@ -23,6 +24,7 @@ function SetupScreen({ onFolderSelected }: SetupScreenProps) {
 
   return (
     <div className="setup-screen">
+      <SimpleTitleBar />
       <div className="setup-content">
         <div className="setup-title">
           <span>Welcome to </span>
