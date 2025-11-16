@@ -18,8 +18,8 @@ import {
   arrayUnion,
   arrayRemove,
 } from 'firebase/firestore';
-import { db } from './firebase';
-import { createTeamFolder, shareFolder, getFolderMetadata } from './googleDriveService';
+import { db, auth } from './firebase';
+import { createTeamStorage } from './cloudStorageBackend';
 
 export interface TeamMember {
   email: string;
@@ -34,8 +34,7 @@ export interface Team {
   description?: string;
   createdAt: Date;
   createdBy: string; // owner's email
-  driveFolderId: string; // Google Drive folder ID
-  driveOwnerEmail: string; // Whose Drive this is stored in
+  storageId: string; // Cloud Storage ID (same as team ID)
   members: { [email: string]: TeamMember };
   memberEmails: string[]; // For querying
 }
@@ -63,20 +62,20 @@ export async function createTeam(
   try {
     console.log(`Creating team "${teamName}"...`);
 
-    // 1. Create folder in owner's Google Drive
-    const driveFolder = await createTeamFolder(teamName);
+    // 1. Generate team ID
+    const teamId = doc(collection(db, 'teams')).id;
 
-    // 2. Create team document in Firestore
-    const teamId = doc(collection(db, 'teams')).id; // Generate ID
+    // 2. Create Cloud Storage structure for the team
+    await createTeamStorage(teamId, teamName);
 
+    // 3. Create team document in Firestore
     const team: Team = {
       id: teamId,
       name: teamName,
       description,
       createdAt: new Date(),
       createdBy: ownerEmail,
-      driveFolderId: driveFolder.id,
-      driveOwnerEmail: ownerEmail,
+      storageId: teamId, // Using team ID as storage ID
       members: {
         [ownerEmail]: {
           email: ownerEmail,
@@ -136,10 +135,8 @@ export async function inviteTeamMember(
       throw new Error('User is already a member of this team');
     }
 
-    // 2. Share Drive folder with new member
-    await shareFolder(team.driveFolderId, memberEmail, 'writer');
-
-    // 3. Create pending invite in Firestore
+    // 2. Create pending invite in Firestore
+    // Note: Access to Cloud Storage is granted automatically when user is added to team
     const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
     await setDoc(doc(db, 'team_invites', inviteId), {
       teamId,
@@ -320,9 +317,7 @@ export async function removeTeamMember(
       memberEmails: arrayRemove(memberEmail),
     });
 
-    // Note: We don't remove Drive access here because Google Drive
-    // permissions can only be managed by the folder owner
-    // The owner should manually remove access from Drive if needed
+    // Note: Access to Cloud Storage is automatically revoked when user is removed from team
 
     console.log(`✅ Removed ${memberEmail} from team ${teamId}`);
   } catch (error: any) {
@@ -341,8 +336,8 @@ export async function deleteTeam(teamId: string): Promise<void> {
     // Delete team document
     await deleteDoc(doc(db, 'teams', teamId));
 
-    // Note: We don't delete the Drive folder automatically
-    // The owner can manually delete it from their Drive
+    // Note: Cloud Storage files remain but access is revoked for all members
+    // Files can be deleted through a separate cleanup process if needed
 
     console.log(`✅ Deleted team ${teamId}`);
   } catch (error: any) {

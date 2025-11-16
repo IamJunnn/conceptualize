@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { signInWithGoogle } from '../../services/authServiceTauri';
+import SimpleTitleBar from '../UI/SimpleTitleBar';
 import './LoginScreen.css';
 
 interface LoginScreenProps {
@@ -10,6 +11,7 @@ interface LoginScreenProps {
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSignUp, setIsSignUp] = useState(true); // Default to sign-up mode
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -18,6 +20,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
     try {
       // This will open system browser, wait for callback, and complete sign-in
       await signInWithGoogle();
+      setLoading(false);
       onLoginSuccess();
     } catch (err: any) {
       console.error('Login error:', err);
@@ -35,6 +38,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
 
   return (
     <div className="login-screen">
+      <SimpleTitleBar />
       <div className="login-container">
         {onBack && (
           <button className="back-button" onClick={onBack} aria-label="Go back">
@@ -52,9 +56,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
         </div>
 
         <div className="login-content">
-          <h2>Welcome</h2>
+          <h2>{isSignUp ? 'Get Started' : 'Welcome Back'}</h2>
           <p className="login-description">
-            Sign in with your company Google account to access Conceptualize.
+            {isSignUp
+              ? 'Create your account with Google to start collaborating with your team.'
+              : 'Sign in with your Google account to access Conceptualize.'
+            }
           </p>
 
           {error && (
@@ -99,15 +106,33 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
                     d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
                   />
                 </svg>
-                <span>Sign in with Google</span>
+                <span>{isSignUp ? 'Sign up with Google' : 'Sign in with Google'}</span>
               </>
             )}
           </button>
 
+          <div className="auth-toggle">
+            {isSignUp ? (
+              <p>
+                Already have an account?{' '}
+                <button onClick={() => setIsSignUp(false)} className="toggle-link">
+                  Sign in here
+                </button>
+              </p>
+            ) : (
+              <p>
+                Don't have an account?{' '}
+                <button onClick={() => setIsSignUp(true)} className="toggle-link">
+                  Sign up here
+                </button>
+              </p>
+            )}
+          </div>
+
           <p className="login-footer">
-            Only authorized users can access this application.
+            Sign up with any Google account to get started.
             <br />
-            Contact your administrator if you need access.
+            Your account will be created automatically.
           </p>
         </div>
       </div>

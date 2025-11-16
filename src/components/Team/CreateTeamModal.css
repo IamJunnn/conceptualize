@@ -1,0 +1,223 @@
+/* Create Team Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: #1e1e1e;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 500px;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.modal-content h2 {
+  margin: 0 0 20px 0;
+  color: #e0e0e0;
+  font-size: 24px;
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #b0b0b0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  padding: 10px 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #666;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Info Box */
+.info-box {
+  background: #2a3f40;
+  border: 1px solid #64c8ca;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.info-box strong {
+  display: block;
+  color: #64c8ca;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.info-box ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #b0b0b0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.info-box li {
+  margin-bottom: 4px;
+}
+
+/* Drive Connect Modal */
+.connect-drive-modal {
+  text-align: center;
+}
+
+.drive-connect-info {
+  margin: 20px 0;
+  color: #b0b0b0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.drive-connect-info p {
+  margin: 12px 0;
+}
+
+.drive-permissions {
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 20px 0;
+  text-align: left;
+}
+
+.drive-permissions h3 {
+  color: #e0e0e0;
+  font-size: 14px;
+  margin: 0 0 12px 0;
+}
+
+.drive-permissions ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #b0b0b0;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* Error Message */
+.error-message {
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 16px;
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.modal-actions .btn-primary,
+.modal-actions .btn-secondary {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.modal-actions .btn-primary {
+  background: #64c8ca !important;
+  color: #1e1e1e !important;
+  border: none !important;
+}
+
+.modal-actions .btn-primary:hover:not(:disabled) {
+  background: #52b6b8 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(100, 200, 202, 0.3);
+}
+
+.modal-actions .btn-primary:disabled {
+  background: #4a7879 !important;
+  color: #666 !important;
+  cursor: not-allowed;
+}
+
+.modal-actions .btn-secondary {
+  background: #3d3d3d !important;
+  color: #b0b0b0 !important;
+  border: 1px solid #4d4d4d !important;
+}
+
+.modal-actions .btn-secondary:hover:not(:disabled) {
+  background: #4d4d4d !important;
+  border-color: #5d5d5d !important;
+}
+
+.modal-actions .btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Scrollbar */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #4d4d4d;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #5d5d5d;
+}

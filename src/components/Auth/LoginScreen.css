@@ -10,9 +10,11 @@
 }
 
 .login-container {
-  background: white;
+  background: rgba(26, 32, 44, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 440px;
   padding: 48px 40px;
@@ -29,9 +31,9 @@
   gap: 8px;
   padding: 8px 16px;
   background: transparent;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
-  color: #4a5568;
+  color: #cbd5e0;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -39,9 +41,9 @@
 }
 
 .back-button:hover {
-  background: #f7fafc;
-  border-color: #cbd5e0;
-  color: #2d3748;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
 }
 
 .back-button svg {
@@ -75,26 +77,26 @@
 .login-header h1 {
   font-size: 32px;
   font-weight: 700;
-  color: #1a202c;
+  color: #ffffff;
   margin: 0 0 8px 0;
 }
 
 .login-subtitle {
   font-size: 14px;
-  color: #718096;
+  color: #a0aec0;
   margin: 0;
 }
 
 .login-content h2 {
   font-size: 24px;
   font-weight: 600;
-  color: #1a202c;
+  color: #ffffff;
   margin: 0 0 12px 0;
 }
 
 .login-description {
   font-size: 14px;
-  color: #4a5568;
+  color: #cbd5e0;
   line-height: 1.6;
   margin: 0 0 32px 0;
 }
@@ -104,10 +106,10 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #fee;
-  border: 1px solid #fcc;
+  background: rgba(245, 101, 101, 0.15);
+  border: 1px solid rgba(245, 101, 101, 0.3);
   border-radius: 8px;
-  color: #c53030;
+  color: #fc8181;
   font-size: 14px;
   margin-bottom: 24px;
   animation: shake 0.4s ease-in-out;
@@ -130,26 +132,28 @@
   justify-content: center;
   gap: 12px;
   padding: 14px 24px;
-  background: white;
-  border: 1px solid #dadce0;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   font-size: 15px;
   font-weight: 500;
   color: #3c4043;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .google-signin-button:hover:not(:disabled) {
-  background: #f8f9fa;
-  border-color: #dadce0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  transform: translateY(-1px);
 }
 
 .google-signin-button:active:not(:disabled) {
   background: #f1f3f4;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transform: translateY(0);
 }
 
 .google-signin-button:disabled {
@@ -178,10 +182,39 @@
   }
 }
 
+.auth-toggle {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.auth-toggle p {
+  font-size: 14px;
+  color: #cbd5e0;
+  margin: 0;
+}
+
+.toggle-link {
+  background: none;
+  border: none;
+  color: #64c8ca;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 0;
+  transition: all 0.2s ease;
+  display: inline;
+}
+
+.toggle-link:hover {
+  color: #7dd3d5;
+  text-decoration: underline;
+}
+
 .login-footer {
-  margin-top: 32px;
+  margin-top: 24px;
   text-align: center;
   font-size: 13px;
-  color: #718096;
+  color: #a0aec0;
   line-height: 1.6;
 }

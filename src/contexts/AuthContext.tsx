@@ -25,38 +25,50 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [appMode, setAppModeState] = useState<'local' | 'team' | null>(null);
 
+  // Monitor app mode changes
   useEffect(() => {
-    // Check if we're in team mode before setting up auth listener
-    const initAuth = async () => {
-      try {
-        const { getAppMode } = await import('../services/appModeService');
-        const mode = await getAppMode();
-
-        if (mode === 'local') {
-          // Skip authentication for local mode
-          setLoading(false);
-          return;
-        }
-
-        // Only set up auth listener for team mode
-        const unsubscribe = onAuthStateChange((newUser) => {
-          setUser(newUser);
-          setLoading(false);
-        });
-
-        return () => unsubscribe();
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        setLoading(false);
-      }
+    const checkMode = async () => {
+      const { getAppMode } = await import('../services/appModeService');
+      const mode = await getAppMode();
+      setAppModeState(mode);
     };
 
-    const cleanup = initAuth();
-    return () => {
-      cleanup.then(unsub => unsub && unsub());
-    };
+    checkMode();
+
+    // Poll for mode changes every second (in case user changes mode)
+    const interval = setInterval(checkMode, 1000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Set up auth listener when in team mode
+  useEffect(() => {
+    if (appMode === 'local') {
+      // Skip authentication for local mode
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    if (appMode === 'team') {
+      console.log('🔐 AuthContext: Setting up auth listener for team mode');
+      // Set up auth listener for team mode
+      const unsubscribe = onAuthStateChange((newUser) => {
+        console.log('🔐 AuthContext: Auth state changed:', newUser ? `User: ${newUser.email}` : 'No user');
+        setUser(newUser);
+        setLoading(false);
+      });
+
+      return () => {
+        console.log('🔐 AuthContext: Cleaning up auth listener');
+        unsubscribe();
+      };
+    }
+
+    // Mode not set yet
+    setLoading(false);
+  }, [appMode]);
 
   const signOut = async () => {
     await authSignOut();

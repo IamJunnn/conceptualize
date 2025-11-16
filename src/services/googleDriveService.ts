@@ -3,6 +3,8 @@
  * Handles folder creation, sharing, file upload/download for team collaboration
  */
 
+import { getAccessToken as getStoredAccessToken, refreshAccessToken as refreshStoredToken, isTokenExpired, hasTokens, clearTokens } from './tokenStorage';
+
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 
@@ -30,61 +32,25 @@ export interface DrivePermission {
 }
 
 /**
- * Get access token from storage
+ * Get access token from storage with automatic refresh
  */
 async function getAccessToken(): Promise<string> {
-  const token = localStorage.getItem('google_access_token');
+  // Check if token is expired and refresh if needed
+  if (isTokenExpired()) {
+    console.log('🔄 Token expired, refreshing...');
+    try {
+      return await refreshStoredToken();
+    } catch (error) {
+      console.error('❌ Failed to refresh token:', error);
+      throw new Error('Authentication expired. Please sign in again.');
+    }
+  }
+
+  const token = getStoredAccessToken();
   if (!token) {
     throw new Error('Not authenticated with Google Drive. Please sign in again.');
   }
-
-  // Check if token is expired
-  const expiresAt = localStorage.getItem('google_token_expires_at');
-  if (expiresAt && Date.now() >= parseInt(expiresAt)) {
-    // Token expired, try to refresh
-    console.log('Access token expired, refreshing...');
-    return await refreshAccessToken();
-  }
-
   return token;
-}
-
-/**
- * Refresh access token using refresh token
- */
-async function refreshAccessToken(): Promise<string> {
-  const refreshToken = localStorage.getItem('google_refresh_token');
-  if (!refreshToken) {
-    throw new Error('No refresh token available. Please sign in again.');
-  }
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Token refresh failed:', error);
-    throw new Error('Failed to refresh access token. Please sign in again.');
-  }
-
-  const data = await response.json();
-
-  // Store new access token
-  localStorage.setItem('google_access_token', data.access_token);
-  localStorage.setItem('google_token_expires_at', (Date.now() + (data.expires_in * 1000)).toString());
-
-  console.log('✅ Access token refreshed successfully');
-  return data.access_token;
 }
 
 /**
@@ -355,17 +321,12 @@ export async function deleteNote(fileId: string): Promise<void> {
  * Check if user has Drive access token
  */
 export function hasDriverAccess(): boolean {
-  const token = localStorage.getItem('google_access_token');
-  const refreshToken = localStorage.getItem('google_refresh_token');
-  return !!(token && refreshToken);
+  return hasTokens();
 }
 
 /**
  * Clear Drive tokens (on sign out)
  */
 export function clearDriveTokens(): void {
-  localStorage.removeItem('google_access_token');
-  localStorage.removeItem('google_refresh_token');
-  localStorage.removeItem('google_token_expires_at');
-  console.log('✅ Cleared Google Drive tokens');
+  clearTokens();
 }

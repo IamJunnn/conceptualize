@@ -5,6 +5,7 @@ import MainUI from './components/MainUI'
 import TeamMainUI from './components/Team/TeamMainUI'
 import LoginScreen from './components/Auth/LoginScreen'
 import ModeSelectionScreen from './components/Auth/ModeSelectionScreen'
+import TeamActionSelectionScreen from './components/Auth/TeamActionSelectionScreen'
 import InviteAcceptScreen from './components/Auth/InviteAcceptScreen'
 import CreateWorkspaceModal from './components/Workspace/CreateWorkspaceModal'
 // TODO: Re-enable for full release
@@ -27,6 +28,7 @@ import './App.css'
 if (import.meta.env.DEV) {
   import('./utils/testHelpers')
   import('./utils/clearData')
+  import('./utils/resetForTesting')
 }
 
 function AppContent() {
@@ -39,6 +41,7 @@ function AppContent() {
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false)
   const [hasWorkspace, setHasWorkspace] = useState<boolean | null>(null)
   const [pendingInvitation, setPendingInvitation] = useState<DeepLinkInvitation | null>(null)
+  const [teamAction, setTeamAction] = useState<'create' | 'join' | null>(null)
 
   // Check for app mode and saved root folder on mount
   useEffect(() => {
@@ -140,11 +143,14 @@ function AppContent() {
   }
 
   const handleModeSelected = async (mode: 'local' | 'team') => {
+    console.log('🎯 Mode selected:', mode)
     try {
       await setAppMode(mode)
+      console.log('✅ App mode set successfully to:', mode)
       setAppModeState(mode)
+      console.log('✅ App mode state updated to:', mode)
     } catch (error) {
-      console.error('Error setting app mode:', error)
+      console.error('❌ Error setting app mode:', error)
     }
   }
 
@@ -180,6 +186,7 @@ function AppContent() {
 
   // Show loading state while checking mode, auth, and initial setup
   if (modeLoading || isLoading) {
+    console.log('⏳ Loading... modeLoading:', modeLoading, 'isLoading:', isLoading)
     return (
       <div className="app">
         <div className="welcome-screen">
@@ -188,6 +195,13 @@ function AppContent() {
       </div>
     )
   }
+
+  console.log('🔍 Current state:', {
+    appMode,
+    user: user ? `${user.email} (${user.uid})` : null,
+    authLoading,
+    pendingInvitation
+  })
 
   // Show invite accept screen if there's a pending invitation (before mode selection)
   if (pendingInvitation && !user) {
@@ -208,26 +222,43 @@ function AppContent() {
 
   // Show mode selection if no mode is set and no pending invitation
   if (!appMode) {
+    console.log('📋 Showing mode selection screen (no app mode set)')
     return <ModeSelectionScreen onModeSelected={handleModeSelected} />
   }
 
-  // Show login screen if in team mode and user is not authenticated
-  if (appMode === 'team' && !user && !authLoading) {
-    return <LoginScreen onLoginSuccess={() => {}} onBack={handleBackToModeSelection} />
+  // Show team action selection if in team mode and no action chosen yet
+  if (appMode === 'team' && !teamAction && !user) {
+    console.log('🎯 Showing team action selection screen')
+    return (
+      <TeamActionSelectionScreen
+        onCreateTeam={() => {
+          console.log('✅ User chose to create a team')
+          setTeamAction('create')
+        }}
+        onJoinTeam={() => {
+          console.log('✅ User chose to join a team')
+          setTeamAction('join')
+        }}
+        onBack={handleBackToModeSelection}
+      />
+    )
+  }
+
+  // Show login screen if in team mode, action chosen, and user is not authenticated
+  if (appMode === 'team' && teamAction && !user && !authLoading) {
+    console.log('🔐 Showing login screen (team mode, action chosen, no user)')
+    return <LoginScreen onLoginSuccess={() => {}} onBack={() => setTeamAction(null)} />
   }
 
   // TEAM MODE: Show TeamMainUI (Google Drive based)
   if (appMode === 'team' && user) {
+    console.log('👥 Showing TeamMainUI (team mode + authenticated user)')
     return <TeamMainUI user={user} />
   }
 
   // LOCAL MODE: Show setup screen if no root path is configured
   if (showSetup || !rootPath) {
-    return (
-      <div className={`app-transition ${showSetup && !rootPath ? 'fade-in' : 'fade-out'}`}>
-        <SetupScreen onFolderSelected={handleFolderSelected} />
-      </div>
-    )
+    return <SetupScreen onFolderSelected={handleFolderSelected} />
   }
 
   // LOCAL MODE: Main application UI (file-based)
