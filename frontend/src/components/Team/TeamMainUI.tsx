@@ -14,6 +14,7 @@ import { DragDropProvider } from '../../contexts/DragDropContext';
 import { GraphVisibilityProvider } from '../../contexts/GraphVisibilityContext';
 import CreateTeamModal from './CreateTeamModal';
 import JoinTeamModal from './JoinTeamModal';
+import TeamManagementModal from './TeamManagementModal';
 import './TeamMainUI.css';
 
 interface TeamMainUIProps {
@@ -40,6 +41,7 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
   const [showJoinTeamModal, setShowJoinTeamModal] = useState(false);
   const [showTeamChoice, setShowTeamChoice] = useState(false);
+  const [showTeamManagement, setShowTeamManagement] = useState(false);
 
   // MainUI-like state
   const [fileTree, setFileTree] = useState<FileTreeNode[]>([]);
@@ -330,6 +332,7 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
                 onChangeFolderPath={() => {}}
                 filesWithIncomingLinks={filesWithIncomingLinks}
                 teamName={selectedTeam.name}
+                onTeamManagement={() => setShowTeamManagement(true)}
               />
             </div>
 
@@ -426,6 +429,19 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
               onSwitchTeam={(team) => {
                 setSelectedTeam(team);
                 setShowSettings(false);
+              }}
+            />
+          )}
+
+          {/* Team Management Modal */}
+          {showTeamManagement && (
+            <TeamManagementModal
+              team={selectedTeam}
+              onClose={() => setShowTeamManagement(false)}
+              onInviteMore={() => {
+                setShowTeamManagement(false);
+                // TODO: Open invite members modal
+                alert('Invite more members feature coming soon!');
               }}
             />
           )}

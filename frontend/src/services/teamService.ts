@@ -293,6 +293,35 @@ export async function getPendingInvites(userEmail: string): Promise<TeamInvitati
 }
 
 /**
+ * Get pending invitations for a team (for admins to see who they invited)
+ */
+export async function getTeamPendingInvites(teamId: string): Promise<TeamInvitation[]> {
+  try {
+    const q = query(
+      collection(db, 'team_invites'),
+      where('teamId', '==', teamId),
+      where('status', '==', 'pending')
+    );
+
+    const snapshot = await getDocs(q);
+    const invites = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        invitedAt: data.invitedAt?.toDate(),
+      } as TeamInvitation;
+    });
+
+    console.log(`✅ Found ${invites.length} pending invites for team ${teamId}`);
+    return invites;
+  } catch (error: any) {
+    console.error('Failed to get team pending invites:', error);
+    throw new Error(`Failed to get team invites: ${error.message}`);
+  }
+}
+
+/**
  * Get team by ID
  */
 export async function getTeamById(teamId: string): Promise<Team | null> {
@@ -473,6 +502,48 @@ export async function createInviteCodesAndSendEmails(
   } catch (error: any) {
     console.error('Failed to create invite codes and send emails:', error);
     throw new Error(`Failed to create invite codes and send emails: ${error.message}`);
+  }
+}
+
+/**
+ * Cancel a pending invitation
+ */
+export async function cancelInvitation(inviteId: string): Promise<void> {
+  try {
+    console.log(`Canceling invitation ${inviteId}...`);
+
+    // Update the invitation status to 'cancelled'
+    await updateDoc(doc(db, 'team_invites', inviteId), {
+      status: 'cancelled',
+    });
+
+    console.log(`✅ Cancelled invitation ${inviteId}`);
+  } catch (error: any) {
+    console.error('Failed to cancel invitation:', error);
+    throw new Error(`Failed to cancel invitation: ${error.message}`);
+  }
+}
+
+/**
+ * Resend invitation email
+ */
+export async function resendInvitation(
+  teamId: string,
+  teamName: string,
+  email: string,
+  inviteCode: string,
+  role: 'admin' | 'leader' | 'member'
+): Promise<void> {
+  try {
+    console.log(`Resending invitation to ${email}...`);
+
+    // Resend the email
+    await sendInviteEmail(email, teamName, inviteCode, role);
+
+    console.log(`✅ Resent invitation to ${email}`);
+  } catch (error: any) {
+    console.error('Failed to resend invitation:', error);
+    throw new Error(`Failed to resend invitation: ${error.message}`);
   }
 }
 

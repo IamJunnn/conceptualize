@@ -1,0 +1,295 @@
+.team-management-modal {
+  max-width: 700px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.team-management-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+}
+
+.team-management-modal .modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #1a202c;
+}
+
+.team-management-modal .btn-close {
+  background: none;
+  border: none;
+  font-size: 32px;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.team-management-modal .btn-close:hover {
+  color: #1a202c;
+}
+
+.team-info {
+  margin-bottom: 20px;
+}
+
+.team-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #2d3748;
+}
+
+.team-description {
+  margin: 0;
+  color: #718096;
+  font-size: 14px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 20px;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: #2d3748;
+}
+
+.tab.active {
+  color: #c44fc4;
+  border-bottom-color: #c44fc4;
+}
+
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+/* Members Section */
+.members-section {
+  padding: 8px 0;
+}
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.member-info {
+  flex: 1;
+}
+
+.member-name {
+  font-weight: 600;
+  color: #1a202c;
+  margin-bottom: 4px;
+}
+
+.member-email {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.member-meta {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.member-role {
+  margin-left: 16px;
+}
+
+/* Invitations Section */
+.invitations-section {
+  padding: 8px 0;
+}
+
+.invitations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invitation-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #fffbeb;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+}
+
+.invitation-info {
+  flex: 1;
+}
+
+.invitation-email {
+  font-weight: 600;
+  color: #1a202c;
+  margin-bottom: 4px;
+}
+
+.invitation-meta {
+  font-size: 12px;
+  color: #92400e;
+  margin-bottom: 8px;
+}
+
+.invitation-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #78350f;
+  margin-top: 8px;
+}
+
+.code-value {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  color: #c44fc4;
+  background: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.btn-copy-code {
+  background: white;
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.btn-copy-code:hover {
+  background: #f3f4f6;
+  color: #1a202c;
+}
+
+.invitation-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+}
+
+/* Role Badges */
+.role-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-badge.role-owner {
+  background: linear-gradient(135deg, #c44fc4 0%, #8b5fbf 100%);
+  color: white;
+}
+
+.role-badge.role-admin {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.role-badge.role-leader {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.role-badge.role-member {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Buttons */
+.btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.btn-danger {
+  background: #fee;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.btn-danger:hover {
+  background: #fecaca;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+
+.error-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #dc2626;
+}
+
+/* Modal Footer */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
