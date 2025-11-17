@@ -940,7 +940,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               onPaneActivate={() => setActivePane('left')}
             />
             <div className="tab-content" onClick={() => setActivePane('left')}>
-              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} />}
+              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleStartEditing(rootPath, 'new-note')} onCreateFolder={() => handleStartEditing(rootPath, 'new-folder')} />}
               {activeTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={handleSelectFile} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
               {activeTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
@@ -1010,7 +1010,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 onPaneActivate={() => setActivePane('left')}
               />
               <div className="tab-content" onClick={() => setActivePane('left')}>
-                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} />}
+                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleStartEditing(rootPath, 'new-note')} onCreateFolder={() => handleStartEditing(rootPath, 'new-folder')} />}
                 {leftPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {leftPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {leftPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {

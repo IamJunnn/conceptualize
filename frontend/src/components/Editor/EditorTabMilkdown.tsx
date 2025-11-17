@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import MilkdownEditor from './MilkdownEditor'
+import { TeamDriveStorage } from '../../services/teamDriveStorage'
 import './EditorTab.css'
 
 interface EditorTabProps {
   filePath: string
   fileName: string
-  rootPath: string
+  rootPath?: string
   onFileRenamed?: (oldPath: string, newPath: string, newName: string) => void
   onOpenFile?: (filePath: string, fileName: string) => void
   onFileCreated?: () => void
   editorId?: string // Unique ID for autocomplete scoping
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
   isActive?: boolean // Whether this pane is currently active
+  storageBackend?: TeamDriveStorage // For team mode
 }
 
 interface SaveResult {
@@ -20,7 +22,7 @@ interface SaveResult {
   error?: string
 }
 
-function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive }: EditorTabProps) {
+function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive, storageBackend }: EditorTabProps) {
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -28,6 +30,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [renameError, setRenameError] = useState<string | null>(null)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isTeamMode = !!storageBackend
 
   // Handle wiki-link clicks
   const handleWikiLinkClick = useCallback(async (noteName: string) => {
@@ -158,39 +161,56 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
     const loadFile = async () => {
       try {
         setIsLoading(true)
-        const fileContent = await invoke<string>('read_file', { filePath })
+        let fileContent: string
+
+        if (isTeamMode && storageBackend) {
+          // Team mode: load from Google Drive
+          fileContent = await storageBackend.getFile(fileName)
+        } else {
+          // Local mode: load from filesystem
+          fileContent = await invoke<string>('read_file', { filePath })
+        }
+
         setContent(fileContent)
+        setSaveError(null) // Clear any previous errors
       } catch (error) {
         console.error('Failed to load file:', error)
-        setSaveError(`Failed to load file: ${error}`)
+        setSaveError(`Failed to load '${fileName}': ${error instanceof Error ? error.message : String(error)}`)
       } finally {
         setIsLoading(false)
       }
     }
 
     loadFile()
-  }, [filePath])
+  }, [filePath, fileName, isTeamMode, storageBackend])
 
   // Auto-save with debounce
   const saveFile = useCallback(async (newContent: string) => {
     try {
       setIsSaving(true)
       setSaveError(null)
-      const result = await invoke<SaveResult>('write_file', {
-        filePath,
-        content: newContent
-      })
 
-      if (!result.success) {
-        setSaveError(result.error || 'Failed to save file')
+      if (isTeamMode && storageBackend) {
+        // Team mode: save to Google Drive
+        await storageBackend.saveFile(fileName, newContent)
+      } else {
+        // Local mode: save to filesystem
+        const result = await invoke<SaveResult>('write_file', {
+          filePath,
+          content: newContent
+        })
+
+        if (!result.success) {
+          setSaveError(result.error || 'Failed to save file')
+        }
       }
     } catch (error) {
       console.error('Failed to save file:', error)
-      setSaveError(`Failed to save: ${error}`)
+      setSaveError(`Failed to save: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsSaving(false)
     }
-  }, [filePath])
+  }, [filePath, fileName, isTeamMode, storageBackend])
 
   const handleChange = useCallback((value: string) => {
     setContent(value)
@@ -234,24 +254,37 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
 
     try {
       setRenameError(null)
-      const result = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('rename_item', {
-        oldPath: filePath,
-        newName: finalName,
-        rootPath: rootPath
-      })
 
-      if (result.success && result.path && result.name) {
+      if (isTeamMode && storageBackend) {
+        // Team mode: rename in Google Drive
+        await storageBackend.renameFile(fileName, finalName)
+
         // Notify parent component to update
         if (onFileRenamed) {
-          onFileRenamed(filePath, result.path, result.name)
+          onFileRenamed(filePath, finalName, finalName)
         }
         setIsEditingTitle(false)
       } else {
-        setRenameError(result.error || 'Failed to rename file')
+        // Local mode: rename in filesystem
+        const result = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('rename_item', {
+          oldPath: filePath,
+          newName: finalName,
+          rootPath: rootPath
+        })
+
+        if (result.success && result.path && result.name) {
+          // Notify parent component to update
+          if (onFileRenamed) {
+            onFileRenamed(filePath, result.path, result.name)
+          }
+          setIsEditingTitle(false)
+        } else {
+          setRenameError(result.error || 'Failed to rename file')
+        }
       }
     } catch (error) {
       console.error('Error renaming file:', error)
-      setRenameError(`Error: ${error}`)
+      setRenameError(`Error: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

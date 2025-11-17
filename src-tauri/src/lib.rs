@@ -277,9 +277,18 @@ fn get_markdown_files(root_path: String) -> Result<MarkdownFilesResult, String> 
         }
         Ok(())
     }
+
+    let root_path_buf = Path::new(&root_path);
+
+    // If the directory doesn't exist, return empty result instead of error
+    if !root_path_buf.exists() {
+        eprintln!("📁 Directory doesn't exist yet: {:?}", root_path);
+        return Ok(MarkdownFilesResult { files: Vec::new(), folders: Vec::new() });
+    }
+
     let mut files = Vec::new();
     let mut folders = Vec::new();
-    collect_markdown_files_and_folders(Path::new(&root_path), &mut files, &mut folders)?;
+    collect_markdown_files_and_folders(root_path_buf, &mut files, &mut folders)?;
     Ok(MarkdownFilesResult { files, folders })
 }
 
