@@ -25,7 +25,7 @@ pub struct TeamInvitationEmail {
 pub async fn send_invitation_email(invitation: InvitationEmail) -> Result<String, String> {
     // Gmail SMTP credentials
     let smtp_username = "junson@launchwith.co";
-    let smtp_password = "YOUR_NEW_APP_PASSWORD_HERE";  // TODO: Replace with new Gmail app password
+    let smtp_password = "erhk oflj cdgz kfqw";
 
     // Generate invite link - using HTTPS URL that can redirect to the app
     // You should replace this with your actual domain
@@ -189,7 +189,7 @@ fn build_email_html(invitation: &InvitationEmail, invite_link: &str) -> String {
 pub async fn send_team_invitation_email(invitation: TeamInvitationEmail) -> Result<String, String> {
     // Gmail SMTP credentials
     let smtp_username = "junson@launchwith.co";
-    let smtp_password = "YOUR_NEW_APP_PASSWORD_HERE";  // TODO: Replace with new Gmail app password
+    let smtp_password = "erhk oflj cdgz kfqw";
 
     // Build email message
     let email = Message::builder()

@@ -63,18 +63,22 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
   const loadTeams = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Loading teams for user:', user.email);
       const userTeams = await getUserTeams(user.email);
+      console.log('✅ Loaded teams:', userTeams);
       setTeams(userTeams);
 
       // Auto-select first team if available
       if (userTeams.length > 0 && !selectedTeam) {
+        console.log('📌 Auto-selecting first team:', userTeams[0].name);
         setSelectedTeam(userTeams[0]);
       } else if (userTeams.length === 0) {
         // If no teams, show create team modal directly
+        console.log('ℹ️ No teams found, showing create team modal');
         setShowCreateTeamModal(true);
       }
     } catch (error) {
-      console.error('Failed to load teams:', error);
+      console.error('❌ Failed to load teams:', error);
     } finally {
       setLoading(false);
     }
@@ -84,11 +88,16 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
   useEffect(() => {
     if (selectedTeam) {
       console.log('✅ Initializing team storage with Google Drive...');
-      console.log('📁 Using Drive folder ID:', selectedTeam.driveFolderId);
+      console.log('📁 Team:', selectedTeam.name);
+      console.log('📁 Drive folder ID:', selectedTeam.driveFolderId);
 
-      const backend = getTeamDriveStorage(selectedTeam.driveFolderId);
-      setStorageBackend(backend);
-      loadFileTree(backend);
+      try {
+        const backend = getTeamDriveStorage(selectedTeam.driveFolderId);
+        setStorageBackend(backend);
+        loadFileTree(backend);
+      } catch (error) {
+        console.error('❌ Failed to initialize storage backend:', error);
+      }
     }
   }, [selectedTeam]);
 
