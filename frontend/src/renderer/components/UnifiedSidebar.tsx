@@ -341,7 +341,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 };
 
 const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks } = props;
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
   const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
