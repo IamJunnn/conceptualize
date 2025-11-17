@@ -4,6 +4,7 @@ import ImageViewer from './ImageViewer'
 import WordViewer from './WordViewer'
 import ExcelViewer from './ExcelViewer'
 import PowerPointViewer from './PowerPointViewer'
+import { TeamDriveStorage } from '../../services/teamDriveStorage'
 
 interface FileViewerProps {
   filePath: string
@@ -16,6 +17,7 @@ interface FileViewerProps {
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
   editorId?: string // Unique ID for autocomplete scoping
   isActive?: boolean
+  storageBackend?: TeamDriveStorage // For team mode
 }
 
 type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'word' | 'excel' | 'powerpoint' | 'unknown'
@@ -42,7 +44,7 @@ function getFileType(fileName: string): FileType {
   return 'unknown'
 }
 
-function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive }: FileViewerProps) {
+function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive, storageBackend }: FileViewerProps) {
   const fileType = getFileType(fileName)
 
   switch (fileType) {
@@ -59,6 +61,7 @@ function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, o
           onPaneActivate={onPaneActivate}
           editorId={editorId}
           isActive={isActive}
+          storageBackend={storageBackend}
         />
       )
 

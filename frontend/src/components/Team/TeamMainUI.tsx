@@ -167,13 +167,14 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
       if (editing.type === 'new-note') {
         // Create a new note file in Google Drive
         const fileName = newName.endsWith('.md') ? newName : `${newName}.md`;
-        const initialContent = `# ${newName}\n\n`;
+        const initialContent = '';
 
         await storageBackend.saveFile(fileName, initialContent);
         console.log(`✅ Created note: ${fileName}`);
 
-        // Refresh file tree
+        // Refresh file tree and graph
         await loadFileTree();
+        setGraphKey(prev => prev + 1);
 
         // Open the newly created file
         handleSelectFile(fileName, fileName);
@@ -182,8 +183,9 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
         await storageBackend.createFolder(newName, editing.path);
         console.log(`✅ Created folder: ${newName}`);
 
-        // Refresh file tree
+        // Refresh file tree and graph
         await loadFileTree();
+        setGraphKey(prev => prev + 1);
       } else if (editing.type === 'rename') {
         // Rename a file in Google Drive
         const oldFileName = editing.path;
@@ -361,6 +363,9 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
                     rootPath={selectedTeam.driveFolderId}
                     onFileOpen={handleSelectFile}
                     onNodeContextMenu={() => {}}
+                    onCreateNote={() => handleStartEditing('', 'new-note')}
+                    onCreateFolder={() => handleStartEditing('', 'new-folder')}
+                    storageBackend={storageBackend || undefined}
                   />
                 )}
                 {activeTab === 'special://todos' && (
@@ -405,6 +410,7 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
                           setGraphKey(prev => prev + 1);
                         }}
                         isActive={true}
+                        storageBackend={storageBackend || undefined}
                       />
                     ) : (
                       <FileViewer
@@ -412,6 +418,7 @@ export default function TeamMainUI({ user }: TeamMainUIProps) {
                         filePath={file.path}
                         fileName={file.name}
                         rootPath={selectedTeam.driveFolderId}
+                        storageBackend={storageBackend || undefined}
                       />
                     )
                   );

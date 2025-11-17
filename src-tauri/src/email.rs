@@ -16,7 +16,6 @@ pub struct InvitationEmail {
 pub struct TeamInvitationEmail {
     pub email: String,
     pub team_name: String,
-    pub invite_code: String,
     pub role: String,
 }
 
@@ -228,6 +227,12 @@ pub async fn send_team_invitation_email(invitation: TeamInvitationEmail) -> Resu
 }
 
 fn build_team_email_html(invitation: &TeamInvitationEmail) -> String {
+    let role_description = match invitation.role.as_str() {
+        "owner" => "team owner with full access",
+        "admin" => "team admin with management privileges",
+        _ => "team member",
+    };
+
     format!(
         r#"<!DOCTYPE html>
         <html>
@@ -254,6 +259,10 @@ fn build_team_email_html(invitation: &TeamInvitationEmail) -> String {
                                     <h2 style="color: #1a202c; margin-top: 0; font-size: 24px;">You're invited to join {}</h2>
 
                                     <p style="color: #4a5568; line-height: 1.6; font-size: 16px; margin-top: 20px;">
+                                        You've been added to <strong>{}</strong> as a <strong>{}</strong>.
+                                    </p>
+
+                                    <p style="color: #4a5568; line-height: 1.6; font-size: 16px; margin-top: 16px;">
                                         Follow these simple steps to get started:
                                     </p>
 
@@ -263,16 +272,17 @@ fn build_team_email_html(invitation: &TeamInvitationEmail) -> String {
                                         <li>Install the application</li>
                                         <li>Run Conceptualize</li>
                                         <li>Click <strong>"Start as a Team"</strong> button</li>
-                                        <li>Click <strong>"Join Existing Team"</strong></li>
-                                        <li>Enter your invite code: <strong style="color: #c44fc4; font-size: 18px;">{}</strong></li>
+                                        <li>Sign in with your invited email: <strong style="color: #c44fc4;">{}</strong></li>
                                     </ol>
 
-                                    <!-- Invite Code Highlight -->
+                                    <!-- Important Note -->
                                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 32px 0;">
                                         <tr>
-                                            <td style="background: linear-gradient(135deg, rgba(196, 79, 196, 0.1) 0%, rgba(100, 200, 202, 0.1) 100%); padding: 24px; border-radius: 8px; border: 2px dashed #c44fc4; text-align: center;">
-                                                <p style="color: #718096; margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Invite Code</p>
-                                                <p style="color: #c44fc4; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 2px; font-family: 'Courier New', monospace;">{}</p>
+                                            <td style="background: linear-gradient(135deg, rgba(196, 79, 196, 0.1) 0%, rgba(100, 200, 202, 0.1) 100%); padding: 24px; border-radius: 8px; border-left: 4px solid #c44fc4;">
+                                                <p style="color: #2d3748; margin: 0 0 8px 0; font-size: 14px; font-weight: 600;">Important</p>
+                                                <p style="color: #4a5568; margin: 0; font-size: 14px; line-height: 1.6;">
+                                                    Make sure to sign in using <strong>{}</strong> to automatically join your team. No invite codes needed!
+                                                </p>
                                             </td>
                                         </tr>
                                     </table>
@@ -294,7 +304,9 @@ fn build_team_email_html(invitation: &TeamInvitationEmail) -> String {
         </body>
         </html>"#,
         invitation.team_name,
-        invitation.invite_code,
-        invitation.invite_code
+        invitation.team_name,
+        role_description,
+        invitation.email,
+        invitation.email
     )
 }

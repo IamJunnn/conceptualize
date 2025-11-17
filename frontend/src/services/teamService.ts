@@ -30,13 +30,6 @@ export interface TeamMember {
   displayName?: string;
 }
 
-export interface TeamInviteCode {
-  code: string;
-  email: string;
-  role: 'admin' | 'leader' | 'member';
-  createdAt: Date;
-  used: boolean;
-}
 
 export interface Team {
   id: string;
@@ -47,7 +40,6 @@ export interface Team {
   driveFolderId: string; // Google Drive folder ID where team files are stored
   members: { [email: string]: TeamMember };
   memberEmails: string[]; // For querying
-  inviteCodes?: { [code: string]: TeamInviteCode }; // Invite codes for joining
 }
 
 export interface TeamInvitation {
@@ -399,62 +391,13 @@ export async function deleteTeam(teamId: string): Promise<void> {
   }
 }
 
-/**
- * Generate a unique 6-character invite code
- */
-function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed ambiguous chars
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
 
 /**
- * Create invite codes for team members
- */
-export async function createInviteCodes(
-  teamId: string,
-  invites: Array<{ email: string; role: 'admin' | 'leader' | 'member' }>
-): Promise<{ [email: string]: string }> {
-  try {
-    const codes: { [email: string]: string } = {};
-    const inviteCodes: { [code: string]: TeamInviteCode } = {};
-
-    for (const invite of invites) {
-      const code = generateInviteCode();
-      codes[invite.email] = code;
-      inviteCodes[code] = {
-        code,
-        email: invite.email,
-        role: invite.role,
-        createdAt: new Date(),
-        used: false,
-      };
-    }
-
-    // Store invite codes in team document
-    await updateDoc(doc(db, 'teams', teamId), {
-      inviteCodes: inviteCodes,
-    });
-
-    console.log(`✅ Created ${Object.keys(codes).length} invite codes for team ${teamId}`);
-    return codes;
-  } catch (error: any) {
-    console.error('Failed to create invite codes:', error);
-    throw new Error(`Failed to create invite codes: ${error.message}`);
-  }
-}
-
-/**
- * Send invitation email to a team member with their invite code
- * Uses Firebase Callable Function - no CORS issues!
+ * Send invitation email to a team member
  */
 export async function sendInviteEmail(
   toEmail: string,
   teamName: string,
-  inviteCode: string,
   role: 'admin' | 'leader' | 'member'
 ): Promise<void> {
   try {
@@ -463,7 +406,6 @@ export async function sendInviteEmail(
       invitation: {
         email: toEmail,
         team_name: teamName,
-        invite_code: inviteCode,
         role: role
       }
     });
@@ -475,20 +417,16 @@ export async function sendInviteEmail(
 }
 
 /**
- * Create invite codes and send emails to all invited members
+ * Send invitation emails to all invited members
  */
-export async function createInviteCodesAndSendEmails(
-  teamId: string,
+export async function sendInvitationEmails(
   teamName: string,
   invites: Array<{ email: string; role: 'admin' | 'leader' | 'member' }>
-): Promise<{ [email: string]: string }> {
+): Promise<void> {
   try {
-    // First, create the invite codes
-    const codes = await createInviteCodes(teamId, invites);
-
-    // Then, send emails to all invited members
+    // Send emails to all invited members
     const emailPromises = invites.map(invite =>
-      sendInviteEmail(invite.email, teamName, codes[invite.email], invite.role)
+      sendInviteEmail(invite.email, teamName, invite.role)
         .catch(error => {
           console.error(`Failed to send email to ${invite.email}:`, error);
           // Don't fail the entire operation if one email fails
@@ -497,11 +435,10 @@ export async function createInviteCodesAndSendEmails(
 
     await Promise.all(emailPromises);
 
-    console.log(`✅ Created invite codes and sent emails to ${invites.length} members`);
-    return codes;
+    console.log(`✅ Sent invitation emails to ${invites.length} members`);
   } catch (error: any) {
-    console.error('Failed to create invite codes and send emails:', error);
-    throw new Error(`Failed to create invite codes and send emails: ${error.message}`);
+    console.error('Failed to send invitation emails:', error);
+    throw new Error(`Failed to send invitation emails: ${error.message}`);
   }
 }
 
@@ -528,17 +465,15 @@ export async function cancelInvitation(inviteId: string): Promise<void> {
  * Resend invitation email
  */
 export async function resendInvitation(
-  teamId: string,
   teamName: string,
   email: string,
-  inviteCode: string,
   role: 'admin' | 'leader' | 'member'
 ): Promise<void> {
   try {
     console.log(`Resending invitation to ${email}...`);
 
     // Resend the email
-    await sendInviteEmail(email, teamName, inviteCode, role);
+    await sendInviteEmail(email, teamName, role);
 
     console.log(`✅ Resent invitation to ${email}`);
   } catch (error: any) {
@@ -547,63 +482,6 @@ export async function resendInvitation(
   }
 }
 
-/**
- * Join team using invite code
- */
-export async function joinTeamWithCode(
-  code: string,
-  userEmail: string,
-  userDisplayName: string
-): Promise<Team> {
-  try {
-    // Find team with this invite code
-    const teamsQuery = query(collection(db, 'teams'));
-    const teamsSnapshot = await getDocs(teamsQuery);
-
-    let foundTeam: Team | null = null;
-    let inviteCodeData: TeamInviteCode | null = null;
-
-    for (const teamDoc of teamsSnapshot.docs) {
-      const teamData = teamDoc.data();
-      if (teamData.inviteCodes && teamData.inviteCodes[code]) {
-        const codeData = teamData.inviteCodes[code];
-
-        // Check if code is for this user and not used
-        if (codeData.email === userEmail && !codeData.used) {
-          foundTeam = {
-            ...teamData,
-            id: teamDoc.id,
-            createdAt: teamData.createdAt?.toDate(),
-          } as Team;
-          inviteCodeData = codeData;
-          break;
-        }
-      }
-    }
-
-    if (!foundTeam || !inviteCodeData) {
-      throw new Error('Invalid or expired invite code');
-    }
-
-    // Add user to team with the role from invite code
-    await updateDoc(doc(db, 'teams', foundTeam.id), {
-      [`members.${userEmail}`]: {
-        email: userEmail,
-        role: inviteCodeData.role,
-        joinedAt: Timestamp.now(),
-        displayName: userDisplayName,
-      },
-      memberEmails: arrayUnion(userEmail),
-      [`inviteCodes.${code}.used`]: true,
-    });
-
-    console.log(`✅ ${userEmail} joined team ${foundTeam.name} as ${inviteCodeData.role}`);
-    return foundTeam;
-  } catch (error: any) {
-    console.error('Failed to join team with code:', error);
-    throw new Error(`Failed to join team: ${error.message}`);
-  }
-}
 
 /**
  * Update team member role

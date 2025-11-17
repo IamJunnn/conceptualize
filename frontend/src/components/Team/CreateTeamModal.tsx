@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { User } from '../../services/authServiceTauri';
-import { createTeam, createInviteCodesAndSendEmails } from '../../services/teamService';
+import { createTeam, inviteTeamMember, sendInvitationEmails } from '../../services/teamService';
 import { hasDriverAccess } from '../../services/googleDriveService';
 import { useAuth } from '../../contexts/AuthContext';
 import './CreateTeamModal.css';
@@ -24,8 +24,6 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDriveConnect, setShowDriveConnect] = useState(false);
-  const [showInviteCodes, setShowInviteCodes] = useState(false);
-  const [inviteCodes, setInviteCodes] = useState<{ [email: string]: string }>({});
 
   const handleAddMember = () => {
     setMembers([...members, { email: '', role: 'member' }]);
@@ -65,11 +63,21 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
 
       console.log('✅ Team created successfully!');
 
-      // Create invite codes for members and send emails
+      // Invite members and send emails
       const validMembers = members.filter(m => m.email.trim() !== '');
       if (validMembers.length > 0) {
-        const codes = await createInviteCodesAndSendEmails(
-          team.id,
+        // Create pending invitations for each member
+        for (const member of validMembers) {
+          await inviteTeamMember(
+            team.id,
+            member.email.trim(),
+            user.email,
+            user.displayName || user.email.split('@')[0]
+          );
+        }
+
+        // Send invitation emails
+        await sendInvitationEmails(
           teamName.trim(),
           validMembers.map(m => ({
             email: m.email.trim(),
@@ -77,21 +85,13 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
           }))
         );
 
-        console.log(`✅ Generated ${Object.keys(codes).length} invite codes and sent emails`);
-
-        // Show invite codes to user
-        setInviteCodes(codes);
-        setShowInviteCodes(true);
-      } else {
-        // No members to invite, just close
-        // Refresh user data to show updated role (should be 'admin' now)
-        await refreshUser();
-        onTeamCreated();
-        onClose();
+        console.log(`✅ Sent invitations to ${validMembers.length} members`);
       }
 
       // Refresh user data to show updated role (should be 'admin' now)
       await refreshUser();
+      onTeamCreated();
+      onClose();
     } catch (err: any) {
       console.error('Failed to create team:', err);
       setError(err.message || 'Failed to create team. Please try again.');
@@ -137,62 +137,6 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
       setIsCreating(false);
     }
   };
-
-  // Show invite codes modal after team creation
-  if (showInviteCodes) {
-    return (
-      <div className="modal-overlay">
-        <div className="modal-content invite-codes-modal">
-          <h2>Team Created Successfully!</h2>
-
-          <div className="invite-codes-info">
-            <p>Share these invite codes with your team members:</p>
-          </div>
-
-          <div className="invite-codes-list">
-            {Object.entries(inviteCodes).map(([email, code]) => (
-              <div key={email} className="invite-code-row">
-                <div className="invite-code-email">{email}</div>
-                <div className="invite-code-code">
-                  <span className="code-value">{code}</span>
-                  <button
-                    className="btn-copy-code"
-                    onClick={() => {
-                      navigator.clipboard.writeText(code);
-                    }}
-                    title="Copy code"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="info-box">
-            <strong>Next Steps:</strong>
-            <ul>
-              <li>Share these codes with the invited members</li>
-              <li>They can join by clicking "Join Existing Team"</li>
-              <li>Each code can only be used once</li>
-            </ul>
-          </div>
-
-          <div className="modal-actions">
-            <button
-              className="btn-primary"
-              onClick={() => {
-                onTeamCreated();
-                onClose();
-              }}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (showDriveConnect) {
     return (
@@ -339,7 +283,7 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
           {onSwitchToJoin && (
             <div className="modal-footer-link">
               <p>
-                Already have an invite code?{' '}
+                Want to join an existing team?{' '}
                 <button
                   type="button"
                   className="link-button"

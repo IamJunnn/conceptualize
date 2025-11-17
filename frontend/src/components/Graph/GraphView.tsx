@@ -4,12 +4,17 @@ import GraphEngine from './GraphEngine';
 import ConfirmModal from '../UI/ConfirmModal';
 import { buildGraphFromFiles, GraphData, GraphNode, getHiddenNodes } from '../../utils/graphUtils';
 import { useGraphVisibility } from '../../contexts/GraphVisibilityContext';
+import { TeamDriveStorage } from '../../services/teamDriveStorage';
+import { FilePlus, FolderPlus, AlertCircle } from 'lucide-react';
 import './GraphView.css';
 
 interface GraphViewProps {
   rootPath: string;
   onFileOpen?: (filePath: string, fileName: string) => void;
   onNodeContextMenu?: (event: React.MouseEvent, node: any) => void;
+  onCreateNote?: () => void;
+  onCreateFolder?: () => void;
+  storageBackend?: TeamDriveStorage; // For team mode
 }
 
 interface MarkdownFile {
@@ -22,7 +27,7 @@ interface MarkdownFilesResult {
   folders: string[];
 }
 
-function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) {
+function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCreateFolder, storageBackend }: GraphViewProps) {
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [hiddenNodesData, setHiddenNodesData] = useState<GraphNode[]>([]);
   const [totalNodes, setTotalNodes] = useState(0); // Total before filtering
@@ -30,10 +35,11 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) 
   const [error, setError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const { hiddenPaths, showAll, getHiddenCount } = useGraphVisibility();
+  const isTeamMode = !!storageBackend;
 
   useEffect(() => {
     loadGraphData();
-  }, [rootPath, hiddenPaths]);
+  }, [rootPath, hiddenPaths, storageBackend]);
 
   // Reload graph when important notes change
   useEffect(() => {
@@ -50,10 +56,42 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) 
     setError(null);
 
     try {
-      // Fetch all markdown files and folders from the Rust backend
-      const result = await invoke<MarkdownFilesResult>('get_markdown_files', {
-        rootPath
-      });
+      let result: MarkdownFilesResult;
+
+      if (isTeamMode && storageBackend) {
+        // Team mode: Load files from Google Drive
+        const files = await storageBackend.listFiles();
+
+        // Filter for markdown files and load their content
+        const markdownFiles = files.filter(f => f.name.endsWith('.md'));
+        const filesWithContent: MarkdownFile[] = await Promise.all(
+          markdownFiles.map(async (file) => {
+            try {
+              const content = await storageBackend.getFile(file.name);
+              return {
+                path: file.name,
+                content: content
+              };
+            } catch (error) {
+              console.error(`Failed to load file ${file.name}:`, error);
+              return {
+                path: file.name,
+                content: ''
+              };
+            }
+          })
+        );
+
+        result = {
+          files: filesWithContent,
+          folders: [] // No folder support in team mode yet
+        };
+      } else {
+        // Local mode: Fetch from Rust backend
+        result = await invoke<MarkdownFilesResult>('get_markdown_files', {
+          rootPath
+        });
+      }
 
       if (result.files.length === 0 && result.folders.length === 0) {
         setGraphData({ nodes: [], links: [] });
@@ -110,7 +148,7 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) 
     return (
       <div className="graph-view">
         <div className="graph-error">
-          <div className="error-icon">⚠️</div>
+          <AlertCircle size={64} strokeWidth={1.5} style={{ color: '#ef4444', marginBottom: '16px' }} />
           <h3>Error Loading Graph</h3>
           <p>{error}</p>
           <button onClick={loadGraphData} className="retry-button">
@@ -125,15 +163,34 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) 
     return (
       <div className="graph-view">
         <div className="graph-empty">
-          <div className="graph-empty-icon">
-            <img src="/logo.svg" alt="Logo" />
+          <div className="graph-empty-icons">
+            <FilePlus size={48} strokeWidth={1.5} style={{ color: '#c44fc4', marginRight: '12px' }} />
+            <FolderPlus size={48} strokeWidth={1.5} style={{ color: '#64c8ca' }} />
           </div>
-          <h2 className="graph-empty-title">No Notes Yet</h2>
+          <h2 className="graph-empty-title">Your Knowledge Graph Awaits</h2>
           <p className="graph-empty-description">
-            Create some markdown notes with [[wiki-links]] to see your knowledge graph.
-            <br /><br />
-            <strong>Example:</strong> In a note, type <code>[[Another Note]]</code> to create a link.
+            Start building your knowledge base by creating notes and folders.
+            <br />
+            Your graph will visualize connections as you add [[wiki-links]] between notes.
           </p>
+          <div className="graph-empty-actions">
+            <button
+              className="graph-empty-button graph-empty-button-note"
+              onClick={onCreateNote}
+              disabled={!onCreateNote}
+            >
+              <FilePlus size={20} strokeWidth={2} style={{ marginRight: '8px', flexShrink: 0 }} />
+              <span>Create a new note</span>
+            </button>
+            <button
+              className="graph-empty-button graph-empty-button-folder"
+              onClick={onCreateFolder}
+              disabled={!onCreateFolder}
+            >
+              <FolderPlus size={20} strokeWidth={2} style={{ marginRight: '8px', flexShrink: 0 }} />
+              <span>Create a new folder</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -161,10 +218,14 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu }: GraphViewProps) 
             </span>
           </>
         )}
-        <span className="stat-divider">•</span>
-        <span className="stat">
-          <strong>{graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length - 1}</strong> folders
-        </span>
+        {!isTeamMode && (
+          <>
+            <span className="stat-divider">•</span>
+            <span className="stat">
+              <strong>{graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length - 1}</strong> folders
+            </span>
+          </>
+        )}
         <span className="stat-divider">•</span>
         <span className="stat">
           <strong>{graphData.links.filter(l => l.type === 'conceptual').length}</strong> wiki-links

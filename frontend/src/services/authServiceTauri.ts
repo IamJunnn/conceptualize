@@ -6,7 +6,7 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from "firebase/auth";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, Timestamp, collection, query, where, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -192,6 +192,9 @@ export const signInWithGoogle = async (): Promise<User> => {
       await setDoc(doc(db, "users", firebaseUser.uid), newUserData);
       console.log('✅ New user account created successfully!');
 
+      // Check for pending team invitations
+      await checkAndAcceptPendingInvitations(firebaseUser.email || "", firebaseUser.displayName || "");
+
       userData = newUserData;
     } else {
       // Existing user - get their data and update last login
@@ -294,6 +297,62 @@ export const isAdmin = (user: User | null): boolean => {
 export const isLeaderOrAdmin = (user: User | null): boolean => {
   return user?.role === "leader" || user?.role === "admin";
 };
+
+/**
+ * Check for pending team invitations and auto-accept them
+ */
+async function checkAndAcceptPendingInvitations(email: string, displayName: string): Promise<void> {
+  try {
+    console.log(`🔍 Checking for pending invitations for ${email}...`);
+
+    // Query for pending invitations with this email
+    const invitesQuery = query(
+      collection(db, 'team_invites'),
+      where('memberEmail', '==', email),
+      where('status', '==', 'pending')
+    );
+
+    const invitesSnapshot = await getDocs(invitesQuery);
+
+    if (invitesSnapshot.empty) {
+      console.log('📭 No pending invitations found');
+      return;
+    }
+
+    console.log(`📬 Found ${invitesSnapshot.size} pending invitation(s)`);
+
+    // Auto-accept all pending invitations
+    for (const inviteDoc of invitesSnapshot.docs) {
+      const invite = inviteDoc.data();
+      console.log(`✅ Auto-accepting invitation to team: ${invite.teamName}`);
+
+      try {
+        // Add member to team
+        await updateDoc(doc(db, 'teams', invite.teamId), {
+          [`members.${email}`]: {
+            email: email,
+            role: 'member',
+            joinedAt: Timestamp.now(),
+            displayName: displayName,
+          },
+          memberEmails: arrayUnion(email),
+        });
+
+        // Update invitation status
+        await updateDoc(inviteDoc.ref, {
+          status: 'accepted',
+          acceptedAt: Timestamp.now(),
+        });
+
+        console.log(`✅ Successfully joined team: ${invite.teamName}`);
+      } catch (error) {
+        console.error(`❌ Failed to accept invitation to ${invite.teamName}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error checking pending invitations:', error);
+  }
+}
 
 // Dummy function for compatibility - not needed with localhost callback approach
 export const checkRedirectResult = async (): Promise<User | null> => {
