@@ -1,4 +1,4 @@
-import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon, ClipboardDocumentListIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon, ClipboardDocumentListIcon, CalendarIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { isImportantNote } from '../../utils/importantNotes';
 import React from 'react';
@@ -21,6 +21,7 @@ interface UnifiedSidebarProps {
   onChangeFolderPath?: () => void;
   filesWithIncomingLinks?: Set<string>;
   teamName?: string;  // Optional team name to display at the top
+  onTeamManagement?: () => void;  // Optional callback to open team management
 }
 
 // Ensure TreeNodeProps is defined
@@ -341,7 +342,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 };
 
 const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName } = props;
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName, onTeamManagement } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
   const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
@@ -585,6 +586,15 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           </h2>
         )}
         <div className="sidebar-actions">
+          {teamName && onTeamManagement && (
+            <button
+              onClick={onTeamManagement}
+              className="action-button"
+              title="Team Management"
+            >
+              <UserGroupIcon className="action-icon" />
+            </button>
+          )}
           {onChangeFolderPath && !isGoogleDriveFolderId && (
             <button
               onClick={onChangeFolderPath}
