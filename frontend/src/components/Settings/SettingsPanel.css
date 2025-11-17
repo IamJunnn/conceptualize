@@ -306,3 +306,33 @@
 .settings-content::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Team Selector */
+.team-selector {
+  padding: 8px 12px;
+  background: #444;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  min-width: 150px;
+  transition: all 0.2s ease;
+}
+
+.team-selector:hover {
+  background: #505050;
+  border-color: #666;
+}
+
+.team-selector:focus {
+  outline: none;
+  border-color: #64c8ca;
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.2);
+}
+
+.team-selector option {
+  background: #333;
+  color: #e0e0e0;
+}
