@@ -2038,7 +2038,7 @@ pub fn run() {
             // OAuth commands
             oauth::start_oauth_callback_server, oauth::open_oauth_url,
             // Email commands
-            email::send_invitation_email,
+            email::send_invitation_email, email::send_team_invitation_email,
             // AI Smart Suggestions commands - Hidden for now
             // auto_index_notes, get_index_status, find_cross_folder_suggestions, analyze_idea
         ])
