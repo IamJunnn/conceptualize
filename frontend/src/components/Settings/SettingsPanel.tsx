@@ -6,16 +6,29 @@ import { isAdmin, isLeaderOrAdmin } from '../../services/authServiceTauri';
 import { Folder, Users, X, Crown, Star, User, Shield } from 'lucide-react';
 import './SettingsPanel.css';
 
+interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  [key: string]: any;
+}
+
 interface SettingsPanelProps {
   onClose: () => void;
   onOpenUserManagement?: () => void;
-  onModeSwitch: () => void;
+  onModeSwitch?: () => void;
+  currentTeam?: Team;
+  availableTeams?: Team[];
+  onSwitchTeam?: (team: Team) => void;
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   onOpenUserManagement,
-  onModeSwitch
+  onModeSwitch,
+  currentTeam,
+  availableTeams,
+  onSwitchTeam
 }) => {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'account'>('general');
@@ -131,16 +144,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </span>
               </div>
 
-              {/* Folder Location */}
-              <div className="setting-item">
-                <div className="setting-label">
-                  <span className="setting-title">Notes Folder</span>
-                  <span className="setting-description">{currentFolder || 'Not set'}</span>
+              {/* Folder Location - Only show in local mode */}
+              {!currentTeam && (
+                <div className="setting-item">
+                  <div className="setting-label">
+                    <span className="setting-title">Notes Folder</span>
+                    <span className="setting-description">{currentFolder || 'Not set'}</span>
+                  </div>
+                  <button className="secondary-button" onClick={handleChangeFolder}>
+                    Change Folder
+                  </button>
                 </div>
-                <button className="secondary-button" onClick={handleChangeFolder}>
-                  Change Folder
-                </button>
-              </div>
+              )}
+
+              {/* Current Team - Only show in team mode */}
+              {currentTeam && (
+                <div className="setting-item">
+                  <div className="setting-label">
+                    <span className="setting-title">Current Team</span>
+                    <span className="setting-description">{currentTeam.name}</span>
+                  </div>
+                  {availableTeams && availableTeams.length > 1 && (
+                    <select
+                      className="team-selector"
+                      value={currentTeam.id}
+                      onChange={(e) => {
+                        const selectedTeam = availableTeams.find(t => t.id === e.target.value);
+                        if (selectedTeam && onSwitchTeam) {
+                          onSwitchTeam(selectedTeam);
+                        }
+                      }}
+                    >
+                      {availableTeams.map(team => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
 
               {/* Switch Mode */}
               <div className="setting-item">
