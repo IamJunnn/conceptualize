@@ -1,0 +1,45 @@
+/* Join Team Modal */
+.join-team-modal {
+  min-width: 500px;
+}
+
+.join-team-info {
+  margin: 16px 0;
+  color: #b0b0b0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.invite-code-input {
+  width: 100%;
+  background: #2d2d2d;
+  border: 2px solid #64c8ca;
+  border-radius: 8px;
+  padding: 16px 20px;
+  color: #e0e0e0;
+  font-size: 24px;
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+  letter-spacing: 4px;
+  text-align: center;
+  text-transform: uppercase;
+  transition: all 0.2s;
+}
+
+.invite-code-input:focus {
+  outline: none;
+  border-color: #52b6b8;
+  box-shadow: 0 0 0 3px rgba(100, 200, 202, 0.1);
+}
+
+.invite-code-input::placeholder {
+  color: #666;
+  letter-spacing: 2px;
+}
+
+.input-hint {
+  margin-top: 8px;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+}

@@ -12,12 +12,20 @@ pub struct InvitationEmail {
     pub token: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TeamInvitationEmail {
+    pub email: String,
+    pub team_name: String,
+    pub invite_code: String,
+    pub role: String,
+}
+
 /// Send invitation email via Gmail SMTP
 #[tauri::command]
 pub async fn send_invitation_email(invitation: InvitationEmail) -> Result<String, String> {
     // Gmail SMTP credentials
     let smtp_username = "junson@launchwith.co";
-    let smtp_password = "hfrnrljblllywsvc";
+    let smtp_password = "YOUR_NEW_APP_PASSWORD_HERE";  // TODO: Replace with new Gmail app password
 
     // Generate invite link - using HTTPS URL that can redirect to the app
     // You should replace this with your actual domain
@@ -173,5 +181,120 @@ fn build_email_html(invitation: &InvitationEmail, invite_link: &str) -> String {
         invite_link,
         invite_link,
         invitation.invited_by_name
+    )
+}
+
+/// Send team invitation email via Gmail SMTP
+#[tauri::command]
+pub async fn send_team_invitation_email(invitation: TeamInvitationEmail) -> Result<String, String> {
+    // Gmail SMTP credentials
+    let smtp_username = "junson@launchwith.co";
+    let smtp_password = "YOUR_NEW_APP_PASSWORD_HERE";  // TODO: Replace with new Gmail app password
+
+    // Build email message
+    let email = Message::builder()
+        .from(
+            "Conceptualize Team <junson@launchwith.co>"
+                .parse::<Mailbox>()
+                .map_err(|e| format!("Failed to parse from address: {}", e))?,
+        )
+        .to(invitation
+            .email
+            .parse::<Mailbox>()
+            .map_err(|e| format!("Failed to parse to address: {}", e))?)
+        .subject(format!(
+            "You're invited to join {} on Conceptualize",
+            invitation.team_name
+        ))
+        .header(ContentType::TEXT_HTML)
+        .body(build_team_email_html(&invitation))
+        .map_err(|e| format!("Failed to build email: {}", e))?;
+
+    // Create SMTP transport
+    let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
+
+    let mailer = SmtpTransport::starttls_relay("smtp.gmail.com")
+        .map_err(|e| format!("Failed to create SMTP transport: {}", e))?
+        .credentials(creds)
+        .port(587)
+        .build();
+
+    // Send the email
+    mailer
+        .send(&email)
+        .map_err(|e| format!("Failed to send email: {}", e))?;
+
+    Ok(format!("Team invitation email sent to {}", invitation.email))
+}
+
+fn build_team_email_html(invitation: &TeamInvitationEmail) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5;">
+                <tr>
+                    <td align="center" style="padding: 40px 10px;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <!-- Header -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, #c44fc4 0%, #8b5fbf 50%, #64c8ca 100%); padding: 40px 20px; text-align: center;">
+                                    <h1 style="color: white; margin: 0; font-size: 32px;">Conceptualize</h1>
+                                    <p style="color: white; opacity: 0.9; margin: 8px 0 0 0;">Team Collaboration</p>
+                                </td>
+                            </tr>
+
+                            <!-- Body -->
+                            <tr>
+                                <td style="padding: 40px 30px;">
+                                    <h2 style="color: #1a202c; margin-top: 0; font-size: 24px;">You're invited to join {}</h2>
+
+                                    <p style="color: #4a5568; line-height: 1.6; font-size: 16px; margin-top: 20px;">
+                                        Follow these simple steps to get started:
+                                    </p>
+
+                                    <ol style="color: #2d3748; line-height: 2; font-size: 15px; margin: 24px 0; padding-left: 20px;">
+                                        <li>Go to <a href="https://conceptualize-note.vercel.app" style="color: #c44fc4; text-decoration: none; font-weight: 600;">https://conceptualize-note.vercel.app</a></li>
+                                        <li>Download Conceptualize for your platform</li>
+                                        <li>Install the application</li>
+                                        <li>Run Conceptualize</li>
+                                        <li>Click <strong>"Start as a Team"</strong> button</li>
+                                        <li>Click <strong>"Join Existing Team"</strong></li>
+                                        <li>Enter your invite code: <strong style="color: #c44fc4; font-size: 18px;">{}</strong></li>
+                                    </ol>
+
+                                    <!-- Invite Code Highlight -->
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 32px 0;">
+                                        <tr>
+                                            <td style="background: linear-gradient(135deg, rgba(196, 79, 196, 0.1) 0%, rgba(100, 200, 202, 0.1) 100%); padding: 24px; border-radius: 8px; border: 2px dashed #c44fc4; text-align: center;">
+                                                <p style="color: #718096; margin: 0 0 8px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Your Invite Code</p>
+                                                <p style="color: #c44fc4; margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 2px; font-family: 'Courier New', monospace;">{}</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <p style="color: #718096; font-size: 14px; line-height: 1.6; margin-top: 32px;">
+                                        If you have any questions, feel free to reach out to your team admin.
+                                    </p>
+
+                                    <p style="color: #a0aec0; font-size: 12px; margin-top: 32px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 24px;">
+                                        <strong>Conceptualize Team</strong><br>
+                                        If you didn't expect this invitation, you can safely ignore this email.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>"#,
+        invitation.team_name,
+        invitation.invite_code,
+        invitation.invite_code
     )
 }
