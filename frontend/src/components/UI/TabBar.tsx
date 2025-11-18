@@ -8,6 +8,7 @@ import './TabBar.css';
 export interface OpenFile {
   path: string;
   name: string;
+  id?: string; // Google Drive file ID (for team mode)
 }
 
 interface TabBarProps {
@@ -49,7 +50,7 @@ export function TabBar({
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
   const [importantNotes, setImportantNotes] = useState<Set<string>>(new Set());
 
-  const handleTabMouseDown = (e: React.MouseEvent, filePath: string, fileName: string) => {
+  const handleTabMouseDown = (e: React.MouseEvent, filePath: string, fileName: string, fileId?: string) => {
     // Don't start drag if clicking the close button
     const target = e.target as HTMLElement;
     if (target.closest('.tab-close')) {
@@ -58,12 +59,16 @@ export function TabBar({
 
     console.log('🖱️ Mouse down on tab:', fileName);
 
-    // Store drag start position and file info
+    // Store drag start position and file info (but don't set draggedTab yet)
     setDragStartPos({ x: e.clientX, y: e.clientY });
-    setDraggedTab({
+
+    // Store the file info temporarily for potential drag
+    // We'll only set draggedTab if the mouse moves past the threshold
+    (e.currentTarget as any).dataset.pendingDrag = JSON.stringify({
       filePath,
       fileName,
       sourcePane: pane,
+      id: fileId,
     });
   };
 
@@ -105,16 +110,32 @@ export function TabBar({
     return () => window.removeEventListener('importantNotesChanged', updateImportantNotes);
   }, [openFiles]);
 
-  // Track cursor position for drag preview
+  // Track cursor position for drag preview and handle mouseup to clear drag state
   React.useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (dragStartPos && draggedTab) {
+      if (dragStartPos) {
         const dx = Math.abs(e.clientX - dragStartPos.x);
         const dy = Math.abs(e.clientY - dragStartPos.y);
+        const DRAG_THRESHOLD = 5;
 
-        // Update cursor position if dragging or moved past threshold
-        if (dx > 5 || dy > 5) {
-          setCursorPos({ x: e.clientX, y: e.clientY });
+        // Only start actual drag if moved past threshold
+        if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+          // Check if we have pending drag data
+          const tabs = document.querySelectorAll('.file-tab');
+          for (const tab of tabs) {
+            const pendingDragData = (tab as any).dataset.pendingDrag;
+            if (pendingDragData) {
+              const dragData = JSON.parse(pendingDragData);
+              setDraggedTab(dragData);
+              (tab as any).dataset.pendingDrag = '';
+              break;
+            }
+          }
+
+          // Update cursor position for drag preview
+          if (draggedTab) {
+            setCursorPos({ x: e.clientX, y: e.clientY });
+          }
         }
       } else {
         // Clear cursor position when drag ends
@@ -122,10 +143,27 @@ export function TabBar({
       }
     };
 
+    const handleMouseUp = () => {
+      // Don't clear drag state here - let the parent (MainUI/TeamMainUI) handle it
+      // Just clear the cursor position for the drag preview
+      if (dragStartPos) {
+        console.log('🖱️ [TabBar] Mouse up - clearing cursor position only');
+        setCursorPos(null);
+
+        // Clear any pending drag data
+        const tabs = document.querySelectorAll('.file-tab');
+        for (const tab of tabs) {
+          (tab as any).dataset.pendingDrag = '';
+        }
+      }
+    };
+
     if (dragStartPos) {
       document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
       };
     }
   }, [dragStartPos, draggedTab]);
@@ -162,7 +200,7 @@ export function TabBar({
           <div
             key={file.path}
             className={`tab file-tab ${activeTab === file.path ? 'active' : ''} ${isPaneActive ? 'pane-active' : 'pane-inactive'} ${isDragging ? 'dragging' : ''}`}
-            onMouseDown={(e) => handleTabMouseDown(e, file.path, file.name)}
+            onMouseDown={(e) => handleTabMouseDown(e, file.path, file.name, file.id)}
             onContextMenu={(e) => handleTabContextMenu(e, file.path)}
             onClick={() => {
               // Don't trigger click if we were dragging

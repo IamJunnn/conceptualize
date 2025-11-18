@@ -16,12 +16,13 @@ interface UnifiedSidebarProps {
   onStartEditing: (path: string, type: 'rename' | 'new-note' | 'new-folder') => void;
   onFinishEditing: (newName?: string) => void;
   refreshFileTree: () => Promise<void>;
-  onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string) => void;
+  onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string, itemId?: string) => void;
   onMoveItem?: (sourcePath: string, destinationPath: string) => Promise<void>;
   onChangeFolderPath?: () => void;
   filesWithIncomingLinks?: Set<string>;
   teamName?: string;  // Optional team name to display at the top
   onTeamManagement?: () => void;  // Optional callback to open team management
+  userRole?: 'owner' | 'admin' | 'leader' | 'member';  // User's role in the team
 }
 
 // Ensure TreeNodeProps is defined
@@ -31,7 +32,7 @@ interface TreeNodeProps {
   level: number;
   editing: EditingState | null;
   onFinishEditing: (newName?: string) => void;
-  onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string) => void;
+  onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string, itemId?: string) => void;
   onMoveItem?: (sourcePath: string, destinationPath: string) => Promise<void>;
   dragState: {
     isDragging: boolean;
@@ -57,15 +58,41 @@ interface FileTreeNode {
   name: string;
   type: 'file' | 'folder';
   children?: FileTreeNode[];
+  id?: string; // Google Drive file ID (for team mode)
 }
 
 interface EditingState {
   path: string;
   type: 'rename' | 'new-note' | 'new-folder';
+  id?: string; // Google Drive file ID (for team mode)
 }
 
 // Corrected the import path for EditInput
 import EditInput from './EditInput';
+
+/**
+ * Sort file tree nodes with hierarchy: folders > notes > other files
+ * Within each category, sort alphabetically (case-insensitive)
+ */
+const sortFileTreeNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
+  return [...nodes].sort((a, b) => {
+    // First priority: folders come first
+    if (a.type === 'folder' && b.type !== 'folder') return -1;
+    if (a.type !== 'folder' && b.type === 'folder') return 1;
+
+    // Second priority: among files, markdown notes come before other files
+    if (a.type === 'file' && b.type === 'file') {
+      const aIsMarkdown = a.name.toLowerCase().endsWith('.md');
+      const bIsMarkdown = b.name.toLowerCase().endsWith('.md');
+
+      if (aIsMarkdown && !bIsMarkdown) return -1;
+      if (!aIsMarkdown && bIsMarkdown) return 1;
+    }
+
+    // Third priority: alphabetical (case-insensitive)
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+};
 
 const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, highlightedPath, filesWithIncomingLinks }) => {
   // Load saved folder state from localStorage, default to true (open) for first time
@@ -130,7 +157,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    onContextMenu(e, node.path, node.type, node.name);
+    onContextMenu(e, node.path, node.type, node.name, node.id);
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -298,9 +325,9 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
             }
           }}
         >
-          {node.children?.map((child: FileTreeNode) => (
+          {sortFileTreeNodes(node.children || []).map((child: FileTreeNode) => (
             <TreeNode
-              key={child.path}
+              key={child.id || child.path}
               node={child}
               onSelectFile={onSelectFile}
               level={level + 1}
@@ -342,7 +369,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 };
 
 const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName, onTeamManagement } = props;
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName, onTeamManagement, userRole } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
   const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
@@ -365,8 +392,6 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
   // State for drag preview cursor position
   const [cursorPos, setCursorPos] = React.useState<{ x: number; y: number } | null>(null);
-
-  if (isDev) console.log('🔄 UnifiedSidebar render - onMoveItem is:', onMoveItem ? 'defined ✅' : 'undefined ❌');
 
   const rootPath = getRootPath();
   const folderName = rootPath.split(/\\/g).pop(); // Extract folder name from path
@@ -525,7 +550,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     onStartEditing(rootPath, type);
   };
 
-  const isCreatingAtRoot = editing && (editing.type === 'new-note' || editing.type === 'new-folder') && editing.path === rootPath;
+  const isCreatingAtRoot = editing && (editing.type === 'new-note' || editing.type === 'new-folder') && (editing.path === rootPath || editing.path === '');
 
   // Root-level drag and drop handlers
   const handleRootDragOver = (e: React.DragEvent) => {
@@ -586,7 +611,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           </h2>
         )}
         <div className="sidebar-actions">
-          {teamName && onTeamManagement && (
+          {teamName && onTeamManagement && (userRole === 'owner' || userRole === 'admin') && (
             <button
               onClick={onTeamManagement}
               className="action-button"
@@ -647,9 +672,9 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
             />
           </div>
         )}
-        {fileTree.map((node: FileTreeNode) => (
+        {sortFileTreeNodes(fileTree).map((node: FileTreeNode) => (
           <TreeNode
-            key={`${node.path}-${treeKey}`}
+            key={node.id ? `${node.id}-${treeKey}` : `${node.path}-${treeKey}`}
             node={node}
             onSelectFile={onSelectFile}
             level={0}

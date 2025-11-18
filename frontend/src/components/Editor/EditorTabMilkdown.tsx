@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import MilkdownEditor from './MilkdownEditor'
+import MilkdownEditor, { clearFileListCache } from './MilkdownEditor'
 import { TeamDriveStorage } from '../../services/teamDriveStorage'
 import './EditorTab.css'
 
@@ -8,6 +8,7 @@ interface EditorTabProps {
   filePath: string
   fileName: string
   rootPath?: string
+  fileId?: string // Google Drive file ID (for team mode)
   onFileRenamed?: (oldPath: string, newPath: string, newName: string) => void
   onOpenFile?: (filePath: string, fileName: string) => void
   onFileCreated?: () => void
@@ -22,7 +23,7 @@ interface SaveResult {
   error?: string
 }
 
-function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive, storageBackend }: EditorTabProps) {
+function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive, storageBackend }: EditorTabProps) {
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -31,6 +32,14 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
   const [renameError, setRenameError] = useState<string | null>(null)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isTeamMode = !!storageBackend
+  const [parentFolderId, setParentFolderId] = useState<string | undefined>(undefined)
+  const [currentFileName, setCurrentFileName] = useState<string>(fileName)
+
+  // Sync currentFileName when fileName prop changes
+  useEffect(() => {
+    console.log('[EditorTab] fileName prop changed:', { oldFileName: currentFileName, newFileName: fileName, filePath, fileId })
+    setCurrentFileName(fileName)
+  }, [fileName])
 
   // Handle wiki-link clicks
   const handleWikiLinkClick = useCallback(async (noteName: string) => {
@@ -56,6 +65,121 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
         searchFileName = `${searchFileName}.md`
       }
 
+      // ========================================
+      // TEAM MODE (Google Drive)
+      // ========================================
+      if (isTeamMode && storageBackend) {
+
+        // Search for the file in Google Drive
+        try {
+          const allFiles = await storageBackend.listFiles()
+          const targetFile = allFiles.find((f: any) => f.name === searchFileName)
+
+          if (targetFile) {
+            // File exists, open it
+            if (onOpenFile) {
+              onOpenFile(targetFile.name, targetFile.name)
+            }
+            return
+          }
+        } catch (error) {
+          console.error('Error searching Drive files:', error)
+        }
+
+        // File doesn't exist, create it
+        if (hasExtension && !searchFileName.endsWith('.md')) {
+          console.error(`File not found: ${searchFileName}`)
+          return
+        }
+
+        // Determine parent folder ID for the new file
+        let parentFolderId: string | undefined = undefined
+
+        if (!hasFolder) {
+          // Create in the same folder as the current file
+          // Find the current file's parent folder by searching the Drive
+          try {
+            const allFiles = await storageBackend.listFiles()
+
+            // Normalize fileName for comparison (ensure .md extension)
+            const normalizedFileName = fileName.endsWith('.md') ? fileName : `${fileName}.md`
+
+            // Find current file with multiple fallback strategies
+            let currentFile = fileId
+              ? allFiles.find((f: any) => f.id === fileId)
+              : undefined
+
+            // Fallback 1: Try exact name match
+            if (!currentFile) {
+              currentFile = allFiles.find((f: any) => f.name === fileName || f.name === normalizedFileName)
+            }
+
+            // Fallback 2: Try without extension
+            if (!currentFile) {
+              const nameWithoutExt = fileName.replace(/\.md$/, '')
+              currentFile = allFiles.find((f: any) =>
+                f.name === nameWithoutExt ||
+                f.name === `${nameWithoutExt}.md`
+              )
+            }
+
+            if (currentFile && currentFile.fullPath) {
+              // Extract parent folder ID from the full path
+              const currentFullPath = currentFile.fullPath
+              const pathParts = currentFullPath.split('\\')
+
+              if (pathParts.length > 1) {
+                // File is in a subfolder - find the folder ID
+                const parentFolderName = pathParts[pathParts.length - 2]
+                const fileTree = await storageBackend.getFileTree()
+
+                const findFolderId = (nodes: any[], folderName: string): string | undefined => {
+                  for (const node of nodes) {
+                    if (node.type === 'folder' && node.name === folderName) {
+                      return node.id
+                    }
+                    if (node.children) {
+                      const found = findFolderId(node.children, folderName)
+                      if (found) return found
+                    }
+                  }
+                  return undefined
+                }
+
+                parentFolderId = findFolderId(fileTree, parentFolderName)
+              }
+            }
+          } catch (error) {
+            console.error('❌ [Wiki-Link] Error finding parent folder:', error)
+          }
+        }
+
+        // Create the file in Google Drive
+        try {
+          await storageBackend.saveFile(searchFileName, '', parentFolderId, true)
+
+          // Clear file list cache so autocomplete picks up new file immediately
+          clearFileListCache(rootPath)
+
+          // Refresh file tree
+          if (onFileCreated) {
+            onFileCreated()
+          }
+
+          // Open the newly created file
+          if (onOpenFile) {
+            onOpenFile(searchFileName, searchFileName)
+          }
+        } catch (error) {
+          console.error('Failed to create file:', error)
+        }
+
+        return
+      }
+
+      // ========================================
+      // LOCAL MODE (Filesystem)
+      // ========================================
       // If a folder is specified, check directly for the file in that specific folder
       if (expectedFolder) {
         // Build the exact path where the file should be
@@ -106,32 +230,24 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
         // Normalize the path separators
         const normalizedRoot = rootPath.replace(/\//g, '\\')
         createPath = `${normalizedRoot}\\${expectedFolder.replace(/\//g, '\\')}`
-
-        // Ensure the folder structure exists
-        const folderParts = expectedFolder.split('/')
-        let currentPath = normalizedRoot
-
-        for (const folderName of folderParts) {
-          currentPath = `${currentPath}\\${folderName}`
-
-          // Check if folder exists, if not create it
-          try {
-            // Try to create the folder - it will fail silently if it already exists
-            await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('create_folder', {
-              parentPath: currentPath.substring(0, currentPath.lastIndexOf('\\')),
-              folderName: folderName
-            })
-          } catch (e) {
-            // Folder might already exist, which is fine
-            console.log(`Folder ${folderName} might already exist or creation failed:`, e)
-          }
-        }
+        // The backend will automatically create any missing parent directories
       } else {
         // Otherwise create it in the same folder as the current file
-        createPath = filePath.substring(0, filePath.lastIndexOf('\\'))
-      }
+        // Check if filePath contains the full path (has path separators)
+        const hasPathSeparator = filePath.includes('\\') || filePath.includes('/')
 
-      console.log('Creating file:', searchFileName, 'in folder:', createPath)
+        if (hasPathSeparator) {
+          // Extract the directory from the full file path
+          const lastSeparator = Math.max(filePath.lastIndexOf('\\'), filePath.lastIndexOf('/'))
+          createPath = filePath.substring(0, lastSeparator)
+        } else if (rootPath) {
+          // If filePath is just a filename, use the rootPath
+          createPath = rootPath
+        } else {
+          console.error('Cannot determine parent folder - no path separators in filePath and no rootPath')
+          throw new Error('Cannot determine parent folder for file creation')
+        }
+      }
 
       const createResult = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('create_file', {
         parentPath: createPath,
@@ -154,7 +270,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
     } catch (error) {
       console.error('Error handling wiki-link:', error)
     }
-  }, [rootPath, filePath, onOpenFile, onFileCreated])
+  }, [rootPath, filePath, fileName, onOpenFile, onFileCreated, isTeamMode, storageBackend])
 
   // Load file content on mount
   useEffect(() => {
@@ -166,6 +282,46 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
         if (isTeamMode && storageBackend) {
           // Team mode: load from Google Drive
           fileContent = await storageBackend.getFile(fileName)
+
+          // Determine the parent folder ID for this file
+          if (fileId) {
+            try {
+              const allFiles = await storageBackend.listFiles()
+              const currentFile = allFiles.find((f: any) => f.id === fileId)
+
+              if (currentFile) {
+                const currentFullPath = currentFile.fullPath || fileName
+                const pathParts = currentFullPath.split('\\')
+
+                if (pathParts.length > 1) {
+                  // File is in a subfolder - find the folder ID
+                  const parentFolderName = pathParts[pathParts.length - 2]
+                  const fileTree = await storageBackend.getFileTree()
+
+                  const findFolderId = (nodes: any[], folderName: string): string | undefined => {
+                    for (const node of nodes) {
+                      if (node.type === 'folder' && node.name === parentFolderName) {
+                        return node.id
+                      }
+                      if (node.children) {
+                        const found = findFolderId(node.children, folderName)
+                        if (found) return found
+                      }
+                    }
+                    return undefined
+                  }
+
+                  const folderIdFound = findFolderId(fileTree, parentFolderName)
+                  setParentFolderId(folderIdFound)
+                } else {
+                  // File is at root level
+                  setParentFolderId(undefined)
+                }
+              }
+            } catch (error) {
+              console.error('Failed to determine parent folder:', error)
+            }
+          }
         } else {
           // Local mode: load from filesystem
           fileContent = await invoke<string>('read_file', { filePath })
@@ -182,7 +338,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
     }
 
     loadFile()
-  }, [filePath, fileName, isTeamMode, storageBackend])
+  }, [filePath, fileName, isTeamMode, storageBackend, fileId])
 
   // Auto-save with debounce
   const saveFile = useCallback(async (newContent: string) => {
@@ -191,8 +347,12 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
       setSaveError(null)
 
       if (isTeamMode && storageBackend) {
-        // Team mode: save to Google Drive
-        await storageBackend.saveFile(fileName, newContent)
+        console.log('[EditorTab] Auto-save triggered:', { currentFileName, parentFolderId, contentLength: newContent.length })
+
+        // Team mode: save to Google Drive with the correct parent folder ID
+        await storageBackend.saveFile(currentFileName, newContent, parentFolderId)
+
+        console.log('[EditorTab] Auto-save completed successfully')
       } else {
         // Local mode: save to filesystem
         const result = await invoke<SaveResult>('write_file', {
@@ -210,7 +370,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
     } finally {
       setIsSaving(false)
     }
-  }, [filePath, fileName, isTeamMode, storageBackend])
+  }, [filePath, currentFileName, isTeamMode, storageBackend, parentFolderId])
 
   const handleChange = useCallback((value: string) => {
     setContent(value)
@@ -237,6 +397,8 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
 
   // Handle title rename
   const handleTitleRename = async (newName: string) => {
+    console.log('[EditorTab] handleTitleRename called:', { newName, currentFileName, fileName, filePath, fileId })
+
     if (!newName || newName.trim() === '') {
       setIsEditingTitle(false)
       return
@@ -246,8 +408,11 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
     const nameWithoutExt = newName.replace(/\.md$/, '')
     const finalName = `${nameWithoutExt}.md`
 
+    console.log('[EditorTab] Rename details:', { nameWithoutExt, finalName, currentFileName, willRename: finalName !== currentFileName })
+
     // Don't rename if name hasn't changed
-    if (finalName === fileName) {
+    if (finalName === currentFileName) {
+      console.log('[EditorTab] Name unchanged, skipping rename')
       setIsEditingTitle(false)
       return
     }
@@ -256,8 +421,17 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
       setRenameError(null)
 
       if (isTeamMode && storageBackend) {
+        console.log('[EditorTab] Starting team mode rename:', { oldName: currentFileName, newName: finalName, fileId })
+
         // Team mode: rename in Google Drive
-        await storageBackend.renameFile(fileName, finalName)
+        await storageBackend.renameFile(currentFileName, finalName, fileId)
+
+        console.log('[EditorTab] Rename successful, updating state')
+
+        // Update current filename immediately
+        setCurrentFileName(finalName)
+
+        console.log('[EditorTab] Calling onFileRenamed callback:', { oldPath: filePath, newPath: finalName, newName: finalName })
 
         // Notify parent component to update
         if (onFileRenamed) {
@@ -288,7 +462,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
     }
   }
 
-  const displayName = fileName.replace(/\.md$/, '')
+  const displayName = currentFileName.replace(/\.md$/, '')
 
   if (isLoading) {
     return (
@@ -357,6 +531,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, onFileRenamed, onOpen
           editorId={editorId}
           onPaneActivate={onPaneActivate}
           isActive={isActive}
+          storageBackend={storageBackend}
         />
       </div>
     </div>

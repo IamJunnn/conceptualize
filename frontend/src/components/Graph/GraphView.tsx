@@ -62,21 +62,29 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
         // Team mode: Load files from Google Drive
         const files = await storageBackend.listFiles();
 
+        // Separate folders from files (use fullPath for hierarchical structure)
+        // Include Drive IDs for folders
+        const folders = files
+          .filter(f => f.contentType === 'application/vnd.google-apps.folder')
+          .map(f => ({ path: f.fullPath, driveId: f.id }));
+
         // Filter for markdown files and load their content
         const markdownFiles = files.filter(f => f.name.endsWith('.md'));
-        const filesWithContent: MarkdownFile[] = await Promise.all(
+        const filesWithContent: Array<{ path: string; content: string; driveId: string }> = await Promise.all(
           markdownFiles.map(async (file) => {
             try {
               const content = await storageBackend.getFile(file.name);
               return {
-                path: file.name,
-                content: content
+                path: file.fullPath, // Use fullPath for hierarchical structure
+                content: content,
+                driveId: file.id // Include Google Drive file ID
               };
             } catch (error) {
               console.error(`Failed to load file ${file.name}:`, error);
               return {
-                path: file.name,
-                content: ''
+                path: file.fullPath, // Use fullPath for hierarchical structure
+                content: '',
+                driveId: file.id // Include Google Drive file ID even for failed loads
               };
             }
           })
@@ -84,7 +92,7 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
 
         result = {
           files: filesWithContent,
-          folders: [] // No folder support in team mode yet
+          folders: folders
         };
       } else {
         // Local mode: Fetch from Rust backend
@@ -160,6 +168,41 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
   }
 
   if (!graphData || graphData.nodes.length === 0) {
+    const handleDiagnostics = async () => {
+      if (isTeamMode && storageBackend) {
+        console.log('=== TEAM MODE DIAGNOSTICS ===');
+        console.log('📁 Root path (Drive folder ID):', rootPath);
+
+        try {
+          // Check folder metadata and permissions
+          const { getFolderMetadata } = await import('../../services/googleDriveService');
+          console.log('🔍 Checking folder metadata...');
+          const folderMeta = await getFolderMetadata(rootPath);
+          console.log('📂 Folder metadata:', folderMeta);
+
+          // Try to list files
+          const files = await storageBackend.listFiles();
+          console.log('📊 Files found via API:', files.length);
+          console.log('📋 File details:', files);
+
+          if (files.length === 0) {
+            console.log('⚠️ No files found in Google Drive folder');
+            console.log('');
+            console.log('🔍 Possible reasons:');
+            console.log('  1. The folder is owned by someone else and you only have view-only access');
+            console.log('  2. The folder was shared with you but the contents were not');
+            console.log('  3. The folder is genuinely empty');
+            console.log('');
+            console.log('💡 Solution: Ask the folder owner to re-share with "Editor" permissions');
+            console.log('   OR: Try creating a new note to test if you have write access');
+          }
+        } catch (error) {
+          console.error('❌ Diagnostics failed:', error);
+          console.error('📊 Error details:', error);
+        }
+      }
+    };
+
     return (
       <div className="graph-view">
         <div className="graph-empty">
@@ -168,6 +211,11 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
             <FolderPlus size={48} strokeWidth={1.5} style={{ color: '#64c8ca' }} />
           </div>
           <h2 className="graph-empty-title">Your Knowledge Graph Awaits</h2>
+          {isTeamMode && (
+            <p style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+              Team Mode - Files stored in Google Drive
+            </p>
+          )}
           <p className="graph-empty-description">
             Start building your knowledge base by creating notes and folders.
             <br />
@@ -190,6 +238,20 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
               <FolderPlus size={20} strokeWidth={2} style={{ marginRight: '8px', flexShrink: 0 }} />
               <span>Create a new folder</span>
             </button>
+            {isTeamMode && (
+              <button
+                className="graph-empty-button"
+                onClick={handleDiagnostics}
+                style={{
+                  marginTop: '12px',
+                  backgroundColor: '#444',
+                  border: '1px solid #666'
+                }}
+              >
+                <AlertCircle size={20} strokeWidth={2} style={{ marginRight: '8px', flexShrink: 0 }} />
+                <span>Run Diagnostics</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -204,6 +266,7 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeContextMenu={onNodeContextMenu}
+        isTeamMode={isTeamMode}
       />
       <div className="graph-stats">
         <span className="stat">
@@ -218,14 +281,12 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
             </span>
           </>
         )}
-        {!isTeamMode && (
-          <>
-            <span className="stat-divider">•</span>
-            <span className="stat">
-              <strong>{graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length - 1}</strong> folders
-            </span>
-          </>
-        )}
+        <span className="stat-divider">•</span>
+        <span className="stat">
+          <strong>{isTeamMode
+            ? graphData.nodes.filter(n => n.type === 'folder').length
+            : graphData.nodes.filter(n => n.type === 'folder' || n.type === 'root').length - 1}</strong> folders
+        </span>
         <span className="stat-divider">•</span>
         <span className="stat">
           <strong>{graphData.links.filter(l => l.type === 'conceptual').length}</strong> wiki-links

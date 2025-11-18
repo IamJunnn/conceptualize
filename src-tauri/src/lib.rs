@@ -219,12 +219,31 @@ fn get_file_tree(root_path: String) -> Result<Vec<FileNode>, String> {
 
 #[tauri::command]
 fn create_file(parent_path: String, file_name: String) -> CreateResult {
+    println!("📝 create_file called - parent_path: {}, file_name: {}", parent_path, file_name);
     let full_file_name = if file_name.ends_with(".md") { file_name.clone() } else { format!("{}.md", file_name) };
     let file_path = PathBuf::from(&parent_path).join(&full_file_name);
+    println!("📝 Full file path will be: {}", file_path.display());
     if file_path.exists() { return CreateResult { success: false, path: None, name: None, error: Some("File already exists".to_string()) }; }
+
+    // Ensure parent directory exists
+    let parent = PathBuf::from(&parent_path);
+    if !parent.exists() {
+        println!("📁 Parent directory doesn't exist, creating: {}", parent.display());
+        if let Err(e) = fs::create_dir_all(&parent) {
+            println!("❌ Failed to create parent directory: {}", e);
+            return CreateResult { success: false, path: None, name: None, error: Some(format!("Failed to create parent directory: {}", e)) };
+        }
+    }
+
     match fs::write(&file_path, "") {
-        Ok(_) => CreateResult { success: true, path: Some(file_path.to_string_lossy().to_string()), name: Some(full_file_name), error: None },
-        Err(e) => CreateResult { success: false, path: None, name: None, error: Some(e.to_string()) }
+        Ok(_) => {
+            println!("✅ File created successfully at: {}", file_path.display());
+            CreateResult { success: true, path: Some(file_path.to_string_lossy().to_string()), name: Some(full_file_name), error: None }
+        },
+        Err(e) => {
+            println!("❌ Failed to create file: {}", e);
+            CreateResult { success: false, path: None, name: None, error: Some(e.to_string()) }
+        }
     }
 }
 
@@ -232,7 +251,8 @@ fn create_file(parent_path: String, file_name: String) -> CreateResult {
 fn create_folder(parent_path: String, folder_name: String) -> CreateResult {
     let folder_path = PathBuf::from(&parent_path).join(&folder_name);
     if folder_path.exists() { return CreateResult { success: false, path: None, name: None, error: Some("Folder already exists".to_string()) }; }
-    match fs::create_dir(&folder_path) {
+    // Use create_dir_all to create parent directories if they don't exist
+    match fs::create_dir_all(&folder_path) {
         Ok(_) => CreateResult { success: true, path: Some(folder_path.to_string_lossy().to_string()), name: Some(folder_name), error: None },
         Err(e) => CreateResult { success: false, path: None, name: None, error: Some(e.to_string()) }
     }

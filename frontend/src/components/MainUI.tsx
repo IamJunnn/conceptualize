@@ -33,11 +33,13 @@ interface FileTreeNode {
   name: string;
   type: 'file' | 'folder';
   children?: FileTreeNode[];
+  id?: string; // Google Drive file ID (for team mode)
 }
 
 interface EditingState {
   path: string;
   type: 'rename' | 'new-note' | 'new-folder';
+  id?: string; // Google Drive file ID (for team mode)
 }
 
 interface ContextMenuState {
@@ -46,6 +48,7 @@ interface ContextMenuState {
   itemPath: string;
   itemType: 'file' | 'folder';
   itemName: string;
+  itemId?: string; // Google Drive file ID (for team mode)
 }
 
 // Helper function removed - was unused
@@ -450,7 +453,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }, [dragStartPos, draggedTab]);
 
   const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
-    if (isDev) console.log('handleSelectFile called:', { filePath, fileName, pane, splitView })
+    console.log('📂 handleSelectFile called:', { filePath, fileName, pane, splitView })
 
     if (!splitView) {
       // Single pane mode
@@ -509,6 +512,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
     try {
       if (editing.type === 'new-note') {
+        if (isDev) console.log('📝 Creating file with parentPath:', editing.path, 'fileName:', newName)
         const result = await invoke<{ success: boolean; path?: string; name?: string; error?: string }>('create_file', {
           parentPath: editing.path,
           fileName: newName
@@ -566,7 +570,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     setEditing(null)
   }
 
-  const handleContextMenu = (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string) => {
+  const handleContextMenu = (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string, itemId?: string) => {
     e.preventDefault()
     e.stopPropagation()
     setContextMenu({
@@ -574,7 +578,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       y: e.clientY,
       itemPath,
       itemType,
-      itemName
+      itemName,
+      itemId
     })
   }
 
@@ -628,10 +633,12 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleCreateNote = (parentPath: string) => {
+    if (isDev) console.log('🆕 handleCreateNote called with parentPath:', parentPath)
     setEditing({ path: parentPath, type: 'new-note' })
   }
 
   const handleCreateFolder = (parentPath: string) => {
+    if (isDev) console.log('📁 handleCreateFolder called with parentPath:', parentPath)
     setEditing({ path: parentPath, type: 'new-folder' })
   }
 
@@ -779,7 +786,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
     if (isDev) console.log('Handling tab drop:', { draggedTab, dropZone: currentDropZone });
 
-    const { filePath, fileName, sourcePane } = draggedTab;
+    const { filePath, fileName, sourcePane, id: fileId } = draggedTab;
 
     // Only handle if dropping on left or right edge
     if (!currentDropZone || (currentDropZone !== 'left' && currentDropZone !== 'right')) {
@@ -940,7 +947,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               onPaneActivate={() => setActivePane('left')}
             />
             <div className="tab-content" onClick={() => setActivePane('left')}>
-              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleStartEditing(rootPath, 'new-note')} onCreateFolder={() => handleStartEditing(rootPath, 'new-folder')} />}
+              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleCreateNote(rootPath)} onCreateFolder={() => handleCreateFolder(rootPath)} />}
               {activeTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={handleSelectFile} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
               {activeTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {

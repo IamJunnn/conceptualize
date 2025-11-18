@@ -9,6 +9,7 @@ export interface GraphNode {
   path: string;        // Full file path or folder path
   type: NodeType;      // Node type: root, folder, or file
   fileType?: FileType; // For files: markdown or other (undefined for folders)
+  driveId?: string;    // Google Drive file ID (for team mode)
   x?: number;
   y?: number;
   vx?: number;
@@ -143,8 +144,8 @@ export function extractFolderStructure(filePaths: string[]): {
  * Now includes folder nodes and both structural and conceptual edges
  */
 export function buildGraphFromFiles(
-  files: Array<{ path: string; content: string }>,
-  allFolders?: string[],
+  files: Array<{ path: string; content: string; driveId?: string }>,
+  allFolders?: Array<string | { path: string; driveId?: string }>,
   hiddenPaths?: Set<string>
 ): GraphData {
   const nodes: GraphNode[] = [];
@@ -155,14 +156,27 @@ export function buildGraphFromFiles(
   // Extract folder structure
   const filePaths = files.map(f => f.path);
 
+  // Build folder map (path -> driveId) for team mode
+  const folderIdMap = new Map<string, string>();
+
   // Use provided folders if available, otherwise extract from file paths
   let rootPath: string;
   let folders: Set<string>;
 
   if (allFolders && allFolders.length > 0) {
     // Use all folders provided by backend (includes empty folders)
-    // Normalize all folder paths
-    const normalizedFolders = allFolders.map(f => normalizePath(f));
+    // Normalize all folder paths and extract Drive IDs if present
+    const normalizedFolders = allFolders.map(f => {
+      if (typeof f === 'string') {
+        return normalizePath(f);
+      } else {
+        // Store Drive ID for this folder path
+        if (f.driveId) {
+          folderIdMap.set(normalizePath(f.path), f.driveId);
+        }
+        return normalizePath(f.path);
+      }
+    });
     rootPath = findCommonRoot([...filePaths, ...normalizedFolders]);
     folders = new Set(normalizedFolders);
   } else {
@@ -178,7 +192,8 @@ export function buildGraphFromFiles(
       id: rootPath,
       name: getFolderName(rootPath),
       path: rootPath,
-      type: 'root'
+      type: 'root',
+      driveId: folderIdMap.get(rootPath)
     };
     nodes.push(rootNode);
     nodeMap.set(rootPath, rootNode);
@@ -192,7 +207,8 @@ export function buildGraphFromFiles(
       id: folderPath,
       name: getFolderName(folderPath),
       path: folderPath,
-      type: 'folder'
+      type: 'folder',
+      driveId: folderIdMap.get(folderPath)
     };
     nodes.push(folderNode);
     nodeMap.set(folderPath, folderNode);
@@ -220,7 +236,8 @@ export function buildGraphFromFiles(
       name: nodeName,
       path: file.path,
       type: 'file',
-      fileType: isMarkdown ? 'markdown' : 'other'
+      fileType: isMarkdown ? 'markdown' : 'other',
+      driveId: file.driveId
     };
     nodes.push(fileNode);
     nodeMap.set(file.path, fileNode);

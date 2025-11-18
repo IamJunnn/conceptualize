@@ -11,6 +11,7 @@ interface FileViewerProps {
   fileName: string
   // Optional props for markdown files
   rootPath?: string
+  fileId?: string // Google Drive file ID (for team mode)
   onOpenFile?: (filePath: string, fileName: string) => void
   onFileCreated?: () => void
   onFileRenamed?: (oldPath: string, newPath: string, newName: string) => void
@@ -44,7 +45,7 @@ function getFileType(fileName: string): FileType {
   return 'unknown'
 }
 
-function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive, storageBackend }: FileViewerProps) {
+function FileViewer({ filePath, fileName, rootPath, fileId, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive, storageBackend }: FileViewerProps) {
   const fileType = getFileType(fileName)
 
   switch (fileType) {
@@ -55,6 +56,7 @@ function FileViewer({ filePath, fileName, rootPath, onOpenFile, onFileCreated, o
           filePath={filePath}
           fileName={fileName}
           rootPath={rootPath}
+          fileId={fileId}
           onOpenFile={onOpenFile}
           onFileCreated={onFileCreated}
           onFileRenamed={onFileRenamed}

@@ -72,7 +72,8 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
             team.id,
             member.email.trim(),
             user.email,
-            user.displayName || user.email.split('@')[0]
+            user.displayName || user.email.split('@')[0],
+            member.role
           );
         }
 

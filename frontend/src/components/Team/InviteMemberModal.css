@@ -9,6 +9,52 @@
   margin: -10px 0 20px 0;
 }
 
+/* Form Group Styles */
+.invite-member-modal .form-group {
+  margin-bottom: 20px;
+}
+
+.invite-member-modal .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #b0b0b0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.invite-member-modal .form-group input,
+.invite-member-modal .form-group select {
+  width: 100%;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 4px;
+  padding: 10px 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+
+.invite-member-modal .form-group input {
+  cursor: text;
+}
+
+.invite-member-modal .form-group input:focus,
+.invite-member-modal .form-group select:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.invite-member-modal .form-group input::placeholder {
+  color: #666;
+}
+
+.invite-member-modal .form-group select option {
+  background: #2d2d2d;
+  color: #e0e0e0;
+}
+
 /* Success Message */
 .success-message {
   background: rgba(40, 167, 69, 0.1);

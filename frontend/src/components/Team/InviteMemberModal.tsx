@@ -12,6 +12,7 @@ interface InviteMemberModalProps {
 
 export default function InviteMemberModal({ team, user, onClose, onMemberInvited }: InviteMemberModalProps) {
   const [memberEmail, setMemberEmail] = useState('');
+  const [memberRole, setMemberRole] = useState<'admin' | 'leader' | 'member'>('member');
   const [isInviting, setIsInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -52,7 +53,8 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
         team.id,
         memberEmail.trim().toLowerCase(),
         user.email,
-        user.displayName || user.email.split('@')[0]
+        user.displayName || user.email.split('@')[0],
+        memberRole
       );
 
       setSuccess(`Invitation sent to ${memberEmail}!`);
@@ -90,6 +92,20 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
               disabled={isInviting}
               autoFocus
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="memberRole">Role *</label>
+            <select
+              id="memberRole"
+              value={memberRole}
+              onChange={(e) => setMemberRole(e.target.value as 'admin' | 'leader' | 'member')}
+              disabled={isInviting}
+            >
+              <option value="member">Member - Can view and edit notes</option>
+              <option value="leader">Leader - Can manage content and guide team</option>
+              <option value="admin">Admin - Full team management access</option>
+            </select>
           </div>
 
           <div className="info-box">

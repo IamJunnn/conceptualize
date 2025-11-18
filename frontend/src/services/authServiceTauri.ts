@@ -327,11 +327,14 @@ async function checkAndAcceptPendingInvitations(email: string, displayName: stri
       console.log(`✅ Auto-accepting invitation to team: ${invite.teamName}`);
 
       try {
-        // Add member to team
+        // Get the role from the invitation, default to 'member' if not specified
+        const role = invite.role || 'member';
+
+        // Add member to team with correct role
         await updateDoc(doc(db, 'teams', invite.teamId), {
           [`members.${email}`]: {
             email: email,
-            role: 'member',
+            role: role,
             joinedAt: Timestamp.now(),
             displayName: displayName,
           },
@@ -344,7 +347,7 @@ async function checkAndAcceptPendingInvitations(email: string, displayName: stri
           acceptedAt: Timestamp.now(),
         });
 
-        console.log(`✅ Successfully joined team: ${invite.teamName}`);
+        console.log(`✅ Successfully joined team: ${invite.teamName} as ${role}`);
       } catch (error) {
         console.error(`❌ Failed to accept invitation to ${invite.teamName}:`, error);
       }

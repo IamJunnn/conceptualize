@@ -10,9 +10,10 @@ interface GraphEngineProps {
   onNodeClick?: (node: GraphNode) => void;
   onNodeDoubleClick?: (node: GraphNode) => void;
   onNodeContextMenu?: (event: React.MouseEvent, node: GraphNode) => void;
+  isTeamMode?: boolean; // Whether this is a team mode graph
 }
 
-const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNodeClick, onNodeDoubleClick, onNodeContextMenu }) => {
+const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNodeClick, onNodeDoubleClick, onNodeContextMenu, isTeamMode = false }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -123,17 +124,18 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     }
 
     // Create force simulation with adjusted parameters for more nodes
-    // Note: No forceCenter needed since root is pinned via fx/fy
     const simulation = d3.forceSimulation<GraphNode>(data.nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(data.links)
         .id(d => d.id)
-        .distance(d => (d as GraphLink).type === 'structural' ? 80 : 120) // Shorter structural links
-        .strength(d => (d as GraphLink).type === 'structural' ? 0.5 : 0.3)) // Weaker structural links
-      .force('charge', d3.forceManyBody().strength(-400))
+        .distance(d => (d as GraphLink).type === 'structural' ? 50 : 80) // Shorter distances for closer nodes
+        .strength(d => (d as GraphLink).type === 'structural' ? 0.7 : 0.5)) // Stronger links to pull nodes closer
+      .force('charge', d3.forceManyBody().strength(-200)) // Reduced repulsion for tighter clustering
       .force('collision', d3.forceCollide<GraphNode>().radius(d => {
-        if ((d as GraphNode).type === 'root') return 28;
-        return 25;
-      }));
+        if ((d as GraphNode).type === 'root') return 22;
+        return 18;
+      }))
+      // Add center force only in team mode (no root node to anchor)
+      .force('center', isTeamMode ? d3.forceCenter(width / 2, height / 2) : null);
 
     // Create links (edges) with different styles for structural vs conceptual
     const link = g.append('g')
