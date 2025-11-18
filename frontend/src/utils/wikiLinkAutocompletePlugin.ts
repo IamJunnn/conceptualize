@@ -190,8 +190,25 @@ export const wikiLinkAutocompletePlugin = () => {
                 window.dispatchEvent(new CustomEvent('wiki-link-autocomplete-navigate', { detail: { direction: 'up', editorId } }))
                 return true // Prevent default
               } else if (event.key === 'Enter') {
-                window.dispatchEvent(new CustomEvent('wiki-link-autocomplete-select', { detail: { editorId } }))
-                return true // Prevent Enter from inserting newline!
+                // Dispatch select event
+                const selectEvent = new CustomEvent('wiki-link-autocomplete-select', { detail: { editorId } })
+                window.dispatchEvent(selectEvent)
+
+                // Close autocomplete if just pressing Enter without selection
+                // (selection will close it if successful)
+                setTimeout(() => {
+                  const stillActive = wikiLinkAutocompletePluginKey.getState(view.state)?.active
+                  if (stillActive) {
+                    // No selection was made, close autocomplete
+                    window.dispatchEvent(new CustomEvent('wiki-link-autocomplete-close', { detail: { editorId } }))
+                    const meta = { active: false, position: null, searchQuery: '', triggerPos: 0 }
+                    const tr = view.state.tr.setMeta(wikiLinkAutocompletePluginKey, meta)
+                    view.dispatch(tr)
+                  }
+                }, 10)
+
+                // Don't prevent default - allow Enter to work normally
+                return false
               } else if (event.key === 'Escape') {
                 window.dispatchEvent(new CustomEvent('wiki-link-autocomplete-close', { detail: { editorId } }))
                 const meta = { active: false, position: null, searchQuery: '', triggerPos: 0 }

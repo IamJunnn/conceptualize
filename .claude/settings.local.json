@@ -115,7 +115,18 @@
       "Bash(firebase functions:config:set:*)",
       "Bash(firebase --help:*)",
       "Bash(firebase functions:delete:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(timeout 45 echo:*)",
+      "Bash(cmd /c \"if not exist src-tauri\\.cargo mkdir src-tauri\\.cargo\")",
+      "Bash(cmd /c \"echo [target.x86_64-pc-windows-msvc] > src-tauri\\.cargo\\config.toml && echo linker = \"\"link.exe\"\" >> src-tauri\\.cargo\\config.toml\")",
+      "Bash(cmd /c \"cd src-tauri && cargo clean\")",
+      "Bash(cmd /c \"set RUSTFLAGS=-C linker=link.exe && npm run dev\")",
+      "Bash(timeout 15 echo:*)",
+      "Bash(cmd /c \"dir /b \"\"C:\\Program Files (x86)\\Windows Kits\\10\\Lib\"\"\")",
+      "Bash(cmd /c \"if exist \"\"C:\\Program Files (x86)\\Windows Kits\"\" (echo Windows SDK exists) else (echo No Windows SDK)\")",
+      "Bash(timeout 20 echo:*)",
+      "Bash(where:*)",
+      "Bash(cmd /c \"if exist target\\debug\\app.exe (echo Build exists) else (echo No build found)\")"
     ],
     "deny": [],
     "ask": []

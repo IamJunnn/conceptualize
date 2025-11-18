@@ -6,6 +6,7 @@
   bottom: 0;
   pointer-events: none;
   z-index: 1000;
+  will-change: contents;
 }
 
 .drop-zone-indicator {
@@ -14,6 +15,8 @@
   border: 2px solid #3b82f6;
   pointer-events: none;
   animation: pulse 0.5s ease-in-out infinite alternate;
+  will-change: opacity;
+  transform: translateZ(0); /* Force GPU acceleration */
 }
 
 @keyframes pulse {

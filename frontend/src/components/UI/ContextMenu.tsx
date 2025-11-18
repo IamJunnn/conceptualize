@@ -27,10 +27,12 @@ interface ContextMenuProps {
   onCreateNote: (parentPath: string) => void;
   onCreateFolder: (parentPath: string) => void;
   onRefresh: () => void;
-  onRevealInExplorer: (path: string) => void;
+  onRevealInExplorer?: (path: string) => void;
   onOpenExternal?: (path: string) => void;
   onOpenInSecondPane?: (path: string, name: string) => void;
   allPaths?: string[]; // All file/folder paths for cascade operations
+  mode?: 'local' | 'team'; // Operating mode
+  userRole?: 'owner' | 'admin' | 'leader' | 'member'; // User role in team mode
 }
 
 const ContextMenu: React.FC<ContextMenuProps> = ({
@@ -48,6 +50,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onRevealInExplorer,
   onOpenExternal,
   onOpenInSecondPane,
+  mode = 'local',
+  userRole,
   allPaths = [],
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -103,13 +107,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     onClose();
   };
 
+  // Check if user has delete permission (owner or admin only in team mode)
+  const canDelete = mode === 'local' || (userRole === 'owner' || userRole === 'admin');
+
   return (
     <div
       ref={menuRef}
       className="context-menu"
       style={{ left: `${x}px`, top: `${y}px` }}
     >
-      {itemType === 'file' && onOpenInSecondPane && (
+      {mode === 'local' && itemType === 'file' && onOpenInSecondPane && (
         <>
           <div
             className="context-menu-item"
@@ -123,7 +130,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
           <div className="context-menu-separator" />
         </>
       )}
-      {itemType === 'file' && shouldShowOpenExternal(itemName) && onOpenExternal && (
+      {mode === 'local' && itemType === 'file' && shouldShowOpenExternal(itemName) && onOpenExternal && (
         <>
           <div
             className="context-menu-item"
@@ -137,7 +144,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
           <div className="context-menu-separator" />
         </>
       )}
-      {itemType === 'file' && (
+      {mode === 'local' && itemType === 'file' && (
         <>
           <div
             className="context-menu-item"
@@ -189,14 +196,18 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         <ArrowPathIcon className="menu-icon" />
         Refresh
       </div>
-      <div
-        className="context-menu-item"
-        onClick={() => handleAction(() => onRevealInExplorer(itemPath))}
-      >
-        <FolderOpenIcon className="menu-icon" />
-        Reveal in File Explorer
-      </div>
-      <div className="context-menu-separator" />
+      {mode === 'local' && onRevealInExplorer && (
+        <>
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onRevealInExplorer(itemPath))}
+          >
+            <FolderOpenIcon className="menu-icon" />
+            Reveal in File Explorer
+          </div>
+          <div className="context-menu-separator" />
+        </>
+      )}
       <div
         className="context-menu-item"
         onClick={() => handleAction(() => {
@@ -227,14 +238,18 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
         <PencilIcon className="menu-icon" />
         Rename
       </div>
-      <div className="context-menu-separator" />
-      <div
-        className="context-menu-item danger"
-        onClick={() => handleAction(() => onDelete(itemPath, itemName))}
-      >
-        <TrashIcon className="menu-icon" />
-        Delete
-      </div>
+      {canDelete && (
+        <>
+          <div className="context-menu-separator" />
+          <div
+            className="context-menu-item danger"
+            onClick={() => handleAction(() => onDelete(itemPath, itemName))}
+          >
+            <TrashIcon className="menu-icon" />
+            Delete
+          </div>
+        </>
+      )}
     </div>
   );
 };

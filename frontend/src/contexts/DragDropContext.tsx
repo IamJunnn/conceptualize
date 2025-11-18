@@ -7,6 +7,7 @@ export interface DraggedTab {
   filePath: string;
   fileName: string;
   sourcePane?: EditorPane; // undefined for single pane mode
+  id?: string; // Google Drive file ID for team mode
 }
 
 interface DragDropContextType {

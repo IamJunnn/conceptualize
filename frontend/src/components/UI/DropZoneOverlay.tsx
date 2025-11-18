@@ -37,6 +37,13 @@ export function DropZoneOverlay({ containerRef }: DropZoneOverlayProps) {
       // If not near left or right edge, set to null (no zone)
 
       if (newZone !== dropZone) {
+        console.log('📍 [DROP ZONE] Changed:', {
+          from: dropZone,
+          to: newZone,
+          mouseX: x,
+          width,
+          threshold: EDGE_THRESHOLD
+        });
         setDropZone(newZone);
       }
     };

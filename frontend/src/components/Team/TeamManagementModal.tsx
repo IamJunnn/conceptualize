@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Team, TeamInvitation, getTeamPendingInvites, cancelInvitation, resendInvitation } from '../../services/teamService';
+import { Team, TeamInvitation, getTeamPendingInvites, cancelInvitation, resendInvitation, updateInvitationRole, reshareTeamContents } from '../../services/teamService';
 import './TeamManagementModal.css';
 
 interface TeamManagementModalProps {
@@ -13,6 +13,7 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
+  const [resharingMember, setResharingMember] = useState<string | null>(null);
 
   useEffect(() => {
     loadPendingInvites();
@@ -47,21 +48,41 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
 
   const handleResendInvite = async (invite: TeamInvitation) => {
     try {
-      // Get the invite code from team's inviteCodes
-      const inviteCode = Object.entries(team.inviteCodes || {}).find(
-        ([_, data]) => data.email === invite.memberEmail && !data.used
-      )?.[0];
-
-      if (!inviteCode) {
+      if (!invite.inviteCode || !invite.role) {
         alert('Invite code not found. The invitation may have expired.');
         return;
       }
 
-      const inviteData = team.inviteCodes![inviteCode];
-      await resendInvitation(team.id, team.name, invite.memberEmail, inviteCode, inviteData.role);
+      await resendInvitation(team.id, team.name, invite.memberEmail, invite.inviteCode, invite.role);
       alert(`Invitation resent to ${invite.memberEmail}`);
     } catch (err: any) {
       alert(`Failed to resend invitation: ${err.message}`);
+    }
+  };
+
+  const handleRoleChange = async (inviteId: string, newRole: 'admin' | 'leader' | 'member') => {
+    try {
+      await updateInvitationRole(inviteId, newRole);
+      // Refresh the list
+      await loadPendingInvites();
+    } catch (err: any) {
+      alert(`Failed to update role: ${err.message}`);
+    }
+  };
+
+  const handleReshareContents = async (memberEmail: string) => {
+    if (!confirm(`⚠️ WARNING: Email Notifications\n\nRe-sharing will grant ${memberEmail} access to all existing folders and files, but Google will send them a separate email notification for EACH item.\n\nIf you have many folders/files, this could spam their inbox with dozens of emails.\n\nContinue anyway?`)) {
+      return;
+    }
+
+    try {
+      setResharingMember(memberEmail);
+      await reshareTeamContents(team.id, memberEmail);
+      alert(`✅ Successfully shared all team contents with ${memberEmail}\n\nNote: They will receive multiple email notifications from Google Drive.`);
+    } catch (err: any) {
+      alert(`Failed to re-share contents: ${err.message}`);
+    } finally {
+      setResharingMember(null);
     }
   };
 
@@ -87,11 +108,6 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
           </button>
         </div>
 
-        <div className="team-info">
-          <h3>{team.name}</h3>
-          {team.description && <p className="team-description">{team.description}</p>}
-        </div>
-
         <div className="tabs">
           <button
             className={`tab ${activeTab === 'members' ? 'active' : ''}`}
@@ -114,24 +130,62 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
                 <p className="empty-state">No members yet</p>
               ) : (
                 <div className="members-list">
-                  {membersList.map((member) => (
-                    <div key={member.email} className="member-item">
-                      <div className="member-info">
-                        <div className="member-name">
-                          {member.displayName || member.email}
+                  {membersList.map((member, index) => {
+                    // Handle incomplete member data
+                    if (!member.email) {
+                      return (
+                        <div key={`incomplete-${index}`} className="member-item">
+                          <div className="member-info">
+                            <div className="member-name" style={{ color: '#f59e0b' }}>
+                              Incomplete member data
+                            </div>
+                            <div className="member-email" style={{ color: '#f59e0b' }}>
+                              Please re-invite this member
+                            </div>
+                            {member.joinedAt && (
+                              <div className="member-meta">
+                                Joined {formatDate(member.joinedAt)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="member-role">
+                            <span className="role-badge role-member" style={{ background: '#f59e0b', color: 'white' }}>
+                              Invalid
+                            </span>
+                          </div>
                         </div>
-                        <div className="member-email">{member.email}</div>
-                        <div className="member-meta">
-                          Joined {formatDate(member.joinedAt)}
+                      );
+                    }
+
+                    return (
+                      <div key={member.email} className="member-item">
+                        <div className="member-info">
+                          <div className="member-name">
+                            {member.displayName || member.email}
+                          </div>
+                          <div className="member-email">{member.email}</div>
+                          <div className="member-meta">
+                            Joined {formatDate(member.joinedAt)}
+                          </div>
+                        </div>
+                        <div className="member-actions">
+                          <span className={`role-badge role-${member.role || 'member'}`}>
+                            {member.role || 'member'}
+                          </span>
+                          {member.role !== 'owner' && (
+                            <button
+                              className="btn-secondary btn-sm"
+                              onClick={() => handleReshareContents(member.email)}
+                              disabled={resharingMember === member.email}
+                              title="Grant access to all existing folders and files"
+                            >
+                              {resharingMember === member.email ? 'Sharing...' : 'Re-share Contents'}
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="member-role">
-                        <span className={`role-badge role-${member.role}`}>
-                          {member.role}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -155,12 +209,6 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
               ) : (
                 <div className="invitations-list">
                   {pendingInvites.map((invite) => {
-                    // Find the invite code for this email
-                    const inviteCode = Object.entries(team.inviteCodes || {}).find(
-                      ([_, data]) => data.email === invite.memberEmail && !data.used
-                    )?.[0];
-                    const inviteData = inviteCode ? team.inviteCodes![inviteCode] : null;
-
                     return (
                       <div key={invite.id} className="invitation-item">
                         <div className="invitation-info">
@@ -168,27 +216,18 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
                           <div className="invitation-meta">
                             Invited by {invite.invitedBy} · {formatDate(invite.invitedAt)}
                           </div>
-                          {inviteCode && (
-                            <div className="invitation-code">
-                              Code: <span className="code-value">{inviteCode}</span>
-                              <button
-                                className="btn-copy-code"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(inviteCode);
-                                }}
-                                title="Copy code"
-                              >
-                                Copy
-                              </button>
-                            </div>
-                          )}
                         </div>
                         <div className="invitation-actions">
-                          {inviteData && (
-                            <span className={`role-badge role-${inviteData.role}`}>
-                              {inviteData.role}
-                            </span>
-                          )}
+                          <select
+                            className="role-select"
+                            value={invite.role || 'member'}
+                            onChange={(e) => handleRoleChange(invite.id, e.target.value as 'admin' | 'leader' | 'member')}
+                            title="Change role"
+                          >
+                            <option value="member">Member</option>
+                            <option value="leader">Leader</option>
+                            <option value="admin">Admin</option>
+                          </select>
                           <button
                             className="btn-secondary btn-small"
                             onClick={() => handleResendInvite(invite)}
@@ -219,9 +258,6 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
               Invite More Members
             </button>
           )}
-          <button className="btn-secondary" onClick={onClose}>
-            Close
-          </button>
         </div>
       </div>
     </div>

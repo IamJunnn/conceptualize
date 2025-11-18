@@ -20,6 +20,7 @@ import WikiLinkAutocomplete from './WikiLinkAutocomplete'
 import TableWidget from './TableWidget'
 import QuickAddModal, { TodoFormData } from '../Todo/QuickAddModal'
 import { invoke } from '@tauri-apps/api/core'
+import { TeamDriveStorage } from '../../services/teamDriveStorage'
 import '@milkdown/theme-nord/style.css'
 import './MilkdownEditor.css'
 import '../../utils/todoBlockPlugin.css'
@@ -33,6 +34,7 @@ interface MilkdownEditorProps {
   editorId?: string // Unique ID to scope autocomplete per pane
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
   isActive?: boolean // Whether this pane is currently active
+  storageBackend?: TeamDriveStorage // For team mode
 }
 
 interface FileItem {
@@ -41,7 +43,14 @@ interface FileItem {
   type: 'md' | 'svg' | 'pdf' | 'png' | 'jpg' | 'other'
 }
 
-function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, filePath, editorId = 'default', onPaneActivate, isActive }: MilkdownEditorProps) {
+// Utility function to clear file list cache (call when files are created/deleted)
+export function clearFileListCache(rootPath?: string) {
+  const cacheKey = `fileList_${rootPath || 'team'}`
+  delete (window as any)[cacheKey]
+  delete (window as any)[`${cacheKey}_time`]
+}
+
+function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, filePath, editorId = 'default', onPaneActivate, isActive, storageBackend }: MilkdownEditorProps) {
   const editorRef = useRef<Editor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [autocompleteVisible, setAutocompleteVisible] = useState(false)
@@ -105,19 +114,42 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
     }
   }, [isActive, editorId])
 
-  // Fetch files from workspace
+  // Fetch files from workspace - OPTIMIZED with caching
   useEffect(() => {
-    if (!rootPath) return
+    const isTeamMode = !!storageBackend
 
     const fetchFiles = async () => {
       try {
-        const result: any = await invoke('get_markdown_files', { rootPath })
         const fileList: FileItem[] = []
 
-        // Process files
-        if (result.files) {
-          result.files.forEach((file: any) => {
-            const extension = file.path.split('.').pop()?.toLowerCase()
+        if (isTeamMode && storageBackend) {
+          // Team mode: fetch from Google Drive with caching
+          // Check if we have cached file list in window object
+          const cacheKey = `fileList_${rootPath || 'team'}`
+          const cachedData = (window as any)[cacheKey]
+          const cacheTime = (window as any)[`${cacheKey}_time`]
+          const now = Date.now()
+
+          // Use cache if it's less than 5 seconds old
+          if (cachedData && cacheTime && (now - cacheTime) < 5000) {
+            setFiles(cachedData)
+            return
+          }
+
+          const driveFiles = await storageBackend.listFiles()
+
+          if (!Array.isArray(driveFiles)) {
+            console.error('Error: driveFiles is not an array')
+            return
+          }
+
+          driveFiles.forEach((file: any) => {
+            // Skip folders - only include files
+            if (file.contentType === 'application/vnd.google-apps.folder') {
+              return
+            }
+
+            const extension = file.name.split('.').pop()?.toLowerCase()
             let type: FileItem['type'] = 'other'
 
             if (extension === 'md') type = 'md'
@@ -126,16 +158,46 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
             else if (extension === 'png') type = 'png'
             else if (extension === 'jpg' || extension === 'jpeg') type = 'jpg'
 
-            // Convert absolute path to relative path from rootPath
-            const relativePath = file.path.replace(rootPath + '\\', '').replace(rootPath + '/', '')
-            const name = file.path.split(/[/\\]/).pop() || file.path
+            // Use fullPath for hierarchical structure, convert backslashes to forward slashes
+            const path = file.fullPath.replace(/\\/g, '/')
 
             fileList.push({
-              name,
-              path: relativePath.replace(/\\/g, '/'),
+              name: file.name,
+              path: path,
               type,
             })
           })
+
+          // Cache the result globally
+          (window as any)[cacheKey] = fileList;
+          (window as any)[`${cacheKey}_time`] = now
+        } else if (rootPath) {
+          // Local mode: fetch from Tauri
+          const result: any = await invoke('get_markdown_files', { rootPath })
+
+          // Process files
+          if (result.files) {
+            result.files.forEach((file: any) => {
+              const extension = file.path.split('.').pop()?.toLowerCase()
+              let type: FileItem['type'] = 'other'
+
+              if (extension === 'md') type = 'md'
+              else if (extension === 'svg') type = 'svg'
+              else if (extension === 'pdf') type = 'pdf'
+              else if (extension === 'png') type = 'png'
+              else if (extension === 'jpg' || extension === 'jpeg') type = 'jpg'
+
+              // Convert absolute path to relative path from rootPath
+              const relativePath = file.path.replace(rootPath + '\\', '').replace(rootPath + '/', '')
+              const name = file.path.split(/[/\\]/).pop() || file.path
+
+              fileList.push({
+                name,
+                path: relativePath.replace(/\\/g, '/'),
+                type,
+              })
+            })
+          }
         }
 
         setFiles(fileList)
@@ -145,7 +207,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
     }
 
     fetchFiles()
-  }, [rootPath])
+  }, [rootPath, storageBackend])
 
   // Listen for todo modal event
   useEffect(() => {
@@ -638,10 +700,10 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
   )
 }
 
-export default function MilkdownEditor({ content, onChange, onWikiLinkClick, rootPath, filePath, editorId, onPaneActivate, isActive }: MilkdownEditorProps) {
+export default function MilkdownEditor({ content, onChange, onWikiLinkClick, rootPath, filePath, editorId, onPaneActivate, isActive, storageBackend }: MilkdownEditorProps) {
   return (
     <MilkdownProvider>
-      <MilkdownEditorInner content={content} onChange={onChange} onWikiLinkClick={onWikiLinkClick} rootPath={rootPath} filePath={filePath} editorId={editorId} onPaneActivate={onPaneActivate} isActive={isActive} />
+      <MilkdownEditorInner content={content} onChange={onChange} onWikiLinkClick={onWikiLinkClick} rootPath={rootPath} filePath={filePath} editorId={editorId} onPaneActivate={onPaneActivate} isActive={isActive} storageBackend={storageBackend} />
     </MilkdownProvider>
   )
 }

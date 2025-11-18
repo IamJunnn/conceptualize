@@ -18,9 +18,10 @@
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: background 0.15s ease, color 0.15s ease;
   border-radius: 4px 4px 0 0;
   user-select: none;
+  will-change: background, color;
 }
 
 .tab:hover {
@@ -53,10 +54,11 @@
   cursor: pointer;
   font-size: 13px;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: background 0.15s ease, color 0.15s ease;
   border-radius: 4px 4px 0 0;
   user-select: none;
   position: relative;
+  will-change: background, color;
 }
 
 .file-tab:hover {
@@ -82,6 +84,7 @@
 .file-tab.dragging {
   opacity: 0.5;
   cursor: default;
+  transition: none !important; /* Disable transitions during drag */
 }
 
 .file-tab[draggable="true"] {
@@ -106,7 +109,7 @@
   padding: 0 4px;
   margin-left: 4px;
   border-radius: 3px;
-  transition: all 0.2s;
+  transition: opacity 0.1s ease, background 0.15s ease, color 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -114,6 +117,7 @@
   height: 20px;
   opacity: 0;
   pointer-events: none;
+  will-change: opacity, background;
 }
 
 /* Show close button on tab hover or when tab is active */

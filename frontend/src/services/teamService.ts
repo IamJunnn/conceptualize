@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { invoke } from '@tauri-apps/api/core';
 import { db, auth, functions } from './firebase';
-import { createTeamFolder, shareFolder } from './googleDriveService';
+import { createTeamFolder, shareFolder, shareFolderRecursively } from './googleDriveService';
 import { httpsCallable } from 'firebase/functions';
 
 export interface TeamMember {
@@ -40,6 +40,7 @@ export interface Team {
   driveFolderId: string; // Google Drive folder ID where team files are stored
   members: { [email: string]: TeamMember };
   memberEmails: string[]; // For querying
+  inviteCodes?: { [code: string]: { email: string; role: 'admin' | 'leader' | 'member'; used: boolean; createdAt: Date } };
 }
 
 export interface TeamInvitation {
@@ -50,6 +51,8 @@ export interface TeamInvitation {
   invitedBy: string;
   invitedAt: Date;
   status: 'pending' | 'accepted' | 'declined' | 'expired';
+  role?: 'admin' | 'leader' | 'member';
+  inviteCode?: string;
 }
 
 /**
@@ -125,7 +128,8 @@ export async function inviteTeamMember(
   teamId: string,
   memberEmail: string,
   inviterEmail: string,
-  inviterDisplayName: string
+  inviterDisplayName: string,
+  role: 'admin' | 'leader' | 'member' = 'member'
 ): Promise<void> {
   try {
     console.log(`Inviting ${memberEmail} to team ${teamId}...`);
@@ -147,12 +151,25 @@ export async function inviteTeamMember(
       throw new Error('User is already a member of this team');
     }
 
-    // 2. Share the Google Drive folder with the new member
-    console.log(`📤 Sharing Drive folder with ${memberEmail}...`);
-    await shareFolder(team.driveFolderId, memberEmail, 'writer');
-    console.log(`✅ Drive folder shared with ${memberEmail}`);
+    // 2. Generate invite code
+    const inviteCode = `${teamId.substring(0, 8)}-${Date.now().toString(36)}`;
 
-    // 3. Create pending invite in Firestore
+    // 3. Share the Google Drive folder and all its contents with the new member
+    console.log(`📤 Sharing Drive folder and contents with ${memberEmail}...`);
+    await shareFolderRecursively(team.driveFolderId, memberEmail, 'writer');
+    console.log(`✅ Drive folder and all contents shared with ${memberEmail}`);
+
+    // 4. Store invite code in team document
+    await updateDoc(doc(db, 'teams', teamId), {
+      [`inviteCodes.${inviteCode}`]: {
+        email: memberEmail,
+        role: role,
+        used: false,
+        createdAt: Timestamp.now(),
+      }
+    });
+
+    // 5. Create pending invite in Firestore
     const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
     await setDoc(doc(db, 'team_invites', inviteId), {
       teamId,
@@ -161,9 +178,11 @@ export async function inviteTeamMember(
       invitedBy: inviterDisplayName || inviterEmail,
       invitedAt: Timestamp.now(),
       status: 'pending',
+      role: role,
+      inviteCode: inviteCode,
     });
 
-    console.log(`✅ Invited ${memberEmail} to team "${team.name}"`);
+    console.log(`✅ Invited ${memberEmail} to team "${team.name}" with code ${inviteCode}`);
   } catch (error: any) {
     console.error('Failed to invite team member:', error);
     throw new Error(`Failed to invite member: ${error.message}`);
@@ -181,25 +200,34 @@ export async function acceptTeamInvite(
   try {
     console.log(`Accepting team invite for ${memberEmail}...`);
 
-    // 1. Update team members
+    // 1. Get the invitation to retrieve the role
+    const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+    const inviteDoc = await getDoc(doc(db, 'team_invites', inviteId));
+
+    let role: 'admin' | 'leader' | 'member' = 'member';
+    if (inviteDoc.exists()) {
+      const inviteData = inviteDoc.data();
+      role = inviteData.role || 'member';
+    }
+
+    // 2. Update team members with the correct role from invitation
     await updateDoc(doc(db, 'teams', teamId), {
       [`members.${memberEmail}`]: {
         email: memberEmail,
-        role: 'member',
+        role: role,
         joinedAt: Timestamp.now(),
         displayName: memberDisplayName,
       },
       memberEmails: arrayUnion(memberEmail),
     });
 
-    // 2. Update invite status
-    const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+    // 3. Update invite status
     await updateDoc(doc(db, 'team_invites', inviteId), {
       status: 'accepted',
       acceptedAt: Timestamp.now(),
     });
 
-    console.log(`✅ ${memberEmail} accepted invite to team ${teamId}`);
+    console.log(`✅ ${memberEmail} accepted invite to team ${teamId} as ${role}`);
   } catch (error: any) {
     console.error('Failed to accept team invite:', error);
     throw new Error(`Failed to accept invite: ${error.message}`);
@@ -240,10 +268,23 @@ export async function getUserTeams(userEmail: string): Promise<Team[]> {
     const snapshot = await getDocs(q);
     const teams = snapshot.docs.map(doc => {
       const data = doc.data();
+
+      // Convert member timestamps
+      const members: { [email: string]: TeamMember } = {};
+      if (data.members) {
+        Object.entries(data.members).forEach(([email, member]: [string, any]) => {
+          members[email] = {
+            ...member,
+            joinedAt: member.joinedAt?.toDate?.() || member.joinedAt,
+          };
+        });
+      }
+
       return {
         ...data,
         id: doc.id,
         createdAt: data.createdAt?.toDate(),
+        members,
       } as Team;
     });
 
@@ -324,10 +365,23 @@ export async function getTeamById(teamId: string): Promise<Team | null> {
     }
 
     const data = teamDoc.data();
+
+    // Convert member timestamps
+    const members: { [email: string]: TeamMember } = {};
+    if (data.members) {
+      Object.entries(data.members).forEach(([email, member]: [string, any]) => {
+        members[email] = {
+          ...member,
+          joinedAt: member.joinedAt?.toDate?.() || member.joinedAt,
+        };
+      });
+    }
+
     return {
       ...data,
       id: teamDoc.id,
       createdAt: data.createdAt?.toDate(),
+      members,
     } as Team;
   } catch (error: any) {
     console.error('Failed to get team:', error);
@@ -465,8 +519,10 @@ export async function cancelInvitation(inviteId: string): Promise<void> {
  * Resend invitation email
  */
 export async function resendInvitation(
+  teamId: string,
   teamName: string,
   email: string,
+  inviteCode: string,
   role: 'admin' | 'leader' | 'member'
 ): Promise<void> {
   try {
@@ -500,5 +556,62 @@ export async function updateMemberRole(
   } catch (error: any) {
     console.error('Failed to update member role:', error);
     throw new Error(`Failed to update role: ${error.message}`);
+  }
+}
+
+/**
+ * Update pending invitation role
+ */
+export async function updateInvitationRole(
+  inviteId: string,
+  newRole: 'admin' | 'leader' | 'member'
+): Promise<void> {
+  try {
+    console.log(`Updating invitation ${inviteId} role to ${newRole}...`);
+
+    await updateDoc(doc(db, 'team_invites', inviteId), {
+      role: newRole,
+    });
+
+    console.log(`✅ Updated invitation role to ${newRole}`);
+  } catch (error: any) {
+    console.error('Failed to update invitation role:', error);
+    throw new Error(`Failed to update invitation role: ${error.message}`);
+  }
+}
+
+/**
+ * Re-share team folder contents with an existing member
+ * Useful for fixing permissions when a member was invited before recursive sharing was implemented
+ */
+export async function reshareTeamContents(
+  teamId: string,
+  memberEmail: string
+): Promise<void> {
+  try {
+    console.log(`Re-sharing team contents with ${memberEmail}...`);
+
+    // Get team data
+    const team = await getTeamById(teamId);
+    if (!team) {
+      throw new Error('Team not found');
+    }
+
+    // Check if user is a member
+    if (!team.memberEmails.includes(memberEmail)) {
+      throw new Error('User is not a member of this team');
+    }
+
+    // Get the member's role to determine permission level
+    const memberRole = team.members[memberEmail]?.role || 'member';
+    const permission = memberRole === 'owner' || memberRole === 'admin' ? 'writer' : 'writer';
+
+    // Recursively share all contents
+    await shareFolderRecursively(team.driveFolderId, memberEmail, permission);
+
+    console.log(`✅ Re-shared all team contents with ${memberEmail}`);
+  } catch (error: any) {
+    console.error('Failed to re-share team contents:', error);
+    throw new Error(`Failed to re-share team contents: ${error.message}`);
   }
 }
