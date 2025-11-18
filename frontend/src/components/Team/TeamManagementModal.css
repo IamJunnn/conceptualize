@@ -14,10 +14,22 @@
   margin-bottom: 16px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .team-management-modal .modal-header {
+    border-bottom-color: #374151;
+  }
+}
+
 .team-management-modal .modal-header h2 {
   margin: 0;
   font-size: 20px;
   color: #1a202c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .team-management-modal .modal-header h2 {
+    color: #f3f4f6;
+  }
 }
 
 .team-management-modal .btn-close {
@@ -39,20 +51,14 @@
   color: #1a202c;
 }
 
-.team-info {
-  margin-bottom: 20px;
-}
+@media (prefers-color-scheme: dark) {
+  .team-management-modal .btn-close {
+    color: #9ca3af;
+  }
 
-.team-info h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  color: #2d3748;
-}
-
-.team-description {
-  margin: 0;
-  color: #718096;
-  font-size: 14px;
+  .team-management-modal .btn-close:hover {
+    color: #f3f4f6;
+  }
 }
 
 .tabs {
@@ -60,6 +66,12 @@
   gap: 8px;
   border-bottom: 2px solid #e5e7eb;
   margin-bottom: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tabs {
+    border-bottom-color: #374151;
+  }
 }
 
 .tab {
@@ -79,6 +91,16 @@
   color: #2d3748;
 }
 
+@media (prefers-color-scheme: dark) {
+  .tab {
+    color: #9ca3af;
+  }
+
+  .tab:hover {
+    color: #e5e7eb;
+  }
+}
+
 .tab.active {
   color: #c44fc4;
   border-bottom-color: #c44fc4;
@@ -88,6 +110,31 @@
   flex: 1;
   overflow-y: auto;
   margin-bottom: 20px;
+}
+
+/* Scrollbar Styling - Conceptualize Theme */
+.tab-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tab-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.tab-content::-webkit-scrollbar-thumb {
+  background: rgba(100, 200, 202, 0.3);
+  border-radius: 4px;
+}
+
+.tab-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 200, 202, 0.5);
+}
+
+/* Firefox scrollbar */
+.tab-content {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 200, 202, 0.3) rgba(255, 255, 255, 0.05);
 }
 
 /* Members Section */
@@ -109,22 +156,50 @@
   background: #f9fafb;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
+  min-width: 0; /* Allow flex children to shrink below content size */
+}
+
+@media (prefers-color-scheme: dark) {
+  .member-item {
+    background: #1f2937;
+    border-color: #374151;
+  }
 }
 
 .member-info {
   flex: 1;
+  min-width: 0; /* Allow text truncation/wrapping */
+  overflow: hidden; /* Prevent overflow */
 }
 
 .member-name {
   font-weight: 600;
   color: #1a202c;
   margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .member-name {
+    color: #f3f4f6;
+  }
 }
 
 .member-email {
   font-size: 14px;
   color: #6b7280;
   margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .member-email {
+    color: #9ca3af;
+  }
 }
 
 .member-meta {
@@ -132,8 +207,42 @@
   color: #9ca3af;
 }
 
-.member-role {
+@media (prefers-color-scheme: dark) {
+  .member-meta {
+    color: #6b7280;
+  }
+}
+
+.member-actions {
   margin-left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0; /* Prevent actions from shrinking */
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Invitations Section */
@@ -155,22 +264,47 @@
   background: #fffbeb;
   border-radius: 8px;
   border: 1px solid #fde68a;
+  min-width: 0; /* Allow flex children to shrink below content size */
+}
+
+@media (prefers-color-scheme: dark) {
+  .invitation-item {
+    background: #422006;
+    border-color: #78350f;
+  }
 }
 
 .invitation-info {
   flex: 1;
+  min-width: 0; /* Allow text truncation/wrapping */
+  overflow: hidden; /* Prevent overflow */
 }
 
 .invitation-email {
   font-weight: 600;
   color: #1a202c;
   margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .invitation-email {
+    color: #fef3c7;
+  }
 }
 
 .invitation-meta {
   font-size: 12px;
   color: #92400e;
   margin-bottom: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .invitation-meta {
+    color: #fde68a;
+  }
 }
 
 .invitation-code {
@@ -182,6 +316,12 @@
   margin-top: 8px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .invitation-code {
+    color: #fcd34d;
+  }
+}
+
 .code-value {
   font-family: 'Courier New', monospace;
   font-weight: 700;
@@ -190,6 +330,14 @@
   padding: 4px 8px;
   border-radius: 4px;
   border: 1px solid #e5e7eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .code-value {
+    color: #e879f9;
+    background: #1f2937;
+    border-color: #4b5563;
+  }
 }
 
 .btn-copy-code {
@@ -208,11 +356,67 @@
   color: #1a202c;
 }
 
+@media (prefers-color-scheme: dark) {
+  .btn-copy-code {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
+
+  .btn-copy-code:hover {
+    background: #4b5563;
+    color: #f3f4f6;
+  }
+}
+
 .invitation-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-left: 16px;
+  flex-shrink: 0; /* Prevent actions from shrinking */
+}
+
+.role-select {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: capitalize;
+}
+
+.role-select:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.role-select:focus {
+  outline: none;
+  border-color: #c44fc4;
+  box-shadow: 0 0 0 2px rgba(196, 79, 196, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .role-select {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
+
+  .role-select:hover {
+    background: #4b5563;
+    border-color: #6b7280;
+  }
+
+  .role-select option {
+    background: #374151;
+    color: #d1d5db;
+  }
 }
 
 /* Role Badges */
@@ -246,20 +450,111 @@
   color: #6b7280;
 }
 
+@media (prefers-color-scheme: dark) {
+  .role-badge.role-admin {
+    background: #1e3a8a;
+    color: #93c5fd;
+  }
+
+  .role-badge.role-leader {
+    background: #14532d;
+    color: #86efac;
+  }
+
+  .role-badge.role-member {
+    background: #374151;
+    color: #d1d5db;
+  }
+}
+
 /* Buttons */
+.btn-primary {
+  background: #64c8ca;
+  color: #1e1e1e;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #52b6b8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(100, 200, 202, 0.3);
+}
+
+.btn-primary:disabled {
+  background: #4a7879;
+  color: #666;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .btn-small {
   padding: 6px 12px;
   font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+  border-color: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-secondary {
+    background: #374151;
+    color: #d1d5db;
+    border-color: #4b5563;
+  }
+
+  .btn-secondary:hover {
+    background: #4b5563;
+    color: #f3f4f6;
+    border-color: #6b7280;
+  }
 }
 
 .btn-danger {
   background: #fee;
   color: #dc2626;
   border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .btn-danger:hover {
   background: #fecaca;
+  color: #b91c1c;
+  border-color: #f87171;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-danger {
+    background: #7f1d1d;
+    color: #fca5a5;
+    border-color: #991b1b;
+  }
+
+  .btn-danger:hover {
+    background: #991b1b;
+    color: #fecaca;
+  }
 }
 
 /* Empty State */
@@ -273,16 +568,34 @@
   margin-bottom: 16px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .empty-state {
+    color: #6b7280;
+  }
+}
+
 .loading-state {
   text-align: center;
   padding: 40px 20px;
   color: #6b7280;
 }
 
+@media (prefers-color-scheme: dark) {
+  .loading-state {
+    color: #9ca3af;
+  }
+}
+
 .error-state {
   text-align: center;
   padding: 40px 20px;
   color: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  .error-state {
+    color: #f87171;
+  }
 }
 
 /* Modal Footer */
@@ -292,4 +605,10 @@
   gap: 12px;
   padding-top: 16px;
   border-top: 1px solid #e5e7eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-footer {
+    border-top-color: #374151;
+  }
 }
