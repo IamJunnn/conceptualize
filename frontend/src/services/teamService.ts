@@ -1,7 +1,7 @@
 /**
  * Team Service
  * Manages team creation, invitations, and member management
- * Uses Firebase Firestore for team metadata and Google Drive for file storage
+ * Uses Firebase Firestore for team metadata and Firebase Cloud Storage for file storage
  */
 
 import {
@@ -11,6 +11,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   getDocs,
@@ -20,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { invoke } from '@tauri-apps/api/core';
 import { db, auth, functions } from './firebase';
+// Google Drive imports kept for legacy teams that still use Drive storage
 import { createTeamFolder, shareFolder, shareFolderRecursively } from './googleDriveService';
 import { httpsCallable } from 'firebase/functions';
 
@@ -56,7 +58,29 @@ export interface TeamInvitation {
 }
 
 /**
+ * Encode email for use as Firestore field key
+ * Firestore doesn't allow dots in field names when using dot notation
+ */
+function encodeEmailKey(email: string): string {
+  return email.replace(/\./g, '_DOT_').replace(/@/g, '_AT_');
+}
+
+/**
+ * Decode Firestore field key back to email
+ * Also handles legacy keys that weren't encoded (contain @ or .)
+ */
+function decodeEmailKey(key: string): string {
+  // If the key already looks like an email (contains @), return as-is (legacy data)
+  if (key.includes('@')) {
+    return key;
+  }
+  // Otherwise decode the encoded version
+  return key.replace(/_DOT_/g, '.').replace(/_AT_/g, '@');
+}
+
+/**
  * Create a new team
+ * Now uses Firebase Cloud Storage instead of Google Drive for file storage
  */
 export async function createTeam(
   teamName: string,
@@ -68,38 +92,43 @@ export async function createTeam(
   try {
     console.log(`Creating team "${teamName}"...`);
 
-    // 1. Generate team ID
+    // 1. Generate team ID - this will also be used as the storage folder ID
     const teamId = doc(collection(db, 'teams')).id;
 
-    // 2. Create Google Drive folder for the team
-    console.log(`📁 Creating Google Drive folder: "Conceptualize - ${teamName}"...`);
-    const driveFolder = await createTeamFolder(teamName);
-    console.log(`✅ Drive folder created (ID: ${driveFolder.id})`);
+    // 2. No longer need to create Google Drive folder
+    // Files will be stored in Firebase Cloud Storage under /teams/{teamId}/
+    console.log(`📁 Team files will be stored in Firebase Storage: /teams/${teamId}/`);
 
     // 3. Create team document in Firestore
+    // Use encoded email key for Firestore compatibility
+    const ownerEmailKey = encodeEmailKey(ownerEmail);
+
+    // Normalize email to lowercase for consistent lookups
+    const normalizedOwnerEmail = ownerEmail.toLowerCase();
+
     const team: Team = {
       id: teamId,
       name: teamName,
       description,
       createdAt: new Date(),
-      createdBy: ownerEmail,
-      driveFolderId: driveFolder.id, // Store Drive folder ID
+      createdBy: normalizedOwnerEmail,
+      driveFolderId: teamId, // Use teamId as the storage identifier (for backward compatibility)
       members: {
-        [ownerEmail]: {
-          email: ownerEmail,
+        [normalizedOwnerEmail]: {
+          email: normalizedOwnerEmail,
           role: 'owner',
           joinedAt: new Date(),
           displayName: ownerDisplayName,
         },
       },
-      memberEmails: [ownerEmail],
+      memberEmails: [normalizedOwnerEmail], // Always store lowercase for Firebase Storage rules
     };
 
     await setDoc(doc(db, 'teams', teamId), {
       ...team,
       createdAt: Timestamp.fromDate(team.createdAt),
       members: {
-        [ownerEmail]: {
+        [ownerEmailKey]: {
           ...team.members[ownerEmail],
           joinedAt: Timestamp.fromDate(team.members[ownerEmail].joinedAt),
         },
@@ -123,6 +152,7 @@ export async function createTeam(
 
 /**
  * Invite a member to a team
+ * No longer needs to share Google Drive - Firebase Storage handles permissions via Security Rules
  */
 export async function inviteTeamMember(
   teamId: string,
@@ -154,10 +184,9 @@ export async function inviteTeamMember(
     // 2. Generate invite code
     const inviteCode = `${teamId.substring(0, 8)}-${Date.now().toString(36)}`;
 
-    // 3. Share the Google Drive folder and all its contents with the new member
-    console.log(`📤 Sharing Drive folder and contents with ${memberEmail}...`);
-    await shareFolderRecursively(team.driveFolderId, memberEmail, 'writer');
-    console.log(`✅ Drive folder and all contents shared with ${memberEmail}`);
+    // 3. No longer need to share Google Drive folder
+    // Firebase Storage Security Rules handle access based on team membership
+    console.log(`📁 Access to team files handled by Firebase Storage Security Rules`);
 
     // 4. Store invite code in team document
     await updateDoc(doc(db, 'teams', teamId), {
@@ -210,18 +239,34 @@ export async function acceptTeamInvite(
       role = inviteData.role || 'member';
     }
 
-    // 2. Update team members with the correct role from invitation
+    // 2. Get the team to access the drive folder ID
+    const teamDoc = await getDoc(doc(db, 'teams', teamId));
+    if (!teamDoc.exists()) {
+      throw new Error('Team not found');
+    }
+    const team = teamDoc.data() as Team;
+
+    // 3. Note: Google Drive folder sharing happens when the owner invites the member
+    // The invited user's token cannot share folders they don't own
+    // If there are permission issues, the owner needs to re-invite or manually share
+    console.log(`📁 Drive folder access should already be granted by owner during invite (folderId: ${team.driveFolderId})`);
+    console.log(`⚠️ If you see permission errors, ask the team owner to re-invite you or check sharing settings`);
+
+    // 4. Update team members with the correct role from invitation
+    // Normalize email to lowercase for Firebase Storage Security Rules
+    const normalizedEmail = memberEmail.toLowerCase();
+    const memberEmailKey = encodeEmailKey(normalizedEmail);
     await updateDoc(doc(db, 'teams', teamId), {
-      [`members.${memberEmail}`]: {
-        email: memberEmail,
+      [`members.${memberEmailKey}`]: {
+        email: normalizedEmail,
         role: role,
         joinedAt: Timestamp.now(),
         displayName: memberDisplayName,
       },
-      memberEmails: arrayUnion(memberEmail),
+      memberEmails: arrayUnion(normalizedEmail), // Always store lowercase for Firebase Storage rules
     });
 
-    // 3. Update invite status
+    // 5. Update invite status
     await updateDoc(doc(db, 'team_invites', inviteId), {
       status: 'accepted',
       acceptedAt: Timestamp.now(),
@@ -266,23 +311,41 @@ export async function getUserTeams(userEmail: string): Promise<Team[]> {
     );
 
     const snapshot = await getDocs(q);
-    const teams = snapshot.docs.map(doc => {
-      const data = doc.data();
+    console.log(`🔍 Query returned ${snapshot.docs.length} teams for ${userEmail}`);
 
-      // Convert member timestamps
+    const teams = snapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      console.log(`\n📁 Processing team "${data.name}" (ID: ${docSnap.id})`);
+      console.log(`   Raw data.members:`, JSON.stringify(data.members, null, 2));
+
+      // Convert member timestamps and decode email keys
       const members: { [email: string]: TeamMember } = {};
       if (data.members) {
-        Object.entries(data.members).forEach(([email, member]: [string, any]) => {
-          members[email] = {
+        const rawKeys = Object.keys(data.members);
+        console.log(`   Raw member keys:`, rawKeys);
+
+        Object.entries(data.members).forEach(([encodedEmail, member]: [string, any]) => {
+          // Decode the email key back to the actual email
+          const email = decodeEmailKey(encodedEmail);
+          // Store with lowercase email for consistent lookup
+          const normalizedEmail = email.toLowerCase();
+          console.log(`   📧 Key "${encodedEmail}" -> decoded "${email}" -> normalized "${normalizedEmail}"`);
+          console.log(`      Member data:`, JSON.stringify(member, null, 2));
+
+          members[normalizedEmail] = {
             ...member,
+            email: member.email || email,
             joinedAt: member.joinedAt?.toDate?.() || member.joinedAt,
           };
         });
       }
 
+      console.log(`   Final members object keys:`, Object.keys(members));
+      console.log(`   Looking for user "${userEmail.toLowerCase()}" in members:`, members[userEmail.toLowerCase()]);
+
       return {
         ...data,
-        id: doc.id,
+        id: docSnap.id,
         createdAt: data.createdAt?.toDate(),
         members,
       } as Team;
@@ -366,12 +429,17 @@ export async function getTeamById(teamId: string): Promise<Team | null> {
 
     const data = teamDoc.data();
 
-    // Convert member timestamps
+    // Convert member timestamps and decode email keys
     const members: { [email: string]: TeamMember } = {};
     if (data.members) {
-      Object.entries(data.members).forEach(([email, member]: [string, any]) => {
-        members[email] = {
+      Object.entries(data.members).forEach(([encodedEmail, member]: [string, any]) => {
+        // Decode the email key back to the actual email
+        const email = decodeEmailKey(encodedEmail);
+        // Store with lowercase email for consistent lookup
+        const normalizedEmail = email.toLowerCase();
+        members[normalizedEmail] = {
           ...member,
+          email: member.email || email, // Use stored email or decoded key
           joinedAt: member.joinedAt?.toDate?.() || member.joinedAt,
         };
       });
@@ -405,14 +473,15 @@ export async function removeTeamMember(
       throw new Error('Team not found');
     }
 
-    // Prevent removing the owner
-    if (team.members[memberEmail]?.role === 'owner') {
+    // Prevent removing the owner (use lowercase for lookup)
+    if (team.members[memberEmail.toLowerCase()]?.role === 'owner') {
       throw new Error('Cannot remove team owner');
     }
 
-    // Update team document
+    // Update team document - use encoded email key
+    const memberEmailKey = encodeEmailKey(memberEmail);
     await updateDoc(doc(db, 'teams', teamId), {
-      [`members.${memberEmail}`]: deleteDoc as any, // Remove member
+      [`members.${memberEmailKey}`]: deleteField(), // Remove member field
       memberEmails: arrayRemove(memberEmail),
     });
 
@@ -538,6 +607,98 @@ export async function resendInvitation(
   }
 }
 
+/**
+ * Re-share Google Drive folder with a team member
+ * This should be called by the team OWNER when a member has permission issues
+ * Also repairs membership data if the user is in memberEmails but not in members object
+ */
+export async function reshareWithMember(
+  teamId: string,
+  memberEmail: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log(`🔄 Re-sharing Drive folder with ${memberEmail}...`);
+
+    // 1. Get the team
+    const teamDoc = await getDoc(doc(db, 'teams', teamId));
+    if (!teamDoc.exists()) {
+      return { success: false, message: 'Team not found' };
+    }
+
+    const team = teamDoc.data() as Team;
+
+    if (!team.driveFolderId) {
+      return { success: false, message: 'Team has no associated Drive folder' };
+    }
+
+    // Normalize email for lookups
+    const normalizedEmail = memberEmail.toLowerCase();
+
+    // 2. Check if user needs membership repair (in memberEmails but not in members)
+    const isMemberByEmail = team.memberEmails?.some(e => e.toLowerCase() === normalizedEmail);
+
+    // Check members object - need to decode keys
+    let foundInMembers = false;
+    if (team.members) {
+      for (const key of Object.keys(team.members)) {
+        const decodedEmail = decodeEmailKey(key).toLowerCase();
+        if (decodedEmail === normalizedEmail) {
+          foundInMembers = true;
+          break;
+        }
+      }
+    }
+
+    if (isMemberByEmail && !foundInMembers) {
+      console.log(`⚠️ Member ${memberEmail} is in memberEmails but not in members object - repairing...`);
+
+      // Try to get role from pending invite
+      const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+      let role: 'admin' | 'leader' | 'member' = 'member';
+
+      try {
+        const inviteDoc = await getDoc(doc(db, 'team_invites', inviteId));
+        if (inviteDoc.exists()) {
+          const inviteData = inviteDoc.data();
+          role = inviteData.role || 'member';
+          console.log(`📋 Found invite with role: ${role}`);
+        }
+      } catch (inviteErr) {
+        console.warn('Could not fetch invite data:', inviteErr);
+      }
+
+      // Add the member to the members object in Firestore
+      const memberEmailKey = encodeEmailKey(memberEmail);
+      await updateDoc(doc(db, 'teams', teamId), {
+        [`members.${memberEmailKey}`]: {
+          email: memberEmail,
+          role: role,
+          joinedAt: Timestamp.now(),
+          displayName: memberEmail.split('@')[0],
+        },
+      });
+
+      console.log(`✅ Added ${memberEmail} to members object with role: ${role}`);
+    }
+
+    // 3. Share the folder recursively
+    console.log(`📤 Sharing folder ${team.driveFolderId} with ${memberEmail}...`);
+    await shareFolderRecursively(team.driveFolderId, memberEmail, 'writer');
+
+    console.log(`✅ Successfully re-shared folder with ${memberEmail}`);
+    return {
+      success: true,
+      message: `Successfully shared folder with ${memberEmail}. They may need to refresh their app.`
+    };
+  } catch (error: any) {
+    console.error('Failed to re-share folder:', error);
+    return {
+      success: false,
+      message: `Failed to share: ${error.message}`
+    };
+  }
+}
+
 
 /**
  * Update team member role
@@ -548,8 +709,10 @@ export async function updateMemberRole(
   newRole: 'admin' | 'leader' | 'member'
 ): Promise<void> {
   try {
+    // Use encoded email key for Firestore compatibility
+    const memberEmailKey = encodeEmailKey(memberEmail);
     await updateDoc(doc(db, 'teams', teamId), {
-      [`members.${memberEmail}.role`]: newRole,
+      [`members.${memberEmailKey}.role`]: newRole,
     });
 
     console.log(`✅ Updated ${memberEmail} role to ${newRole} in team ${teamId}`);
@@ -597,13 +760,52 @@ export async function reshareTeamContents(
       throw new Error('Team not found');
     }
 
-    // Check if user is a member
-    if (!team.memberEmails.includes(memberEmail)) {
+    // Normalize email to lowercase for lookups (members object uses lowercase keys)
+    const normalizedEmail = memberEmail.toLowerCase();
+
+    // Check if user is a member (memberEmails may have original case)
+    const isMember = team.memberEmails.some(e => e.toLowerCase() === normalizedEmail);
+    if (!isMember) {
       throw new Error('User is not a member of this team');
     }
 
-    // Get the member's role to determine permission level
-    const memberRole = team.members[memberEmail]?.role || 'member';
+    // Get the member's role to determine permission level (use lowercase for lookup)
+    let memberRole = team.members[normalizedEmail]?.role;
+
+    // If member is in memberEmails but not in members object, repair the membership data first
+    if (!memberRole) {
+      console.log(`⚠️ Member ${memberEmail} is in memberEmails but not in members object - repairing...`);
+
+      // Try to get role from pending invite
+      const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+      let role: 'admin' | 'leader' | 'member' = 'member';
+
+      try {
+        const inviteDoc = await getDoc(doc(db, 'team_invites', inviteId));
+        if (inviteDoc.exists()) {
+          const inviteData = inviteDoc.data();
+          role = inviteData.role || 'member';
+          console.log(`📋 Found invite with role: ${role}`);
+        }
+      } catch (inviteErr) {
+        console.warn('Could not fetch invite data:', inviteErr);
+      }
+
+      // Add the member to the members object in Firestore
+      const memberEmailKey = encodeEmailKey(memberEmail);
+      await updateDoc(doc(db, 'teams', teamId), {
+        [`members.${memberEmailKey}`]: {
+          email: memberEmail,
+          role: role,
+          joinedAt: Timestamp.now(),
+          displayName: memberEmail.split('@')[0],
+        },
+      });
+
+      console.log(`✅ Added ${memberEmail} to members object with role: ${role}`);
+      memberRole = role;
+    }
+
     const permission = memberRole === 'owner' || memberRole === 'admin' ? 'writer' : 'writer';
 
     // Recursively share all contents
@@ -613,5 +815,133 @@ export async function reshareTeamContents(
   } catch (error: any) {
     console.error('Failed to re-share team contents:', error);
     throw new Error(`Failed to re-share team contents: ${error.message}`);
+  }
+}
+
+/**
+ * Automatically repair permissions for a team member
+ * This function is called when access issues are detected
+ */
+export async function autoRepairMemberPermissions(
+  teamId: string,
+  memberEmail: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log(`🔧 Auto-repairing permissions for ${memberEmail} in team ${teamId}...`);
+
+    // Get team data
+    const team = await getTeamById(teamId);
+    if (!team) {
+      return { success: false, message: 'Team not found' };
+    }
+
+    // Normalize email to lowercase for lookups (members object uses lowercase keys)
+    const normalizedEmail = memberEmail.toLowerCase();
+
+    // Verify user is actually a member (memberEmails may have original case)
+    const isMember = team.memberEmails.some(e => e.toLowerCase() === normalizedEmail);
+    if (!isMember) {
+      return { success: false, message: 'User is not a member of this team' };
+    }
+
+    // Use lowercase for member lookup
+    let member = team.members[normalizedEmail];
+
+    // If member is in memberEmails but not in members object, repair the membership data
+    if (!member) {
+      console.log(`⚠️ Member ${memberEmail} is in memberEmails but not in members object - repairing...`);
+
+      // Try to get role from pending invite
+      const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+      let role: 'admin' | 'leader' | 'member' = 'member';
+
+      try {
+        const inviteDoc = await getDoc(doc(db, 'team_invites', inviteId));
+        if (inviteDoc.exists()) {
+          const inviteData = inviteDoc.data();
+          role = inviteData.role || 'member';
+          console.log(`📋 Found invite with role: ${role}`);
+        }
+      } catch (inviteErr) {
+        console.warn('Could not fetch invite data:', inviteErr);
+      }
+
+      // Add the member to the members object in Firestore
+      const memberEmailKey = encodeEmailKey(memberEmail);
+      await updateDoc(doc(db, 'teams', teamId), {
+        [`members.${memberEmailKey}`]: {
+          email: memberEmail,
+          role: role,
+          joinedAt: Timestamp.now(),
+          displayName: memberEmail.split('@')[0], // Use email prefix as display name
+        },
+      });
+
+      console.log(`✅ Added ${memberEmail} to members object with role: ${role}`);
+
+      // Update local member reference
+      member = {
+        email: memberEmail,
+        role: role,
+        joinedAt: new Date(),
+        displayName: memberEmail.split('@')[0],
+      };
+    }
+
+    console.log(`👤 Member role: ${member.role}`);
+    console.log(`📅 Member joined: ${member.joinedAt}`);
+
+    // Determine appropriate permission level
+    const permission = member.role === 'owner' || member.role === 'admin' ? 'writer' : 'writer';
+
+    try {
+      // First, check current permissions
+      const { diagnoseFolderPermissions } = await import('./googleDriveService');
+      const diagnostic = await diagnoseFolderPermissions(team.driveFolderId, memberEmail);
+
+      if (diagnostic.hasAccess && diagnostic.userPermission?.role === permission) {
+        return { success: true, message: 'Permissions are already correct' };
+      }
+
+      // Attempt to re-share the folder and all contents
+      console.log(`📤 Re-sharing folder with ${memberEmail} as ${permission}...`);
+      await shareFolderRecursively(team.driveFolderId, memberEmail, permission);
+
+      // Verify the fix worked
+      const postDiagnostic = await diagnoseFolderPermissions(team.driveFolderId, memberEmail);
+      if (postDiagnostic.hasAccess) {
+        console.log(`✅ Successfully repaired permissions for ${memberEmail}`);
+        return { success: true, message: 'Permissions repaired successfully' };
+      } else {
+        console.warn(`⚠️ Repair attempted but access still not working`);
+        return {
+          success: false,
+          message: 'Repair attempted but access issue persists. Please sign out and back in with Google.'
+        };
+      }
+
+    } catch (repairError: any) {
+      console.error('Repair error:', repairError);
+
+      // Check if this is a permission error (owner action required)
+      if (repairError.message?.includes('403') || repairError.message?.includes('forbidden')) {
+        return {
+          success: false,
+          message: 'Only the team owner can repair permissions. Please contact them.'
+        };
+      }
+
+      return {
+        success: false,
+        message: `Repair failed: ${repairError.message}`
+      };
+    }
+
+  } catch (error: any) {
+    console.error('Auto-repair failed:', error);
+    return {
+      success: false,
+      message: `Auto-repair failed: ${error.message}`
+    };
   }
 }

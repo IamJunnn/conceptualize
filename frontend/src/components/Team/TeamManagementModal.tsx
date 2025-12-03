@@ -1,19 +1,27 @@
 import { useState, useEffect } from 'react';
-import { Team, TeamInvitation, getTeamPendingInvites, cancelInvitation, resendInvitation, updateInvitationRole, reshareTeamContents } from '../../services/teamService';
+import { Team, TeamInvitation, getTeamPendingInvites, cancelInvitation, resendInvitation, updateInvitationRole, reshareTeamContents, removeTeamMember, reshareWithMember } from '../../services/teamService';
+import { User } from '../../services/authServiceTauri';
 import './TeamManagementModal.css';
 
 interface TeamManagementModalProps {
   team: Team;
+  currentUser: User;
   onClose: () => void;
   onInviteMore?: () => void;
+  onMemberRemoved?: () => void;
 }
 
-export default function TeamManagementModal({ team, onClose, onInviteMore }: TeamManagementModalProps) {
+export default function TeamManagementModal({ team, currentUser, onClose, onInviteMore, onMemberRemoved }: TeamManagementModalProps) {
   const [pendingInvites, setPendingInvites] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
   const [resharingMember, setResharingMember] = useState<string | null>(null);
+  const [removingMember, setRemovingMember] = useState<string | null>(null);
+
+  // Get current user's role in the team (use lowercase for lookup)
+  const currentUserRole = team.members[currentUser.email.toLowerCase()]?.role;
+  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
 
   useEffect(() => {
     loadPendingInvites();
@@ -86,6 +94,31 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
     }
   };
 
+  const handleRemoveMember = async (memberEmail: string) => {
+    const member = team.members[memberEmail.toLowerCase()];
+    const memberName = member?.displayName || memberEmail;
+
+    if (!confirm(`Are you sure you want to remove ${memberName} from the team?\n\nThis will revoke their access to all team files.`)) {
+      return;
+    }
+
+    try {
+      setRemovingMember(memberEmail);
+      await removeTeamMember(team.id, memberEmail);
+      alert(`✅ Successfully removed ${memberName} from the team`);
+
+      // Close the modal and trigger parent refresh
+      if (onMemberRemoved) {
+        onMemberRemoved();
+      }
+      onClose(); // Close the modal instead of reloading the entire page
+    } catch (err: any) {
+      alert(`Failed to remove member: ${err.message}`);
+    } finally {
+      setRemovingMember(null);
+    }
+  };
+
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
@@ -110,13 +143,13 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
 
         <div className="tabs">
           <button
-            className={`tab ${activeTab === 'members' ? 'active' : ''}`}
+            className={`modal-tab ${activeTab === 'members' ? 'active' : ''}`}
             onClick={() => setActiveTab('members')}
           >
             Members ({membersList.length})
           </button>
           <button
-            className={`tab ${activeTab === 'invitations' ? 'active' : ''}`}
+            className={`modal-tab ${activeTab === 'invitations' ? 'active' : ''}`}
             onClick={() => setActiveTab('invitations')}
           >
             Pending Invitations ({pendingInvites.length})
@@ -140,7 +173,7 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
                               Incomplete member data
                             </div>
                             <div className="member-email" style={{ color: '#f59e0b' }}>
-                              Please re-invite this member
+                              Invalid member entry
                             </div>
                             {member.joinedAt && (
                               <div className="member-meta">
@@ -148,10 +181,28 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
                               </div>
                             )}
                           </div>
-                          <div className="member-role">
+                          <div className="member-actions">
                             <span className="role-badge role-member" style={{ background: '#f59e0b', color: 'white' }}>
                               Invalid
                             </span>
+                            {canManageMembers && (
+                              <button
+                                className="btn-danger btn-sm"
+                                onClick={() => {
+                                  // For invalid entries, we need to find the key
+                                  const memberKey = Object.keys(team.members).find(
+                                    (key, idx) => idx === index && !team.members[key].email
+                                  );
+                                  if (memberKey) {
+                                    handleRemoveMember(memberKey);
+                                  }
+                                }}
+                                disabled={removingMember !== null}
+                                title="Remove invalid entry"
+                              >
+                                {removingMember === Object.keys(team.members)[index] ? 'Removing...' : 'Remove'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -173,14 +224,26 @@ export default function TeamManagementModal({ team, onClose, onInviteMore }: Tea
                             {member.role || 'member'}
                           </span>
                           {member.role !== 'owner' && (
-                            <button
-                              className="btn-secondary btn-sm"
-                              onClick={() => handleReshareContents(member.email)}
-                              disabled={resharingMember === member.email}
-                              title="Grant access to all existing folders and files"
-                            >
-                              {resharingMember === member.email ? 'Sharing...' : 'Re-share Contents'}
-                            </button>
+                            <>
+                              <button
+                                className="btn-secondary btn-sm"
+                                onClick={() => handleReshareContents(member.email)}
+                                disabled={resharingMember === member.email}
+                                title="Grant access to all existing folders and files"
+                              >
+                                {resharingMember === member.email ? 'Sharing...' : 'Re-share Contents'}
+                              </button>
+                              {canManageMembers && (
+                                <button
+                                  className="btn-danger btn-sm"
+                                  onClick={() => handleRemoveMember(member.email)}
+                                  disabled={removingMember === member.email}
+                                  title="Remove member from team"
+                                >
+                                  {removingMember === member.email ? 'Removing...' : 'Remove'}
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>

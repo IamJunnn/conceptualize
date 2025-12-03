@@ -1,20 +1,23 @@
 /**
- * Team Drive Storage Service
- * Provides team file storage using Google Drive API
- * This replaces cloudStorageBackend.ts for team file operations
+ * Team Storage Service
+ * Provides team file storage using Firebase Cloud Storage
+ * This replaces Google Drive for team file operations to avoid permission issues
  */
 
 import {
-  listFolderFiles,
+  uploadFile,
+  downloadFile,
+  deleteFile,
+  deleteFolder,
+  listFiles,
   listAllFilesRecursive,
-  uploadNote,
-  downloadNote,
-  updateNote,
-  deleteNote,
-  createSubfolder,
-  moveFile,
-  DriveFile
-} from './googleDriveService';
+  createFolder as createStorageFolder,
+  moveFile as moveStorageFile,
+  renameFile as renameStorageFile,
+  fileExists,
+  invalidateTeamCache,
+  StorageFile,
+} from './firebaseStorageService';
 
 interface FileTreeNode {
   path: string;
@@ -25,63 +28,103 @@ interface FileTreeNode {
   modifiedTime?: string;
 }
 
-export class TeamDriveStorage {
-  private driveFolderId: string;
-  private fileCache: Map<string, { id: string; content: string }> = new Map();
+// Content cache duration - 30 seconds
+const CONTENT_CACHE_DURATION = 30000;
 
-  constructor(driveFolderId: string) {
-    this.driveFolderId = driveFolderId;
+export class TeamDriveStorage {
+  private teamId: string;
+  private fileCache: Map<string, { id: string; content: string; timestamp: number }> = new Map();
+  // Cache for file path lookups to avoid repeated listAllFilesRecursive calls
+  private filePathCache: Map<string, string> = new Map();
+
+  // Expose teamId as rootFolderId for compatibility with existing code
+  get rootFolderId(): string {
+    return this.teamId;
+  }
+
+  constructor(teamId: string) {
+    this.teamId = teamId;
   }
 
   /**
-   * Get file tree structure from Drive folder
+   * Get file tree structure from Firebase Storage
    */
   async getFileTree(): Promise<FileTreeNode[]> {
     try {
+      console.log('[TeamStorage] Getting file tree for team:', this.teamId);
+
       // Get all files recursively
-      const allFiles = await listAllFilesRecursive(this.driveFolderId);
+      const allFiles = await listAllFilesRecursive(this.teamId);
 
-      // Build a map of file ID to file for quick lookup
-      const fileMap = new Map<string, DriveFile>();
-      allFiles.forEach(file => fileMap.set(file.id, file));
+      // Filter out .folder markers from the list
+      const visibleFiles = allFiles.filter(f => f.name !== '.folder');
 
-      // Build a map of parent ID to children
-      const childrenMap = new Map<string, DriveFile[]>();
-      allFiles.forEach(file => {
-        const parentId = file.parents?.[0] || this.driveFolderId;
-        if (!childrenMap.has(parentId)) {
-          childrenMap.set(parentId, []);
-        }
-        childrenMap.get(parentId)!.push(file);
-      });
+      // Build tree structure from flat list
+      const tree = this.buildTreeFromFiles(visibleFiles);
 
-      // Recursively build tree starting from root
-      const buildTree = (parentId: string): FileTreeNode[] => {
-        const children = childrenMap.get(parentId) || [];
-        return children.map(file => {
-          const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
-          const node: FileTreeNode = {
-            id: file.id,
-            name: file.name,
-            path: file.name, // In flat structure, path is just the name
-            type: isFolder ? 'folder' : 'file',
-            modifiedTime: file.modifiedTime,
-          };
-
-          if (isFolder) {
-            node.children = buildTree(file.id);
-          }
-
-          return node;
-        });
-      };
-
-      const tree = buildTree(this.driveFolderId);
+      console.log('[TeamStorage] File tree built with', tree.length, 'root items');
       return tree;
     } catch (error) {
-      console.error('Failed to get file tree:', error);
+      console.error('[TeamStorage] Failed to get file tree:', error);
       throw error;
     }
+  }
+
+  /**
+   * Build a tree structure from flat file list
+   */
+  private buildTreeFromFiles(files: StorageFile[]): FileTreeNode[] {
+    const root: FileTreeNode[] = [];
+    const folderMap = new Map<string, FileTreeNode>();
+
+    // First pass: create all folder nodes
+    for (const file of files) {
+      if (file.isFolder) {
+        const relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
+        const node: FileTreeNode = {
+          id: file.id,
+          name: file.name,
+          path: relativePath,
+          type: 'folder',
+          children: [],
+          modifiedTime: file.modifiedTime,
+        };
+        folderMap.set(relativePath, node);
+      }
+    }
+
+    // Second pass: create file nodes and build hierarchy
+    for (const file of files) {
+      const relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
+      const pathParts = relativePath.split('/');
+      const fileName = pathParts.pop()!;
+      const parentPath = pathParts.join('/');
+
+      if (file.isFolder) {
+        const node = folderMap.get(relativePath)!;
+        if (parentPath && folderMap.has(parentPath)) {
+          folderMap.get(parentPath)!.children!.push(node);
+        } else if (!parentPath) {
+          root.push(node);
+        }
+      } else {
+        const node: FileTreeNode = {
+          id: file.id,
+          name: fileName,
+          path: relativePath,
+          type: 'file',
+          modifiedTime: file.modifiedTime,
+        };
+
+        if (parentPath && folderMap.has(parentPath)) {
+          folderMap.get(parentPath)!.children!.push(node);
+        } else if (!parentPath) {
+          root.push(node);
+        }
+      }
+    }
+
+    return root;
   }
 
   /**
@@ -89,131 +132,208 @@ export class TeamDriveStorage {
    */
   async listFiles(): Promise<any[]> {
     try {
-      const files = await listAllFilesRecursive(this.driveFolderId);
+      console.log('[TeamStorage] Listing files for team:', this.teamId);
 
-      // Build a map of file ID to file for quick lookup
-      const fileMap = new Map<string, DriveFile>();
-      files.forEach(file => fileMap.set(file.id, file));
+      const files = await listAllFilesRecursive(this.teamId);
 
-      // Recursively build the full path for a file by traversing parents
-      const buildFullPath = (file: DriveFile): string => {
-        const parentId = file.parents?.[0];
-
-        // If no parent or parent is the root team folder, just return the name
-        if (!parentId || parentId === this.driveFolderId) {
-          return file.name;
-        }
-
-        // Otherwise, recursively get parent path
-        const parent = fileMap.get(parentId);
-        if (parent) {
-          const parentPath = buildFullPath(parent);
-          const fullPath = `${parentPath}\\${file.name}`;
-          return fullPath;
-        }
-
-        // Parent not found - log this as it indicates a problem
-        console.warn(`⚠️ Parent folder not found for "${file.name}" (parentId: ${parentId})`);
-        return file.name;
-      };
-
-      return files.map(file => ({
-        id: file.id,
-        name: file.name,
-        fullPath: buildFullPath(file),
-        size: parseInt(file.size || '0'),
-        contentType: file.mimeType,
-        modifiedTime: file.modifiedTime,
-        webViewLink: file.webViewLink
-      }));
+      // Filter out .folder markers and map to expected format
+      return files
+        .filter(f => f.name !== '.folder')
+        .map(file => {
+          const relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
+          return {
+            id: file.id,
+            name: file.name,
+            fullPath: relativePath.replace(/\//g, '\\'), // Use backslash for consistency with existing code
+            size: file.size || 0,
+            contentType: file.isFolder ? 'application/vnd.google-apps.folder' : file.contentType,
+            modifiedTime: file.modifiedTime,
+          };
+        });
     } catch (error) {
-      console.error('Failed to list files:', error);
+      console.error('[TeamStorage] Failed to list files:', error);
       throw error;
     }
   }
 
   /**
-   * Get file content by name
+   * Get file content by name or path
+   * Accepts either a filename (e.g., "note.md") or a relative path (e.g., "folder/note.md")
+   * Optimized: Uses path cache and direct download when possible
    */
-  async getFile(fileName: string): Promise<string> {
+  async getFile(fileNameOrPath: string): Promise<string> {
     try {
-      // Check cache first for newly created files
-      const normalizedFileName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
-      const cached = this.fileCache.get(normalizedFileName);
-      if (cached) {
+      console.log('[TeamStorage] Getting file:', fileNameOrPath);
+
+      // Normalize backslashes to forward slashes (Windows paths)
+      const normalizedInput = fileNameOrPath.replace(/\\/g, '/');
+
+      // Check if this looks like a path (contains /) or just a filename
+      const isPath = normalizedInput.includes('/');
+      const normalizedPath = normalizedInput.endsWith('.md') ? normalizedInput : `${normalizedInput}.md`;
+
+      // Check content cache first
+      const cached = this.fileCache.get(normalizedPath);
+      if (cached && Date.now() - cached.timestamp < CONTENT_CACHE_DURATION) {
+        console.log('[TeamStorage] Returning cached content for:', normalizedPath);
         return cached.content;
       }
 
-      // Search recursively for the file by name across all folders
-      const allFiles = await listAllFilesRecursive(this.driveFolderId);
-      const file = allFiles.find(f => f.name === fileName || f.name === normalizedFileName);
+      let relativePath: string;
 
-      if (!file) {
-        throw new Error(`File "${fileName}" not found`);
+      if (isPath) {
+        // If a full path was provided, try direct download first
+        // This handles newly created files that aren't in the file list cache yet
+        relativePath = normalizedPath;
+        console.log('[TeamStorage] Using provided path:', relativePath);
+
+        try {
+          const content = await downloadFile(this.teamId, relativePath);
+
+          // Cache the content
+          this.fileCache.set(normalizedPath, {
+            id: relativePath,
+            content,
+            timestamp: Date.now(),
+          });
+
+          return content;
+        } catch (downloadError: any) {
+          // If direct download fails with not found, fall through to search
+          if (downloadError.message?.includes('not found') || downloadError.code === 'storage/object-not-found') {
+            console.log('[TeamStorage] Direct download failed, searching file list...');
+          } else {
+            throw downloadError;
+          }
+        }
+      }
+
+      // For filename-only lookups, or if direct path download failed
+      // Check if we have a cached path for this filename
+      relativePath = this.filePathCache.get(normalizedPath) || '';
+
+      if (!relativePath) {
+        // Need to find the file path - use cached listAllFilesRecursive
+        const allFiles = await listAllFilesRecursive(this.teamId);
+        const file = allFiles.find(f =>
+          f.name === fileNameOrPath ||
+          f.name === normalizedPath ||
+          f.fullPath.endsWith(`/${fileNameOrPath}`) ||
+          f.fullPath.endsWith(`/${normalizedPath}`)
+        );
+
+        if (!file) {
+          throw new Error(`File "${fileNameOrPath}" not found`);
+        }
+
+        relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
+        // Cache the path for future lookups
+        this.filePathCache.set(normalizedPath, relativePath);
       }
 
       // Download the file content
-      const content = await downloadNote(file.id);
+      const content = await downloadFile(this.teamId, relativePath);
+
+      // Cache the content
+      this.fileCache.set(normalizedPath, {
+        id: relativePath,
+        content,
+        timestamp: Date.now(),
+      });
+
       return content;
     } catch (error) {
-      console.error(`Failed to get file "${fileName}":`, error);
+      console.error(`[TeamStorage] Failed to get file "${fileNameOrPath}":`, error);
       throw error;
     }
+  }
+
+  /**
+   * Clear all caches (call when team changes or on major operations)
+   */
+  clearCaches(): void {
+    this.fileCache.clear();
+    this.filePathCache.clear();
+    console.log('[TeamStorage] Caches cleared');
+  }
+
+  /**
+   * Pre-cache file content for optimistic UI updates
+   * Call this before opening a newly created file to avoid race conditions
+   */
+  preCacheContent(filePath: string, content: string): void {
+    const normalizedPath = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
+    const fileName = normalizedPath.split('/').pop() || normalizedPath;
+
+    console.log('[TeamStorage] Pre-caching content for:', normalizedPath);
+
+    // Cache with both full path and filename
+    this.fileCache.set(normalizedPath, {
+      id: normalizedPath,
+      content,
+      timestamp: Date.now(),
+    });
+    this.fileCache.set(fileName, {
+      id: normalizedPath,
+      content,
+      timestamp: Date.now(),
+    });
+    this.filePathCache.set(fileName, normalizedPath);
   }
 
   /**
    * Save a file to the team folder
    */
-  async saveFile(fileName: string, content: string, parentFolderId?: string, isNewFile: boolean = false): Promise<string> {
+  async saveFile(fileName: string, content: string, parentFolderPath?: string, isNewFile: boolean = false): Promise<string> {
     try {
-      console.log('[TeamDriveStorage] saveFile called:', { fileName, parentFolderId, targetFolder: parentFolderId || this.driveFolderId, isNewFile, contentLength: content.length });
+      console.log('[TeamStorage] saveFile called:', { fileName, parentFolderPath, isNewFile, contentLength: content.length });
 
-      // Use provided parent folder ID or fall back to team root folder
-      const targetFolderId = parentFolderId || this.driveFolderId;
       const normalizedFileName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
 
-      console.log('[TeamDriveStorage] Normalized filename:', normalizedFileName, '- Checking for existing file in folder:', targetFolderId);
+      // Strip the teams/{teamId}/ prefix if present (since uploadFile adds it)
+      let cleanParentPath = parentFolderPath;
+      const teamPrefix = `teams/${this.teamId}/`;
+      if (cleanParentPath && cleanParentPath.startsWith(teamPrefix)) {
+        cleanParentPath = cleanParentPath.slice(teamPrefix.length);
+      }
+
+      // Build the full path (relative to team folder)
+      const filePath = cleanParentPath
+        ? `${cleanParentPath}/${normalizedFileName}`
+        : normalizedFileName;
+
+      console.log('[TeamStorage] Full file path:', filePath);
 
       // Check if file already exists
-      const files = await listFolderFiles(targetFolderId);
-      console.log('[TeamDriveStorage] Files in target folder:', files.map(f => f.name));
-
-      const existingFile = files.find(f => f.name === fileName || f.name === normalizedFileName);
-      console.log('[TeamDriveStorage] Existing file found:', existingFile ? existingFile.name : 'none');
-
-      if (existingFile) {
-        if (isNewFile) {
-          console.log('[TeamDriveStorage] ERROR: Trying to create new file but it already exists');
-          // Prevent creating duplicate files
+      if (isNewFile) {
+        const exists = await fileExists(this.teamId, filePath);
+        if (exists) {
+          console.log('[TeamStorage] ERROR: Trying to create new file but it already exists');
           throw new Error(`A file named "${fileName}" already exists in this folder`);
-        } else {
-          console.log('[TeamDriveStorage] Updating existing file:', existingFile.id);
-          // Update existing file (this is for auto-save)
-          await updateNote(existingFile.id, content);
-
-          // Update cache
-          this.fileCache.set(normalizedFileName, { id: existingFile.id, content });
-          console.log('[TeamDriveStorage] File updated successfully');
-          return existingFile.id;
         }
-      } else {
-        console.log('[TeamDriveStorage] No existing file found, creating new file');
-        // Create new file
-        const newFile = await uploadNote(targetFolderId, fileName, content);
-        console.log('[TeamDriveStorage] New file created:', newFile.id);
-
-        // Cache the newly created file to avoid race condition when immediately loading it
-        this.fileCache.set(normalizedFileName, { id: newFile.id, content });
-
-        // Clear cache after 5 seconds (by then Google Drive should have indexed it)
-        setTimeout(() => {
-          this.fileCache.delete(normalizedFileName);
-        }, 5000);
-
-        return newFile.id;
       }
+
+      // Upload/update the file
+      const result = await uploadFile(this.teamId, filePath, content);
+      console.log('[TeamStorage] File saved:', result.id);
+
+      // Cache the file content and path
+      // Cache with both filename and full path for quick lookups
+      this.fileCache.set(normalizedFileName, {
+        id: result.id,
+        content,
+        timestamp: Date.now(),
+      });
+      this.fileCache.set(filePath, {
+        id: result.id,
+        content,
+        timestamp: Date.now(),
+      });
+      this.filePathCache.set(normalizedFileName, filePath);
+
+      return result.id;
     } catch (error) {
-      console.error(`❌ Failed to save file "${fileName}":`, error);
+      console.error(`[TeamStorage] Failed to save file "${fileName}":`, error);
       throw error;
     }
   }
@@ -223,18 +343,32 @@ export class TeamDriveStorage {
    */
   async deleteFile(fileName: string): Promise<void> {
     try {
-      // Search recursively for the file by name
-      const allFiles = await listAllFilesRecursive(this.driveFolderId);
-      const file = allFiles.find(f => f.name === fileName || f.name === `${fileName}.md`);
+      console.log('[TeamStorage] Deleting file:', fileName);
+
+      // Find the file to get its full path
+      const allFiles = await listAllFilesRecursive(this.teamId);
+      const file = allFiles.find(f =>
+        f.name === fileName ||
+        f.name === `${fileName}.md` ||
+        f.fullPath.endsWith(`/${fileName}`) ||
+        f.fullPath.endsWith(`/${fileName}.md`)
+      );
 
       if (!file) {
         throw new Error(`File "${fileName}" not found`);
       }
 
-      // Delete the file
-      await deleteNote(file.id);
+      const relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
+
+      if (file.isFolder) {
+        await deleteFolder(this.teamId, relativePath);
+      } else {
+        await deleteFile(this.teamId, relativePath);
+      }
+
+      console.log('[TeamStorage] File deleted:', fileName);
     } catch (error) {
-      console.error(`Failed to delete file "${fileName}":`, error);
+      console.error(`[TeamStorage] Failed to delete file "${fileName}":`, error);
       throw error;
     }
   }
@@ -258,84 +392,121 @@ export class TeamDriveStorage {
   }
 
   /**
-   * Rename a file (with optional file ID for direct rename)
+   * Rename a file
    */
   async renameFile(oldName: string, newName: string, fileId?: string): Promise<void> {
     try {
-      console.log('[TeamDriveStorage] renameFile called:', { oldName, newName, fileId });
+      console.log('[TeamStorage] renameFile called:', { oldName, newName });
 
-      // If we have a file ID, use direct rename (much faster and no duplicates)
-      if (fileId) {
-        console.log('[TeamDriveStorage] Using direct rename with fileId:', fileId);
-        const { renameFile: renameFileDrive } = await import('./googleDriveService');
-        await renameFileDrive(fileId, newName);
-        console.log('[TeamDriveStorage] Rename completed successfully');
-        return;
-      }
-
-      // Fallback: Find file by name and rename
-      const allFiles = await listAllFilesRecursive(this.driveFolderId);
-      const file = allFiles.find(f => f.name === oldName || f.name === `${oldName}.md`);
+      // Find the file to get its path
+      const allFiles = await listAllFilesRecursive(this.teamId);
+      const file = allFiles.find(f =>
+        f.name === oldName ||
+        f.name === `${oldName}.md` ||
+        (fileId && f.id === fileId)
+      );
 
       if (!file) {
         throw new Error(`File "${oldName}" not found`);
       }
 
-      const { renameFile: renameFileDrive } = await import('./googleDriveService');
-      await renameFileDrive(file.id, newName);
+      const relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
+      await renameStorageFile(this.teamId, relativePath, newName);
+
+      console.log('[TeamStorage] Rename completed:', oldName, '->', newName);
     } catch (error) {
-      console.error(`Failed to rename file from "${oldName}" to "${newName}":`, error);
+      console.error(`[TeamStorage] Failed to rename file from "${oldName}" to "${newName}":`, error);
       throw error;
     }
   }
 
   /**
-   * Create a folder (subfolder in the team folder)
+   * Create a folder
    */
-  async createFolder(folderName: string, parentFolderId?: string): Promise<void> {
+  async createFolder(folderName: string, parentFolderPath?: string): Promise<void> {
     try {
-      // Use provided parent folder ID or fall back to team root folder
-      const targetFolderId = parentFolderId || this.driveFolderId;
+      console.log('[TeamStorage] Creating folder:', folderName, 'in', parentFolderPath || 'root');
 
-      // Create subfolder in the specified parent folder
-      await createSubfolder(targetFolderId, folderName);
+      // Strip the teams/{teamId}/ prefix if present (since createStorageFolder adds it)
+      let cleanParentPath = parentFolderPath;
+      const teamPrefix = `teams/${this.teamId}/`;
+      if (cleanParentPath && cleanParentPath.startsWith(teamPrefix)) {
+        cleanParentPath = cleanParentPath.slice(teamPrefix.length);
+      }
+
+      const folderPath = cleanParentPath
+        ? `${cleanParentPath}/${folderName}`
+        : folderName;
+
+      await createStorageFolder(this.teamId, folderPath);
+
+      console.log('[TeamStorage] Folder created:', folderPath);
     } catch (error) {
-      console.error(`Failed to create folder "${folderName}":`, error);
+      console.error(`[TeamStorage] Failed to create folder "${folderName}":`, error);
       throw error;
     }
   }
 
   /**
    * Move a file or folder to a different location
+   * @param sourcePathOrName - Can be a filename (e.g., "note.md") or a relative path (e.g., "folder/note.md")
+   * @param destinationFolderPath - The destination folder path (e.g., "coaches" or "" for root)
    */
-  async moveItem(sourceName: string, destinationFolderName: string): Promise<void> {
+  async moveItem(sourcePathOrName: string, destinationFolderPath: string): Promise<void> {
     try {
-      // Search recursively for all files and folders
-      const allFiles = await listAllFilesRecursive(this.driveFolderId);
+      console.log('[TeamStorage] Moving item:', sourcePathOrName, 'to', destinationFolderPath || 'root');
 
-      // Find source file/folder
-      const sourceFile = allFiles.find(f => f.name === sourceName);
+      // Invalidate cache to ensure we have fresh data
+      invalidateTeamCache(this.teamId);
+
+      // Find the source file/folder
+      const allFiles = await listAllFilesRecursive(this.teamId);
+
+      // Try to find by exact path match first, then by name
+      // sourcePathOrName could be "trials.md" (root file) or "folder/trials.md" (nested file)
+      let sourceFile = allFiles.find(f => {
+        const relativePath = f.fullPath.replace(`teams/${this.teamId}/`, '');
+        return relativePath === sourcePathOrName || relativePath === `${sourcePathOrName}.md`;
+      });
+
+      // If not found by path, try by name (for backwards compatibility)
       if (!sourceFile) {
-        throw new Error(`Source "${sourceName}" not found`);
-      }
-
-      // Find destination folder (if empty, move to root team folder)
-      let destinationFolderId = this.driveFolderId;
-      if (destinationFolderName) {
-        const destFolder = allFiles.find(
-          f => f.name === destinationFolderName &&
-          f.mimeType === 'application/vnd.google-apps.folder'
+        sourceFile = allFiles.find(f =>
+          f.name === sourcePathOrName ||
+          f.name === `${sourcePathOrName}.md`
         );
-        if (!destFolder) {
-          throw new Error(`Destination folder "${destinationFolderName}" not found`);
-        }
-        destinationFolderId = destFolder.id;
       }
 
-      // Move the file/folder
-      await moveFile(sourceFile.id, destinationFolderId, this.driveFolderId);
+      if (!sourceFile) {
+        console.error('[TeamStorage] Available files:', allFiles.map(f => f.fullPath));
+        throw new Error(`Source "${sourcePathOrName}" not found`);
+      }
+
+      const sourceRelativePath = sourceFile.fullPath.replace(`teams/${this.teamId}/`, '');
+      const fileName = sourceFile.name;
+
+      // Strip the teams/{teamId}/ prefix from destination if present
+      let cleanDestination = destinationFolderPath;
+      const teamPrefix = `teams/${this.teamId}/`;
+      if (cleanDestination && cleanDestination.startsWith(teamPrefix)) {
+        cleanDestination = cleanDestination.slice(teamPrefix.length);
+      }
+
+      // Build destination path using the actual filename
+      const newPath = cleanDestination
+        ? `${cleanDestination}/${fileName}`
+        : fileName;
+
+      console.log('[TeamStorage] Source path:', sourceRelativePath, '-> New path:', newPath);
+
+      await moveStorageFile(this.teamId, sourceRelativePath, newPath);
+
+      // Clear local caches after move
+      this.clearCaches();
+
+      console.log('[TeamStorage] Item moved:', sourcePathOrName, 'to', newPath);
     } catch (error) {
-      console.error(`Failed to move "${sourceName}":`, error);
+      console.error(`[TeamStorage] Failed to move "${sourcePathOrName}":`, error);
       throw error;
     }
   }
@@ -343,7 +514,8 @@ export class TeamDriveStorage {
 
 /**
  * Factory function to create TeamDriveStorage instance
+ * Now takes teamId instead of driveFolderId
  */
-export function getTeamDriveStorage(driveFolderId: string): TeamDriveStorage {
-  return new TeamDriveStorage(driveFolderId);
+export function getTeamDriveStorage(teamId: string): TeamDriveStorage {
+  return new TeamDriveStorage(teamId);
 }

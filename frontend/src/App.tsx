@@ -5,7 +5,8 @@ import MainUI from './components/MainUI'
 import TeamMainUI from './components/Team/TeamMainUI'
 import LoginScreen from './components/Auth/LoginScreen'
 import ModeSelectionScreen from './components/Auth/ModeSelectionScreen'
-import TeamActionSelectionScreen from './components/Auth/TeamActionSelectionScreen'
+// TeamActionSelectionScreen removed - we now go directly to login after selecting team mode
+// TeamMainUI handles the logic for: has teams → show team, no teams → show create modal
 import InviteAcceptScreen from './components/Auth/InviteAcceptScreen'
 import CreateWorkspaceModal from './components/Workspace/CreateWorkspaceModal'
 // TODO: Re-enable for full release
@@ -41,7 +42,6 @@ function AppContent() {
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false)
   const [hasWorkspace, setHasWorkspace] = useState<boolean | null>(null)
   const [pendingInvitation, setPendingInvitation] = useState<DeepLinkInvitation | null>(null)
-  const [teamAction, setTeamAction] = useState<'create' | 'join' | null>(null)
 
   // Check for app mode and saved root folder on mount
   useEffect(() => {
@@ -185,8 +185,9 @@ function AppContent() {
   }
 
   // Show loading state while checking mode, auth, and initial setup
-  if (modeLoading || isLoading) {
-    console.log('⏳ Loading... modeLoading:', modeLoading, 'isLoading:', isLoading)
+  // Also show loading if in team mode and auth is still loading
+  if (modeLoading || isLoading || (appMode === 'team' && authLoading)) {
+    console.log('⏳ Loading... modeLoading:', modeLoading, 'isLoading:', isLoading, 'authLoading:', authLoading)
     return (
       <div className="app">
         <div className="welcome-screen">
@@ -220,34 +221,28 @@ function AppContent() {
     )
   }
 
+  const handleLocalWorkspaceCreated = (path: string, _name: string) => {
+    // The workspace folder has been created and saved as root folder
+    // Set the root path directly to skip the SetupScreen
+    setRootPath(path)
+  }
+
   // Show mode selection if no mode is set and no pending invitation
   if (!appMode) {
     console.log('📋 Showing mode selection screen (no app mode set)')
-    return <ModeSelectionScreen onModeSelected={handleModeSelected} />
-  }
-
-  // Show team action selection if in team mode and no action chosen yet
-  if (appMode === 'team' && !teamAction && !user) {
-    console.log('🎯 Showing team action selection screen')
     return (
-      <TeamActionSelectionScreen
-        onCreateTeam={() => {
-          console.log('✅ User chose to create a team')
-          setTeamAction('create')
-        }}
-        onJoinTeam={() => {
-          console.log('✅ User chose to join a team')
-          setTeamAction('join')
-        }}
-        onBack={handleBackToModeSelection}
+      <ModeSelectionScreen
+        onModeSelected={handleModeSelected}
+        onLocalWorkspaceCreated={handleLocalWorkspaceCreated}
       />
     )
   }
 
-  // Show login screen if in team mode, action chosen, and user is not authenticated
-  if (appMode === 'team' && teamAction && !user && !authLoading) {
-    console.log('🔐 Showing login screen (team mode, action chosen, no user)')
-    return <LoginScreen onLoginSuccess={() => {}} onBack={() => setTeamAction(null)} />
+  // Show login screen directly if in team mode and user is not authenticated
+  // After sign-in, TeamMainUI will handle routing based on user's team state
+  if (appMode === 'team' && !user && !authLoading) {
+    console.log('🔐 Showing login screen (team mode, no user)')
+    return <LoginScreen onLoginSuccess={() => {}} onBack={handleBackToModeSelection} />
   }
 
   // TEAM MODE: Show TeamMainUI (Google Drive based)

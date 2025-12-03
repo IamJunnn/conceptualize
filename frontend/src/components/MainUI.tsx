@@ -1,27 +1,44 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
 import TitleBar from './UI/TitleBar'
+import IconRail from './UI/IconRail'
 import GraphView from './Graph/GraphView'
-import FileViewer from './Viewers/FileViewer'
 import ContextMenu from './UI/ContextMenu'
 import HelpModal from './UI/HelpModal'
 import { TabBar, OpenFile } from './UI/TabBar'
 import { DropZoneOverlay } from './UI/DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import { getFilesWithIncomingLinks } from '../utils/graphUtils'
-import TodoPanel from './Todo/TodoPanel'
-import NoteTodosView from './Todo/NoteTodosView'
-import SettingsPanel from './Settings/SettingsPanel'
-import AdminDashboard from './Workspace/AdminDashboard'
-import LeaderDashboard from './Workspace/LeaderDashboard'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserWorkspace, Workspace, getMemberRole, WorkspaceRole } from '../services/workspaceService'
-// import AISuggestionsPanel from './AI/AISuggestionsPanel'
 import './MainUI.css'
+
+// Lazy load heavy components for better initial load performance
+const FileViewer = lazy(() => import('./Viewers/FileViewer'))
+const TodoPanel = lazy(() => import('./Todo/TodoPanel'))
+const NoteTodosView = lazy(() => import('./Todo/NoteTodosView'))
+const SettingsPanel = lazy(() => import('./Settings/SettingsPanel'))
+const DashboardPanel = lazy(() => import('./Dashboard/DashboardPanel'))
+const AdminDashboard = lazy(() => import('./Workspace/AdminDashboard'))
+const LeaderDashboard = lazy(() => import('./Workspace/LeaderDashboard'))
 
 // Development mode flag
 const isDev = import.meta.env.DEV
+
+// Loading fallback component for lazy-loaded components
+const LoadingFallback = () => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    color: '#cccccc',
+    fontSize: '14px'
+  }}>
+    Loading...
+  </div>
+)
 
 interface MainUIProps {
   rootPath: string
@@ -51,7 +68,6 @@ interface ContextMenuState {
   itemId?: string; // Google Drive file ID (for team mode)
 }
 
-// Helper function removed - was unused
 
 function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { draggedTab, setDraggedTab, dropZone, setDropZone, isDragging, setIsDragging } = useDragDrop();
@@ -63,7 +79,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const dropZoneRef = useRef(dropZone);
 
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('graph') // 'graph' | 'timeline' | file path
+  const [activeTab, setActiveTab] = useState<string>('') // 'special://graph' | 'special://timeline' | file path
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
   const [fileTree, setFileTree] = useState<FileTreeNode[]>([])
   const [editing, setEditing] = useState<EditingState | null>(null)
@@ -80,7 +96,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const { user } = useAuth()
 
   // Helper function to extract all paths from file tree
-  const getAllPaths = (nodes: FileTreeNode[]): string[] => {
+  // Memoize getAllPaths to avoid recomputing on every render
+  const allPaths = useMemo(() => {
     const paths: string[] = [];
     const traverse = (node: FileTreeNode) => {
       paths.push(node.path);
@@ -88,15 +105,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         node.children.forEach(traverse);
       }
     };
-    nodes.forEach(traverse);
+    fileTree.forEach(traverse);
     return paths;
-  };
+  }, [fileTree]);
 
   // Split view state
   const [splitView, setSplitView] = useState(false)
   const [activePane, setActivePane] = useState<EditorPane>('left')
-  const [leftPaneTab, setLeftPaneTab] = useState<string>('graph')
-  const [rightPaneTab, setRightPaneTab] = useState<string>('graph')
+  const [leftPaneTab, setLeftPaneTab] = useState<string>('')
+  const [rightPaneTab, setRightPaneTab] = useState<string>('')
   const [leftPaneFiles, setLeftPaneFiles] = useState<OpenFile[]>([])
   const [rightPaneFiles, setRightPaneFiles] = useState<OpenFile[]>([])
 
@@ -182,24 +199,28 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
   }, [])
 
-  // Save session to localStorage whenever tabs change
+  // Save session to localStorage whenever tabs change (debounced for performance)
   useEffect(() => {
     // Don't save until we've loaded the session
     if (!sessionLoaded) return
 
-    const session = {
-      splitView,
-      openFiles,
-      activeTab,
-      leftPaneFiles,
-      rightPaneFiles,
-      leftPaneTab,
-      rightPaneTab,
-      activePane
-    }
+    const timeoutId = setTimeout(() => {
+      const session = {
+        splitView,
+        openFiles,
+        activeTab,
+        leftPaneFiles,
+        rightPaneFiles,
+        leftPaneTab,
+        rightPaneTab,
+        activePane
+      }
 
-    if (isDev) console.log('💾 Saving session:', session)
-    localStorage.setItem('editorSession', JSON.stringify(session))
+      if (isDev) console.log('💾 Saving session:', session)
+      localStorage.setItem('editorSession', JSON.stringify(session))
+    }, 500) // Debounce: wait 500ms after last change before saving
+
+    return () => clearTimeout(timeoutId)
   }, [sessionLoaded, splitView, openFiles, activeTab, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab, activePane])
 
   const loadFileTree = useCallback(async () => {
@@ -230,11 +251,33 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     updateFilesWithIncomingLinks()
   }, [loadFileTree, updateFilesWithIncomingLinks])
 
-  // Keyboard shortcuts
+  // Refs for keyboard shortcuts to avoid re-registering event listener
+  const activeTabRef = useRef(activeTab)
+  const splitViewRef = useRef(splitView)
+  const activeGuideRef = useRef(activeGuide)
+  const activePaneRef = useRef(activePane)
+  const leftPaneTabRef = useRef(leftPaneTab)
+  const rightPaneTabRef = useRef(rightPaneTab)
+  const leftPaneFilesRef = useRef(leftPaneFiles)
+  const rightPaneFilesRef = useRef(rightPaneFiles)
+  const openFilesRef = useRef(openFiles)
+
+  // Update refs when values change
+  useEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+  useEffect(() => { splitViewRef.current = splitView }, [splitView])
+  useEffect(() => { activeGuideRef.current = activeGuide }, [activeGuide])
+  useEffect(() => { activePaneRef.current = activePane }, [activePane])
+  useEffect(() => { leftPaneTabRef.current = leftPaneTab }, [leftPaneTab])
+  useEffect(() => { rightPaneTabRef.current = rightPaneTab }, [rightPaneTab])
+  useEffect(() => { leftPaneFilesRef.current = leftPaneFiles }, [leftPaneFiles])
+  useEffect(() => { rightPaneFilesRef.current = rightPaneFiles }, [rightPaneFiles])
+  useEffect(() => { openFilesRef.current = openFiles }, [openFiles])
+
+  // Keyboard shortcuts - registered once, uses refs for current values
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // ESC - Close help modal
-      if (e.key === 'Escape' && activeGuide) {
+      if (e.key === 'Escape' && activeGuideRef.current) {
         e.preventDefault()
         setActiveGuide(null)
         return
@@ -244,34 +287,34 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
         e.preventDefault() // Prevent browser from closing tab/window
 
-        if (!splitView) {
+        if (!splitViewRef.current) {
           // Single pane mode: close active file or special tab
-          if (activeTab !== 'graph') {
-            if (activeTab.startsWith('special://')) {
+          if (activeTabRef.current) {
+            if (activeTabRef.current.startsWith('special://')) {
               // Close special tab (Todos/Timeline)
-              const newFiles = openFiles.filter(f => f.path !== activeTab)
+              const newFiles = openFilesRef.current.filter(f => f.path !== activeTabRef.current)
               setOpenFiles(newFiles)
-              setActiveTab(newFiles.length > 0 ? newFiles[0].path : 'graph')
+              setActiveTab(newFiles.length > 0 ? newFiles[0].path : '')
             } else {
               // Close regular file
-              handleCloseFile(activeTab)
+              handleCloseFile(activeTabRef.current)
             }
           }
         } else {
           // Split view mode: close active file in active pane
-          if (activePane === 'left') {
-            if (leftPaneTab !== 'graph') {
-              const newFiles = leftPaneFiles.filter(f => f.path !== leftPaneTab)
+          if (activePaneRef.current === 'left') {
+            if (leftPaneTabRef.current) {
+              const newFiles = leftPaneFilesRef.current.filter(f => f.path !== leftPaneTabRef.current)
               setLeftPaneFiles(newFiles)
               if (newFiles.length > 0) {
                 setLeftPaneTab(newFiles[0].path)
               } else {
-                setLeftPaneTab('graph')
+                setLeftPaneTab('')
               }
             }
-          } else if (activePane === 'right') {
-            if (rightPaneTab !== 'graph') {
-              const newFiles = rightPaneFiles.filter(f => f.path !== rightPaneTab)
+          } else if (activePaneRef.current === 'right') {
+            if (rightPaneTabRef.current) {
+              const newFiles = rightPaneFilesRef.current.filter(f => f.path !== rightPaneTabRef.current)
               setRightPaneFiles(newFiles)
               if (newFiles.length > 0) {
                 setRightPaneTab(newFiles[0].path)
@@ -287,15 +330,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       // Ctrl+\ or Cmd+\ (Mac) - Toggle split view
       if ((e.ctrlKey || e.metaKey) && e.key === '\\') {
         e.preventDefault()
-        if (splitView) {
+        if (splitViewRef.current) {
           handleCloseSplitView()
         } else {
           // Open split view: Current content on left, empty right pane
           setSplitView(true)
 
           // Transfer current state to left pane
-          setLeftPaneFiles(openFiles)
-          setLeftPaneTab(activeTab)
+          setLeftPaneFiles(openFilesRef.current)
+          setLeftPaneTab(activeTabRef.current)
 
           // Right pane: empty with null/empty state
           setRightPaneFiles([])
@@ -314,7 +357,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [activeTab, splitView, activeGuide, activePane, leftPaneTab, rightPaneTab, leftPaneFiles, rightPaneFiles, openFiles]) // Re-bind when active tab, splitView, or activeGuide changes
+  }, []) // Empty dependency array - listener registered once!
 
   // Handle pane resizing
   useEffect(() => {
@@ -360,8 +403,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingSidebar) {
         const newWidth = e.clientX
-        // Clamp between 200px and 500px
-        const clampedWidth = Math.min(Math.max(newWidth, 200), 500)
+        // Clamp between 100px and 500px
+        const clampedWidth = Math.min(Math.max(newWidth, 100), 500)
         setSidebarWidth(clampedWidth)
       }
     }
@@ -422,17 +465,11 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           });
         }
 
-        // Only handle drop if we're dragging AND over a valid drop zone
+        // Only handle cross-pane drop if we're dragging AND over a valid drop zone
+        // Note: Tab reordering within the same pane is handled by TabBar's mouseup handler (capture phase)
         if (currentIsDragging && currentDropZone && (currentDropZone === 'left' || currentDropZone === 'right')) {
           if (isDev) console.log('✅ Valid drop - handling on', currentDropZone, 'side');
           handleTabDrop();
-        } else {
-          if (isDev) {
-            console.log('❌ No valid drop zone - tab stays in place', {
-              isDragging: currentIsDragging,
-              dropZone: currentDropZone
-            });
-          }
         }
 
         // Reset all drag state
@@ -452,35 +489,50 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     };
   }, [dragStartPos, draggedTab]);
 
-  const handleSelectFile = (filePath: string, fileName: string, pane?: EditorPane) => {
-    console.log('📂 handleSelectFile called:', { filePath, fileName, pane, splitView })
+  const handleSelectFile = useCallback((filePath: string, fileName: string, pane?: EditorPane) => {
 
     if (!splitView) {
       // Single pane mode
-      const existingFile = openFiles.find(f => f.path === filePath)
-      if (existingFile) {
-        setActiveTab(filePath)
-      } else {
-        setOpenFiles([...openFiles, { path: filePath, name: fileName }])
-        setActiveTab(filePath)
-      }
+      setOpenFiles(prev => {
+        const existingFile = prev.find(f => f.path === filePath)
+        if (existingFile) {
+          setActiveTab(filePath)
+          return prev
+        } else {
+          setActiveTab(filePath)
+          return [...prev, { path: filePath, name: fileName }]
+        }
+      })
     } else {
       // Split view mode - if no pane specified, default to left pane
       const targetPane = pane || 'left';
-      const targetFiles = targetPane === 'left' ? leftPaneFiles : rightPaneFiles
-      const setTargetFiles = targetPane === 'left' ? setLeftPaneFiles : setRightPaneFiles
-      const setTargetTab = targetPane === 'left' ? setLeftPaneTab : setRightPaneTab
 
-      const existingFile = targetFiles.find(f => f.path === filePath)
-      if (existingFile) {
-        setTargetTab(filePath)
+      if (targetPane === 'left') {
+        setLeftPaneFiles(prev => {
+          const existingFile = prev.find(f => f.path === filePath)
+          if (existingFile) {
+            setLeftPaneTab(filePath)
+            return prev
+          } else {
+            setLeftPaneTab(filePath)
+            return [...prev, { path: filePath, name: fileName }]
+          }
+        })
       } else {
-        setTargetFiles([...targetFiles, { path: filePath, name: fileName }])
-        setTargetTab(filePath)
+        setRightPaneFiles(prev => {
+          const existingFile = prev.find(f => f.path === filePath)
+          if (existingFile) {
+            setRightPaneTab(filePath)
+            return prev
+          } else {
+            setRightPaneTab(filePath)
+            return [...prev, { path: filePath, name: fileName }]
+          }
+        })
       }
       setActivePane(targetPane)
     }
-  }
+  }, [splitView])
 
   const handleCloseFile = (filePath: string) => {
     const fileIndex = openFiles.findIndex(f => f.path === filePath)
@@ -811,12 +863,12 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           setLeftPaneTab(filePath);
 
           setRightPaneFiles(newOpenFiles);
-          setRightPaneTab(newOpenFiles.length > 0 ? newOpenFiles[0].path : 'graph');
+          setRightPaneTab(newOpenFiles.length > 0 ? newOpenFiles[0].path : '');
           setActivePane('left');
         } else {
           // Drop on RIGHT: others stay on left, dragged file goes to right
           setLeftPaneFiles(newOpenFiles);
-          setLeftPaneTab(newOpenFiles.length > 0 ? newOpenFiles[0].path : 'graph');
+          setLeftPaneTab(newOpenFiles.length > 0 ? newOpenFiles[0].path : '');
 
           setRightPaneFiles([{ path: filePath, name: fileName }]);
           setRightPaneTab(filePath);
@@ -898,11 +950,26 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       <TitleBar
         onSearchResultClick={handleSelectFile}
         onGuideOpen={handleGuideOpen}
-        onSettingsOpen={() => setShowSettings(true)}
         rootPath={rootPath}
       />
 
       <div className="main-ui-content">
+        {/* Icon Rail - Navigation */}
+        <IconRail
+          onDashboardClick={() => handleSelectFile('special://dashboard', 'Dashboard')}
+          onGraphClick={() => handleSelectFile('special://graph', 'Graph')}
+          onTodosClick={() => handleSelectFile('special://todos', 'Todos')}
+          onTimelineClick={() => handleSelectFile('special://timeline', 'Timeline')}
+          onSettingsClick={() => setShowSettings(true)}
+          activeItem={
+            activeTab === 'special://dashboard' ? 'dashboard' :
+            activeTab === 'special://graph' ? 'graph' :
+            activeTab === 'special://todos' ? 'todos' :
+            activeTab === 'special://timeline' ? 'timeline' :
+            showSettings ? 'settings' : null
+          }
+        />
+
         {/* Left Sidebar - Explorer */}
         <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
           <UnifiedSidebar
@@ -916,7 +983,6 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             refreshFileTree={loadFileTree}
             onContextMenu={handleContextMenu}
             onMoveItem={handleMoveItem}
-            onChangeFolderPath={handleChangeFolderPath}
             filesWithIncomingLinks={filesWithIncomingLinks}
           />
         </div>
@@ -937,9 +1003,10 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             <TabBar
               activeTab={activeTab}
               openFiles={openFiles}
-              showGraphTab={true}
+              showGraphTab={false}
               onTabClick={setActiveTab}
               onTabClose={handleCloseFile}
+              onReorderTabs={setOpenFiles}
               dragStartPos={dragStartPos}
               setDragStartPos={setDragStartPos}
               isPaneActive={true}
@@ -947,44 +1014,72 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               onPaneActivate={() => setActivePane('left')}
             />
             <div className="tab-content" onClick={() => setActivePane('left')}>
-              {activeTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={handleSelectFile} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleCreateNote(rootPath)} onCreateFolder={() => handleCreateFolder(rootPath)} />}
-              {activeTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={handleSelectFile} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
-              {activeTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
+              {activeTab === 'special://dashboard' && (
+                <Suspense fallback={<LoadingFallback />}>
+                  <DashboardPanel
+                    rootPath={rootPath}
+                    onSelectFile={handleSelectFile}
+                    isTabMode={true}
+                  />
+                </Suspense>
+              )}
+              {activeTab === 'special://graph' && (
+                <GraphView
+                  key={graphKey}
+                  rootPath={rootPath}
+                  onFileOpen={handleSelectFile}
+                  onNodeContextMenu={handleGraphNodeContextMenu}
+                  onCreateNote={() => handleCreateNote(rootPath)}
+                  onCreateFolder={() => handleCreateFolder(rootPath)}
+                />
+              )}
+              {activeTab === 'special://todos' && (
+                <Suspense fallback={<LoadingFallback />}>
+                  <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={handleSelectFile} onTodoCreated={() => setTodoKey(prev => prev + 1)} />
+                </Suspense>
+              )}
+              {activeTab === 'special://timeline' && (
+                <Suspense fallback={<LoadingFallback />}>
+                  <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />
+                </Suspense>
+              )}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                 const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                 return activeTab === file.path && (
-                  isEditable ? (
-                    <FileViewer
-                      key={file.path}
-                      filePath={file.path}
-                      fileName={file.name}
-                      rootPath={rootPath}
-                      onOpenFile={handleSelectFile}
-                      onFileCreated={() => {
-                        loadFileTree()
-                        setGraphKey(prev => prev + 1)
-                      }}
-                      onFileRenamed={(oldPath, newPath, newName) => {
-                        const updatedOpenFiles = openFiles.map(f =>
-                          f.path === oldPath ? { path: newPath, name: newName } : f
-                        )
-                        setOpenFiles(updatedOpenFiles)
-                        if (activeTab === oldPath) {
-                          setActiveTab(newPath)
-                        }
-                        loadFileTree()
-                        setGraphKey(prev => prev + 1)
-                      }}
-                      isActive={true}
-                    />
-                  ) : (
-                    <FileViewer
-                      key={file.path}
-                      filePath={file.path}
-                      fileName={file.name}
-                      rootPath={rootPath}
-                    />
-                  )
+                  <Suspense key={file.path} fallback={<LoadingFallback />}>
+                    {isEditable ? (
+                      <FileViewer
+                        key={file.path}
+                        filePath={file.path}
+                        fileName={file.name}
+                        rootPath={rootPath}
+                        onOpenFile={handleSelectFile}
+                        onFileCreated={() => {
+                          loadFileTree()
+                          setGraphKey(prev => prev + 1)
+                        }}
+                        onFileRenamed={(oldPath, newPath, newName) => {
+                          const updatedOpenFiles = openFiles.map(f =>
+                            f.path === oldPath ? { path: newPath, name: newName } : f
+                          )
+                          setOpenFiles(updatedOpenFiles)
+                          if (activeTab === oldPath) {
+                            setActiveTab(newPath)
+                          }
+                          loadFileTree()
+                          setGraphKey(prev => prev + 1)
+                        }}
+                        isActive={true}
+                      />
+                    ) : (
+                      <FileViewer
+                        key={file.path}
+                        filePath={file.path}
+                        fileName={file.name}
+                        rootPath={rootPath}
+                      />
+                    )}
+                  </Suspense>
                 )
               })}
             </div>
@@ -1001,15 +1096,16 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 activeTab={leftPaneTab}
                 openFiles={leftPaneFiles}
                 pane="left"
-                showGraphTab={true}
+                showGraphTab={false}
                 onTabClick={setLeftPaneTab}
                 onTabClose={(filePath) => {
                   const newFiles = leftPaneFiles.filter(f => f.path !== filePath);
                   setLeftPaneFiles(newFiles);
                   if (leftPaneTab === filePath) {
-                    setLeftPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph');
+                    setLeftPaneTab(newFiles.length > 0 ? newFiles[0].path : '');
                   }
                 }}
+                onReorderTabs={setLeftPaneFiles}
                 dragStartPos={dragStartPos}
                 setDragStartPos={setDragStartPos}
                 isPaneActive={activePane === 'left'}
@@ -1017,7 +1113,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 onPaneActivate={() => setActivePane('left')}
               />
               <div className="tab-content" onClick={() => setActivePane('left')}>
-                {leftPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleStartEditing(rootPath, 'new-note')} onCreateFolder={() => handleStartEditing(rootPath, 'new-folder')} />}
+                {leftPaneTab === 'special://dashboard' && <DashboardPanel rootPath={rootPath} onSelectFile={(path, name) => handleSelectFile(path, name, 'left')} isTabMode={true} />}
+                {leftPaneTab === 'special://graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleCreateNote(rootPath)} onCreateFolder={() => handleCreateFolder(rootPath)} />}
                 {leftPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {leftPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {leftPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
@@ -1074,18 +1171,19 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 activeTab={rightPaneTab}
                 openFiles={rightPaneFiles}
                 pane="right"
-                showGraphTab={rightPaneFiles.length === 0 && rightPaneTab !== ''}
+                showGraphTab={false}
                 onTabClick={setRightPaneTab}
                 onTabClose={(filePath) => {
                   const newFiles = rightPaneFiles.filter(f => f.path !== filePath);
                   setRightPaneFiles(newFiles);
                   if (rightPaneTab === filePath) {
-                    setRightPaneTab(newFiles.length > 0 ? newFiles[0].path : 'graph');
+                    setRightPaneTab(newFiles.length > 0 ? newFiles[0].path : '');
                   }
                   if (newFiles.length === 0) {
                     handleCloseSplitView();
                   }
                 }}
+                onReorderTabs={setRightPaneFiles}
                 dragStartPos={dragStartPos}
                 setDragStartPos={setDragStartPos}
                 isPaneActive={activePane === 'right'}
@@ -1093,7 +1191,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 onPaneActivate={() => setActivePane('right')}
               />
               <div className="tab-content" onClick={() => setActivePane('right')}>
-                {rightPaneTab === 'graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
+                {rightPaneTab === 'special://dashboard' && <DashboardPanel rootPath={rootPath} onSelectFile={(path, name) => handleSelectFile(path, name, 'right')} isTabMode={true} />}
+                {rightPaneTab === 'special://graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
                 {rightPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {rightPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {rightPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
@@ -1159,7 +1258,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           onRevealInExplorer={handleRevealInExplorer}
           onOpenExternal={handleOpenExternal}
           onOpenInSecondPane={handleOpenInSecondPane}
-          allPaths={getAllPaths(fileTree)}
+          allPaths={allPaths}
         />
       )}
 
@@ -1202,22 +1301,24 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
       {/* Settings Panel */}
       {showSettings && (
-        <SettingsPanel
-          onClose={() => setShowSettings(false)}
-          onOpenUserManagement={() => {
-            setShowSettings(false);
-            setShowAdminDashboard(true);
-          }}
-          onModeSwitch={() => {
-            setShowSettings(false);
-            window.location.reload();
-          }}
-        />
+        <Suspense fallback={<LoadingFallback />}>
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            onOpenUserManagement={() => {
+              setShowSettings(false);
+              setShowAdminDashboard(true);
+            }}
+            onModeSwitch={() => {
+              setShowSettings(false);
+              window.location.reload();
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Admin/Leader Dashboard */}
       {showAdminDashboard && workspace && userRole && (
-        <>
+        <Suspense fallback={<LoadingFallback />}>
           {userRole === 'admin' ? (
             <AdminDashboard
               workspace={workspace}
@@ -1229,17 +1330,9 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               onClose={() => setShowAdminDashboard(false)}
             />
           ) : null}
-        </>
+        </Suspense>
       )}
 
-      {/* AI Smart Suggestions Panel - Hidden for now */}
-      {/* <AISuggestionsPanel
-        rootPath={rootPath}
-        onOpenFile={(filePath: string) => {
-          const fileName = filePath.split(/[\\/]/).pop() || filePath;
-          handleSelectFile(filePath, fileName);
-        }}
-      /> */}
     </div>
   )
 }

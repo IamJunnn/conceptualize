@@ -92,7 +92,9 @@ export const signInWithGoogle = async (): Promise<User> => {
     authUrl.searchParams.set('client_id', import.meta.env.VITE_GOOGLE_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'email profile openid https://www.googleapis.com/auth/drive.file');
+    // Basic scopes for Firebase Auth - no Google Drive access needed
+    // Team files are stored in Firebase Cloud Storage, not Google Drive
+    authUrl.searchParams.set('scope', 'email profile openid');
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('access_type', 'offline');
     authUrl.searchParams.set('prompt', 'consent'); // Force consent screen to get refresh token every time

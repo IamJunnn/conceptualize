@@ -74,7 +74,7 @@
   }
 }
 
-.tab {
+.team-management-modal .modal-tab {
   background: none;
   border: none;
   padding: 12px 20px;
@@ -87,21 +87,21 @@
   transition: all 0.2s;
 }
 
-.tab:hover {
+.team-management-modal .modal-tab:hover {
   color: #2d3748;
 }
 
 @media (prefers-color-scheme: dark) {
-  .tab {
+  .team-management-modal .modal-tab {
     color: #9ca3af;
   }
 
-  .tab:hover {
+  .team-management-modal .modal-tab:hover {
     color: #e5e7eb;
   }
 }
 
-.tab.active {
+.team-management-modal .modal-tab.active {
   color: #c44fc4;
   border-bottom-color: #c44fc4;
 }
@@ -217,8 +217,10 @@
   margin-left: 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0; /* Prevent actions from shrinking */
+  flex-wrap: wrap; /* Allow wrapping on small screens */
+  justify-content: flex-end;
 }
 
 .btn-sm {

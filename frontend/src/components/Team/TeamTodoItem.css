@@ -1,0 +1,233 @@
+/* Team Todo Item */
+.team-todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #2a2a2a;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.team-todo-item:hover {
+  background: #303030;
+  border-color: #4d4d4d;
+}
+
+.team-todo-item.completed {
+  opacity: 0.7;
+}
+
+.team-todo-item.completed .todo-title {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.team-todo-item.deleting {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Checkbox */
+.todo-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.todo-checkbox .empty-circle {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #5a5a5a;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.todo-checkbox:hover .empty-circle {
+  border-color: #64c8ca;
+}
+
+.todo-checkbox .check-icon {
+  width: 24px;
+  height: 24px;
+  color: #64c8ca;
+}
+
+/* Priority indicator */
+.priority-indicator {
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Content */
+.todo-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-title {
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.todo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Due date */
+.todo-due-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #888;
+}
+
+.todo-due-date .date-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.todo-due-date.overdue {
+  color: #ef4444;
+}
+
+.todo-due-date.due-soon {
+  color: #f97316;
+}
+
+/* Assignees */
+.todo-assignees {
+  display: flex;
+  align-items: center;
+}
+
+.assignee-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: #1e1e1e;
+  border: 2px solid #2a2a2a;
+  margin-left: -8px;
+}
+
+.assignee-badge:first-child {
+  margin-left: 0;
+}
+
+.more-assignees {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+}
+
+/* Completed by */
+.completed-by {
+  font-size: 11px;
+  color: #64c8ca;
+}
+
+/* Menu */
+.todo-menu-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.todo-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.team-todo-item:hover .todo-menu-btn {
+  opacity: 1;
+}
+
+.todo-menu-btn:hover {
+  background: #404040;
+}
+
+.todo-menu-btn .menu-icon {
+  width: 18px;
+  height: 18px;
+  color: #888;
+}
+
+.todo-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #2a2a2a;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  min-width: 120px;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.todo-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.todo-menu-item:hover {
+  background: #353535;
+}
+
+.todo-menu-item.danger {
+  color: #ef4444;
+}
+
+.todo-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.todo-menu-item .item-icon {
+  width: 16px;
+  height: 16px;
+}

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { User } from '../../services/authServiceTauri';
 import { createTeam, inviteTeamMember, sendInvitationEmails } from '../../services/teamService';
-import { hasDriverAccess } from '../../services/googleDriveService';
 import { useAuth } from '../../contexts/AuthContext';
 import './CreateTeamModal.css';
 
@@ -23,7 +22,6 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
   const [members, setMembers] = useState<TeamMember[]>([{ email: '', role: 'member' }]);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showDriveConnect, setShowDriveConnect] = useState(false);
 
   const handleAddMember = () => {
     setMembers([...members, { email: '', role: 'member' }]);
@@ -100,87 +98,6 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
       setIsCreating(false);
     }
   };
-
-  const handleConnectDrive = async () => {
-    try {
-      setIsCreating(true);
-      setError(null);
-
-      // Import the signInWithGoogle function dynamically to trigger OAuth
-      const { signInWithGoogle } = await import('../../services/authServiceTauri');
-
-      // This will open Google OAuth in browser, which already includes Drive scope
-      // The user will be prompted to grant Drive permissions
-      await signInWithGoogle();
-
-      // After successful OAuth, tokens are stored in localStorage
-      // Close the drive connect dialog and retry creating team
-      setShowDriveConnect(false);
-
-      // Automatically retry team creation
-      if (teamName.trim()) {
-        await createTeam(
-          teamName.trim(),
-          description.trim(),
-          user.email,
-          user.displayName || user.email.split('@')[0],
-          user.uid
-        );
-
-        console.log('✅ Team created successfully!');
-        onTeamCreated();
-        onClose();
-      }
-    } catch (err: any) {
-      console.error('Failed to connect Google Drive:', err);
-      setError(err.message || 'Failed to connect Google Drive. Please try again.');
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  if (showDriveConnect) {
-    return (
-      <div className="modal-overlay">
-        <div className="modal-content connect-drive-modal">
-          <h2>Connect Your Google Drive</h2>
-
-          <div className="drive-connect-info">
-            <p>To create teams and sync notes, you need to connect your Google Drive account.</p>
-            <p>We'll create a team folder in your Drive that you can share with team members.</p>
-          </div>
-
-          <div className="drive-permissions">
-            <h3>Permissions Required:</h3>
-            <ul>
-              <li>Create folders in your Google Drive</li>
-              <li>Upload and download files</li>
-              <li>Share folders with team members</li>
-            </ul>
-          </div>
-
-          {error && <div className="error-message">{error}</div>}
-
-          <div className="modal-actions">
-            <button
-              className="btn-secondary"
-              onClick={onClose}
-              disabled={isCreating}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn-primary"
-              onClick={handleConnectDrive}
-              disabled={isCreating}
-            >
-              Connect Google Drive
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="modal-overlay">

@@ -116,7 +116,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
       className="context-menu"
       style={{ left: `${x}px`, top: `${y}px` }}
     >
-      {mode === 'local' && itemType === 'file' && onOpenInSecondPane && (
+      {itemType === 'file' && onOpenInSecondPane && (
         <>
           <div
             className="context-menu-item"

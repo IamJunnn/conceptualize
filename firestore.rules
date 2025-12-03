@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isTeamMember(teamId) {
+      let team = get(/databases/$(database)/documents/teams/$(teamId));
+      return team != null && request.auth.token.email in team.data.memberEmails;
+    }
+
+    function isTeamAdmin(teamId) {
+      let team = get(/databases/$(database)/documents/teams/$(teamId));
+      if (team == null) { return false; }
+      let email = request.auth.token.email;
+      let emailKey = email.replace('.', '_DOT_').replace('@', '_AT_');
+      return team.data.members[emailKey].role in ['owner', 'admin'];
+    }
+
+    function isTeamOwner(teamId) {
+      let team = get(/databases/$(database)/documents/teams/$(teamId));
+      if (team == null) { return false; }
+      return team.data.createdBy == request.auth.token.email;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Teams collection
+    match /teams/{teamId} {
+      allow read: if isAuthenticated() && isTeamMember(teamId);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isTeamMember(teamId);
+      allow delete: if isAuthenticated() && isTeamOwner(teamId);
+
+      // Team todos subcollection
+      match /todos/{todoId} {
+        // Read: Any team member can read todos
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Create: Any team member can create todos
+        // The createdBy field must match the authenticated user's email
+        allow create: if isAuthenticated()
+          && isTeamMember(teamId)
+          && request.resource.data.createdBy == request.auth.token.email;
+
+        // Update: Creator, assignees, or admins can update
+        allow update: if isAuthenticated() && isTeamMember(teamId) && (
+          // Creator can update
+          resource.data.createdBy == request.auth.token.email ||
+          // Assignees can update
+          request.auth.token.email in resource.data.assignees ||
+          // Admins/owners can update
+          isTeamAdmin(teamId)
+        );
+
+        // Delete: Only creator or admins can delete
+        allow delete: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.createdBy == request.auth.token.email ||
+          isTeamAdmin(teamId)
+        );
+      }
+    }
+
+    // Team invitations collection
+    match /team_invites/{inviteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+  }
+}

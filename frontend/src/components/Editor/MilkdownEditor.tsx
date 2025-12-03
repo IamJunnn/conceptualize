@@ -149,6 +149,12 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
               return
             }
 
+            // Skip files without required properties
+            if (!file.name || !file.fullPath) {
+              console.warn('Skipping file with missing properties:', file)
+              return
+            }
+
             const extension = file.name.split('.').pop()?.toLowerCase()
             let type: FileItem['type'] = 'other'
 
@@ -515,14 +521,6 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
     }
   }
 
-  // Stub functions for WikiLinkAutocomplete props (not actually used, handled by event system)
-  const handleNavigate = () => {}
-  const handleClose = () => {}
-  const handleClickOutsideClose = () => {
-    // This is called when autocomplete closes via click-outside
-    // The actual blocking logic is now in the wikiLinkAutocompletePlugin
-  }
-
   const handleContainerClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
 
@@ -678,10 +676,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
         searchQuery={searchQuery}
         files={files}
         onSelect={handleFileSelect}
-        onClose={handleClose}
-        onClickOutsideClose={handleClickOutsideClose}
         selectedIndex={selectedIndex}
-        onNavigate={handleNavigate}
       />
       <TableWidget editor={editorRef.current} />
       <QuickAddModal

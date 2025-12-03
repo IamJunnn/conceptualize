@@ -1,0 +1,221 @@
+/* Add Team Todo Modal */
+.add-team-todo-modal {
+  max-width: 520px;
+  width: 100%;
+}
+
+.add-team-todo-modal h2 {
+  margin: 0 0 24px 0;
+  color: #e0e0e0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Form styling */
+.add-team-todo-modal .form-group {
+  margin-bottom: 20px;
+}
+
+.add-team-todo-modal .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #b0b0b0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.add-team-todo-modal .form-group input[type="text"],
+.add-team-todo-modal .form-group input[type="date"],
+.add-team-todo-modal .form-group textarea {
+  width: 100%;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.add-team-todo-modal .form-group input:focus,
+.add-team-todo-modal .form-group textarea:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.add-team-todo-modal .form-group input::placeholder,
+.add-team-todo-modal .form-group textarea::placeholder {
+  color: #666;
+}
+
+.add-team-todo-modal .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Date inputs styling */
+.add-team-todo-modal .form-group input[type="date"] {
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.add-team-todo-modal .form-group input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) sepia(0) saturate(0) hue-rotate(0deg);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.add-team-todo-modal .form-group input[type="date"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* Webkit/Chromium date picker calendar styling */
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-text {
+  color: #888;
+  padding: 0 4px;
+}
+
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-month-field,
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-day-field,
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #e0e0e0;
+  padding: 0 4px;
+}
+
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-month-field:focus,
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-day-field:focus,
+.add-team-todo-modal .form-group input[type="date"]::-webkit-datetime-edit-year-field:focus {
+  background: #64c8ca;
+  color: #1e1e1e;
+  border-radius: 2px;
+  outline: none;
+}
+
+/* Calendar popup styling for webkit browsers */
+.add-team-todo-modal .form-group input[type="date"]::-webkit-calendar-picker-indicator {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2364c8ca" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>');
+  background-size: 18px 18px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 20px;
+  height: 20px;
+  filter: none;
+}
+
+/* Form row for side-by-side fields */
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+/* Priority options */
+.priority-options {
+  display: flex;
+  gap: 8px;
+}
+
+.priority-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.priority-btn:hover {
+  background: #353535;
+  border-color: var(--priority-color);
+  color: var(--priority-color);
+}
+
+.priority-btn.selected {
+  background: var(--priority-bg);
+  border-color: var(--priority-color);
+  color: var(--priority-color);
+}
+
+.priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Error message */
+.add-team-todo-modal .error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  color: #ef4444;
+  font-size: 13px;
+}
+
+/* Modal actions */
+.add-team-todo-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #3d3d3d;
+}
+
+.add-team-todo-modal .btn-secondary {
+  padding: 10px 20px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-team-todo-modal .btn-secondary:hover {
+  background: #353535;
+}
+
+.add-team-todo-modal .btn-primary {
+  padding: 10px 24px;
+  background: #64c8ca;
+  border: none;
+  border-radius: 6px;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-team-todo-modal .btn-primary:hover {
+  background: #52b6b8;
+}
+
+.add-team-todo-modal .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.add-team-todo-modal .btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

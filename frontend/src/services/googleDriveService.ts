@@ -123,7 +123,9 @@ export async function shareFolder(
 ): Promise<void> {
   const token = await getAccessToken();
 
-  const response = await fetch(`${DRIVE_API_BASE}/files/${folderId}/permissions`, {
+  console.log(`📤 Sharing folder ${folderId} with ${memberEmail} as ${role}...`);
+
+  const response = await fetch(`${DRIVE_API_BASE}/files/${folderId}/permissions?supportsAllDrives=true`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -139,8 +141,12 @@ export async function shareFolder(
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`❌ Failed to share folder ${folderId}:`, error);
     throw new Error(`Failed to share folder: ${error}`);
   }
+
+  const result = await response.json();
+  console.log(`✅ Shared folder ${folderId} - permission ID: ${result.id}`);
 }
 
 /**
@@ -257,6 +263,224 @@ export async function shareFolderRecursively(
 }
 
 /**
+ * Check if the current user has access to a specific folder
+ */
+export async function checkFolderAccess(folderId: string): Promise<boolean> {
+  try {
+    const token = await getAccessToken();
+
+    // Try to get folder metadata - this will fail if no access
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response.ok) {
+      console.log(`✅ User has access to folder ${folderId}`);
+      return true;
+    } else if (response.status === 404 || response.status === 403) {
+      console.log(`❌ User does not have access to folder ${folderId}`);
+      return false;
+    } else {
+      console.warn(`⚠️ Unexpected response when checking folder access: ${response.status}`);
+      return false;
+    }
+  } catch (error) {
+    console.error('Failed to check folder access:', error);
+    return false;
+  }
+}
+
+/**
+ * Comprehensive diagnostic for team folder permissions
+ */
+export async function diagnoseFolderPermissions(folderId: string, userEmail: string): Promise<{
+  hasAccess: boolean;
+  folderExists: boolean;
+  permissions: DrivePermission[];
+  userPermission: DrivePermission | null;
+  sharedWithMe: boolean;
+  issues: string[];
+  recommendations: string[];
+}> {
+  const issues: string[] = [];
+  const recommendations: string[] = [];
+  let hasAccess = false;
+  let folderExists = false;
+  let permissions: DrivePermission[] = [];
+  let userPermission: DrivePermission | null = null;
+  let sharedWithMe = false;
+
+  try {
+    const token = await getAccessToken();
+
+    // 1. Check if folder exists and user has access
+    const folderResponse = await fetch(
+      `${DRIVE_API_BASE}/files/${folderId}?fields=id,name,mimeType,ownedByMe,shared,sharingUser&supportsAllDrives=true`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (folderResponse.ok) {
+      folderExists = true;
+      hasAccess = true;
+      const folderData = await folderResponse.json();
+      sharedWithMe = !folderData.ownedByMe && folderData.shared;
+
+      console.log('📁 Folder metadata:', folderData);
+
+      // 2. Get permissions list
+      const permissionsResponse = await fetch(
+        `${DRIVE_API_BASE}/files/${folderId}/permissions?fields=permissions(id,type,role,emailAddress)&supportsAllDrives=true`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (permissionsResponse.ok) {
+        const permData = await permissionsResponse.json();
+        permissions = permData.permissions || [];
+
+        // Find user's specific permission
+        userPermission = permissions.find(p =>
+          p.emailAddress?.toLowerCase() === userEmail.toLowerCase()
+        ) || null;
+
+        console.log('🔐 Permissions:', permissions);
+        console.log('👤 User permission:', userPermission);
+
+        if (!userPermission) {
+          issues.push(`No explicit permission found for ${userEmail}`);
+          if (sharedWithMe) {
+            issues.push('Folder appears shared but no specific permission found');
+          }
+        } else if (userPermission.role === 'reader') {
+          issues.push('User has read-only access (should have writer access)');
+          recommendations.push('Team owner should update permission to "writer" role');
+        }
+      } else {
+        issues.push(`Failed to fetch permissions (${permissionsResponse.status})`);
+      }
+
+      // 3. Check if folder appears in "shared with me"
+      const sharedCheckResponse = await fetch(
+        `${DRIVE_API_BASE}/files?q='${folderId}'+in+parents+and+sharedWithMe=true&fields=files(id)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!sharedCheckResponse.ok || (await sharedCheckResponse.json()).files?.length === 0) {
+        if (!sharedWithMe) {
+          issues.push('Folder not appearing in "Shared with me" section');
+          recommendations.push('Ask team owner to re-share the folder');
+        }
+      }
+
+    } else if (folderResponse.status === 404) {
+      folderExists = false;
+      issues.push('Folder not found or no access');
+
+      // Try to search for the folder in shared items
+      console.log('🔍 Searching for folder in shared items...');
+      try {
+        const searchResponse = await fetch(
+          `${DRIVE_API_BASE}/files?q=mimeType='application/vnd.google-apps.folder'+and+sharedWithMe=true&fields=files(id,name)&pageSize=50&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json();
+          console.log('📂 Shared folders found:', searchData.files?.map((f: any) => ({ id: f.id, name: f.name })));
+
+          const matchingFolder = searchData.files?.find((f: any) => f.id === folderId);
+          if (matchingFolder) {
+            console.log('✅ Found folder in shared items:', matchingFolder);
+            issues.push('Folder exists in shared items but direct access failed');
+            recommendations.push('Try refreshing the page');
+          } else {
+            console.log('❌ Folder ID not found in shared folders');
+            recommendations.push('The folder may not be shared with your account yet');
+            recommendations.push('Ask team owner to click "Re-share Contents" in Team Settings');
+          }
+        }
+      } catch (searchErr) {
+        console.error('Search failed:', searchErr);
+      }
+
+      recommendations.push('Primary issue: No access to team folder');
+      recommendations.push('Verify the folder ID is correct');
+      recommendations.push('Ask team owner to share the folder with you');
+      recommendations.push('Try signing out and back in with Google');
+      recommendations.push('Contact team owner to verify invitation was sent to: ' + userEmail);
+    } else if (folderResponse.status === 403) {
+      folderExists = true; // Likely exists but no permission
+      issues.push('Access denied to folder');
+      recommendations.push('Ask team owner to share the folder with your email: ' + userEmail);
+      recommendations.push('Make sure you\'re signed in with the correct Google account');
+    }
+
+    // 4. Additional checks
+    if (hasAccess) {
+      // Try to list files to verify read access
+      const listResponse = await fetch(
+        `${DRIVE_API_BASE}/files?q='${folderId}'+in+parents+and+trashed=false&fields=files(id)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!listResponse.ok) {
+        issues.push('Cannot list folder contents despite having folder access');
+        recommendations.push('Permission might be incomplete - ask owner to re-share');
+      }
+    }
+
+  } catch (error) {
+    console.error('Diagnostic error:', error);
+    issues.push(`Diagnostic failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+
+  // Generate final recommendations
+  if (issues.length === 0) {
+    recommendations.push('All permissions look good!');
+  } else {
+    if (!hasAccess) {
+      recommendations.unshift('Primary issue: No access to team folder');
+    }
+    recommendations.push('Try signing out and back in with Google');
+    recommendations.push('Contact team owner to verify invitation was sent to: ' + userEmail);
+  }
+
+  return {
+    hasAccess,
+    folderExists,
+    permissions,
+    userPermission,
+    sharedWithMe,
+    issues,
+    recommendations
+  };
+}
+
+/**
  * Upload a note file to Drive folder
  */
 export async function uploadNote(
@@ -364,6 +588,9 @@ export async function downloadNote(fileId: string): Promise<string> {
 
 /**
  * List all files in a folder
+ * Tries multiple query strategies to handle different sharing scenarios:
+ * 1. Default query (works for most shared folders)
+ * 2. allDrives corpora (for Shared Drives)
  */
 export async function listFolderFiles(folderId: string): Promise<DriveFile[]> {
   const token = await getAccessToken();
@@ -371,33 +598,54 @@ export async function listFolderFiles(folderId: string): Promise<DriveFile[]> {
   console.log('[listFolderFiles] 📂 Listing files in folder:', folderId);
 
   const query = `'${folderId}'+in+parents+and+trashed=false`;
-  const url = `${DRIVE_API_BASE}/files?q=${query}&fields=files(id,name,mimeType,modifiedTime,size,webViewLink,parents)&orderBy=modifiedTime desc`;
+  const fields = 'files(id,name,mimeType,modifiedTime,size,webViewLink,parents)';
 
-  console.log('[listFolderFiles] 🔍 API URL:', url);
-
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
+  // Try multiple approaches to handle different sharing scenarios
+  const approaches = [
+    // Approach 1: Default user corpora (works for regular shared folders)
+    {
+      name: 'default',
+      url: `${DRIVE_API_BASE}/files?q=${query}&fields=${fields}&orderBy=modifiedTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`
     },
-  });
+    // Approach 2: allDrives corpora (for Shared Drives)
+    {
+      name: 'allDrives',
+      url: `${DRIVE_API_BASE}/files?q=${query}&fields=${fields}&orderBy=modifiedTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives`
+    },
+  ];
 
-  console.log('[listFolderFiles] 📡 Response status:', response.status, response.statusText);
+  for (const approach of approaches) {
+    console.log(`[listFolderFiles] 🔍 Trying ${approach.name} approach...`);
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('[listFolderFiles] ❌ Failed to list files:', error);
-    throw new Error(`Failed to list files: ${error}`);
+    const response = await fetch(approach.url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    console.log(`[listFolderFiles] 📡 ${approach.name} response:`, response.status, response.statusText);
+
+    if (response.ok) {
+      const data = await response.json();
+      const files = data.files || [];
+
+      console.log(`[listFolderFiles] 📊 ${approach.name} found ${files.length} items`);
+
+      if (files.length > 0) {
+        console.log('[listFolderFiles] 📁 Files:', files.map((f: DriveFile) => `${f.name} (${f.mimeType})`));
+        return files;
+      }
+      // If empty, try next approach
+    } else if (response.status !== 400) {
+      // Log non-400 errors but continue to next approach
+      const error = await response.text();
+      console.warn(`[listFolderFiles] ⚠️ ${approach.name} failed:`, error);
+    }
   }
 
-  const data = await response.json();
-  console.log('[listFolderFiles] ✅ Response data:', data);
-  console.log('[listFolderFiles] 📊 Found', (data.files || []).length, 'items');
-
-  if (data.files && data.files.length > 0) {
-    console.log('[listFolderFiles] 📁 Files:', data.files.map((f: DriveFile) => `${f.name} (${f.mimeType})`));
-  }
-
-  return data.files || [];
+  // All approaches returned empty or failed
+  console.log('[listFolderFiles] ℹ️ No files found with any approach (folder may be empty)');
+  return [];
 }
 
 /**
@@ -455,7 +703,7 @@ export async function getFolderMetadata(folderId: string): Promise<DriveFolder> 
   const token = await getAccessToken();
 
   const response = await fetch(
-    `${DRIVE_API_BASE}/files/${folderId}?fields=id,name,webViewLink,createdTime`,
+    `${DRIVE_API_BASE}/files/${folderId}?fields=id,name,webViewLink,createdTime&supportsAllDrives=true`,
     {
       headers: {
         'Authorization': `Bearer ${token}`,

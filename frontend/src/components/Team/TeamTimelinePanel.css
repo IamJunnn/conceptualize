@@ -1,0 +1,151 @@
+/* Team Timeline Panel */
+.team-timeline-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Header matching TeamTodoPanel */
+.team-timeline-panel .timeline-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #2d2d2d;
+  flex-shrink: 0;
+}
+
+.team-timeline-panel .timeline-panel-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-timeline-panel .timeline-panel-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.team-timeline-panel .timeline-panel-header .task-count {
+  padding: 4px 10px;
+  background: #2d2d2d;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #888;
+  font-weight: 500;
+}
+
+.team-timeline-panel .add-task-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #64c8ca;
+  border: none;
+  border-radius: 6px;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.team-timeline-panel .add-task-btn:hover {
+  background: #52b6b8;
+}
+
+.team-timeline-panel .add-task-btn .add-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Loading state */
+.team-timeline-panel .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: #888;
+}
+
+.team-timeline-panel .loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #3d3d3d;
+  border-top-color: #64c8ca;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error state */
+.team-timeline-panel .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: #ef4444;
+}
+
+.team-timeline-panel .error-state button {
+  padding: 8px 16px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.team-timeline-panel .error-state button:hover {
+  background: #353535;
+}
+
+/* FAB button - positioned within panel, not fixed to viewport */
+.team-timeline-panel .fab-add-todo {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #7dd3d5 0%, #64c8ca 100%);
+  border: none;
+  border-radius: 50%;
+  color: #1e1e1e;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(100, 200, 202, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+}
+
+.team-timeline-panel .fab-add-todo:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(100, 200, 202, 0.5), 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.team-timeline-panel .fab-add-todo:active {
+  transform: scale(0.95);
+}
+
+.team-timeline-panel .fab-add-todo .icon-medium {
+  width: 20px;
+  height: 20px;
+}

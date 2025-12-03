@@ -1,0 +1,273 @@
+.create-local-workspace-modal {
+  background: #1a1a1a;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.3s ease-out;
+  border: 1px solid #2d2d2d;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.create-local-workspace-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 24px 16px 24px;
+  border-bottom: 1px solid #2d2d2d;
+}
+
+.create-local-workspace-modal .modal-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.create-local-workspace-modal .close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #a0a0a0;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.create-local-workspace-modal .close-button:hover {
+  color: #ffffff;
+  background: #2d2d2d;
+}
+
+.create-local-workspace-modal .modal-content {
+  padding: 24px;
+}
+
+.create-local-workspace-modal .modal-description {
+  font-size: 14px;
+  color: #a0a0a0;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.create-local-workspace-modal .form-group {
+  margin-bottom: 24px;
+}
+
+.create-local-workspace-modal .form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.create-local-workspace-modal .form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 2px solid #2d2d2d;
+  border-radius: 8px;
+  transition: all 0.2s;
+  font-family: inherit;
+  background: #0d0d0d;
+  color: #ffffff;
+  box-sizing: border-box;
+}
+
+.create-local-workspace-modal .form-group input::placeholder {
+  color: #6b6b6b;
+}
+
+.create-local-workspace-modal .form-group input:focus {
+  outline: none;
+  border-color: #22c5aa;
+  box-shadow: 0 0 0 3px rgba(34, 197, 170, 0.2);
+}
+
+.create-local-workspace-modal .form-group input:disabled {
+  background: #0d0d0d;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.create-local-workspace-modal .input-hint {
+  display: block;
+  font-size: 12px;
+  color: #808080;
+  margin-top: 6px;
+}
+
+.create-local-workspace-modal .input-hint strong {
+  color: #22c5aa;
+}
+
+.create-local-workspace-modal .folder-selector {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 14px;
+  border: 2px dashed #2d2d2d;
+  border-radius: 8px;
+  transition: all 0.2s;
+  font-family: inherit;
+  background: #0d0d0d;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.create-local-workspace-modal .folder-selector:hover:not(:disabled) {
+  border-color: #22c5aa;
+  background: #0f1a18;
+}
+
+.create-local-workspace-modal .folder-selector:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.create-local-workspace-modal .folder-icon {
+  flex-shrink: 0;
+  color: #22c5aa;
+}
+
+.create-local-workspace-modal .folder-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffffff;
+}
+
+.create-local-workspace-modal .folder-placeholder {
+  flex: 1;
+  color: #6b6b6b;
+}
+
+.create-local-workspace-modal .error-message {
+  background: #2d1a1a;
+  border: 1px solid #fc8181;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #fc8181;
+}
+
+.create-local-workspace-modal .modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.create-local-workspace-modal .primary-button,
+.create-local-workspace-modal .secondary-button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-family: inherit;
+}
+
+.create-local-workspace-modal .primary-button {
+  background: linear-gradient(135deg, #22c5aa 0%, #1a9a85 100%);
+  color: white;
+}
+
+.create-local-workspace-modal .primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 170, 0.3);
+}
+
+.create-local-workspace-modal .primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.create-local-workspace-modal .secondary-button {
+  background: #2d2d2d;
+  color: #ffffff;
+  border: 2px solid #3d3d3d;
+}
+
+.create-local-workspace-modal .secondary-button:hover:not(:disabled) {
+  background: #3d3d3d;
+  border-color: #4d4d4d;
+}
+
+.create-local-workspace-modal .secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.create-local-workspace-modal .info-box {
+  background: linear-gradient(135deg, #1a2d2a 0%, #1a2d2d 100%);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 24px;
+  border: 1px solid #2d3d3a;
+}
+
+.create-local-workspace-modal .info-box h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 12px 0;
+}
+
+.create-local-workspace-modal .info-box ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.create-local-workspace-modal .info-box li {
+  font-size: 13px;
+  color: #a0a0a0;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.create-local-workspace-modal .info-box li:last-child {
+  margin-bottom: 0;
+}
+
+/* Conceptualize scrollbar styling */
+.create-local-workspace-modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.create-local-workspace-modal::-webkit-scrollbar-track {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+.create-local-workspace-modal::-webkit-scrollbar-thumb {
+  background: #3d3d3d;
+  border-radius: 4px;
+}
+
+.create-local-workspace-modal::-webkit-scrollbar-thumb:hover {
+  background: #4d4d4d;
+}

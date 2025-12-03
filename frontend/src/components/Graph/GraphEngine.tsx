@@ -57,14 +57,21 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     // Clear previous content
     svg.selectAll('*').remove();
 
-    // Helper function to count conceptual connections for a node
-    const getConceptualConnections = (nodeId: string): number => {
-      return data.links.filter(
+    // Pre-compute conceptual connections map for O(1) lookup (performance optimization)
+    const conceptualConnectionsMap = new Map<string, number>();
+    data.nodes.forEach(node => {
+      const count = data.links.filter(
         l => l.type === 'conceptual' && (
-          (typeof l.source === 'object' ? l.source.id : l.source) === nodeId ||
-          (typeof l.target === 'object' ? l.target.id : l.target) === nodeId
+          (typeof l.source === 'object' ? l.source.id : l.source) === node.id ||
+          (typeof l.target === 'object' ? l.target.id : l.target) === node.id
         )
       ).length;
+      conceptualConnectionsMap.set(node.id, count);
+    });
+
+    // Helper function to get pre-computed conceptual connections
+    const getConceptualConnections = (nodeId: string): number => {
+      return conceptualConnectionsMap.get(nodeId) || 0;
     };
 
     // Helper function to truncate long labels
@@ -127,15 +134,15 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     const simulation = d3.forceSimulation<GraphNode>(data.nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(data.links)
         .id(d => d.id)
-        .distance(d => (d as GraphLink).type === 'structural' ? 50 : 80) // Shorter distances for closer nodes
-        .strength(d => (d as GraphLink).type === 'structural' ? 0.7 : 0.5)) // Stronger links to pull nodes closer
-      .force('charge', d3.forceManyBody().strength(-200)) // Reduced repulsion for tighter clustering
+        .distance(d => (d as GraphLink).type === 'structural' ? 60 : 80) // Shorter distances for closer nodes
+        .strength(d => (d as GraphLink).type === 'structural' ? 0.6 : 0.4)) // Stronger links to keep connected nodes together
+      .force('charge', d3.forceManyBody().strength(-150)) // Reduced repulsion for closer clustering
       .force('collision', d3.forceCollide<GraphNode>().radius(d => {
         if ((d as GraphNode).type === 'root') return 22;
         return 18;
       }))
-      // Add center force only in team mode (no root node to anchor)
-      .force('center', isTeamMode ? d3.forceCenter(width / 2, height / 2) : null);
+      // Add center force to pull nodes together
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.1));
 
     // Create links (edges) with different styles for structural vs conceptual
     const link = g.append('g')
@@ -168,7 +175,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
         const conceptualConnections = getConceptualConnections(d.id);
         const baseSize = 8;
         const maxSize = 20;
-        return Math.min(baseSize + conceptualConnections * 1.5, maxSize);
+        return Math.min(baseSize + conceptualConnections * 2, maxSize);
       })
       .attr('fill', d => {
         // Root folder is pink/magenta
@@ -234,7 +241,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
         const conceptualConnections = getConceptualConnections(d.id);
         const baseSize = 8;
         const maxSize = 20;
-        return Math.min(baseSize + conceptualConnections * 1.5, maxSize);
+        return Math.min(baseSize + conceptualConnections * 2, maxSize);
       })
       .attr('fill', d => {
         if (d.type === 'root') return '#bb2289';

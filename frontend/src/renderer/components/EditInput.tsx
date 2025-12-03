@@ -55,7 +55,17 @@ const EditInput: React.FC<EditInputProps> = ({ initialValue, onSave, onCancel, i
       onChange={(e) => setValue(e.target.value)}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      className="ml-2 bg-gray-900 text-white border border-blue-500 rounded px-1 w-full"
+      style={{
+        marginLeft: '4px',
+        backgroundColor: '#1e1e1e',
+        color: '#e0e0e0',
+        border: '1px solid #555',
+        borderRadius: '4px',
+        padding: '2px 6px',
+        width: '100%',
+        fontSize: '13px',
+        outline: 'none',
+      }}
     />
   );
 };

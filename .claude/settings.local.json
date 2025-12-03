@@ -126,7 +126,16 @@
       "Bash(cmd /c \"if exist \"\"C:\\Program Files (x86)\\Windows Kits\"\" (echo Windows SDK exists) else (echo No Windows SDK)\")",
       "Bash(timeout 20 echo:*)",
       "Bash(where:*)",
-      "Bash(cmd /c \"if exist target\\debug\\app.exe (echo Build exists) else (echo No build found)\")"
+      "Bash(cmd /c \"if exist target\\debug\\app.exe (echo Build exists) else (echo No build found)\")",
+      "Bash(cmd /c \"taskkill /IM app.exe /F & taskkill /IM node.exe /F 2>nul\")",
+      "Bash(cmd /c \"taskkill /IM app.exe /F\")",
+      "Bash(git -C \"c:\\Users\\Owner\\Desktop\\project\\conceptualize\" log --oneline -20)",
+      "Bash(git -C \"c:\\Users\\Owner\\Desktop\\project\\conceptualize\" branch -a)",
+      "Bash(done)",
+      "Bash(timeout 20 npm run dev:*)",
+      "Bash(timeout 30 npm run dev)",
+      "Bash(timeout 45 npm run dev)",
+      "Bash(timeout 60 npm run dev:*)"
     ],
     "deny": [],
     "ask": []

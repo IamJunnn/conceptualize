@@ -14,10 +14,7 @@ interface WikiLinkAutocompleteProps {
   searchQuery: string
   files: FileItem[]
   onSelect: (file: FileItem) => void
-  onClose: () => void
-  onClickOutsideClose?: () => void // Called when autocomplete is closed by click-outside
   selectedIndex: number
-  onNavigate: (direction: 'up' | 'down') => void
 }
 
 export default function WikiLinkAutocomplete({
@@ -26,23 +23,11 @@ export default function WikiLinkAutocomplete({
   searchQuery,
   files,
   onSelect,
-  onClose,
-  onClickOutsideClose,
   selectedIndex,
-  onNavigate,
 }: WikiLinkAutocompleteProps) {
   const [filteredFiles, setFilteredFiles] = useState<FileItem[]>([])
   const [adjustedPosition, setAdjustedPosition] = useState(position)
   const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Use refs for callbacks to avoid recreating the handler
-  const onCloseRef = useRef(onClose)
-  const onClickOutsideCloseRef = useRef(onClickOutsideClose)
-
-  useEffect(() => {
-    onCloseRef.current = onClose
-    onClickOutsideCloseRef.current = onClickOutsideClose
-  }, [onClose, onClickOutsideClose])
 
   useEffect(() => {
     if (!searchQuery) {
@@ -81,43 +66,6 @@ export default function WikiLinkAutocomplete({
       setAdjustedPosition(position)
     }
   }, [visible, position, filteredFiles])
-
-  // Close dropdown when clicking outside - TEMPORARILY DISABLED FOR DEBUGGING
-  // useEffect(() => {
-  //   if (!visible) return
-
-  //   const handleClickOutside = (event: MouseEvent) => {
-  //     if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-  //       // Stop the event from propagating to prevent it from reopening the autocomplete
-  //       event.stopImmediatePropagation()
-
-  //       // Dispatch close event with clickOutside flag to notify the plugin
-  //       window.dispatchEvent(
-  //         new CustomEvent('wiki-link-autocomplete-close', {
-  //           detail: { clickOutside: true },
-  //         })
-  //       )
-
-  //       // Call the click-outside callback
-  //       if (onClickOutsideCloseRef.current) {
-  //         onClickOutsideCloseRef.current()
-  //       }
-
-  //       // Close the autocomplete
-  //       onCloseRef.current()
-  //     }
-  //   }
-
-  //   // Delay adding the listener to prevent immediate closure from the same event that opened it
-  //   const timeoutId = setTimeout(() => {
-  //     document.addEventListener('mousedown', handleClickOutside, true)
-  //   }, 150)
-
-  //   return () => {
-  //     clearTimeout(timeoutId)
-  //     document.removeEventListener('mousedown', handleClickOutside, true)
-  //   }
-  // }, [visible])
 
   if (!visible || filteredFiles.length === 0) {
     return null

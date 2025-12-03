@@ -4,7 +4,7 @@ import { scaleTime } from 'd3-scale';
 import { axisBottom } from 'd3-axis';
 import { timeDay, timeWeek } from 'd3-time';
 import { timeFormat } from 'd3-time-format';
-import { CalendarIcon } from '@heroicons/react/24/outline';
+import { CalendarIcon, PlusIcon } from '@heroicons/react/24/outline';
 import './GanttTimeline.css';
 
 interface Todo {
@@ -32,6 +32,7 @@ interface GanttTimelineProps {
   lists: TodoList[];
   onTodoClick?: (todo: Todo) => void;
   onTodoToggle?: (todoId: string, completed: boolean) => void; // Toggle checkbox
+  onAddTask?: () => void; // Optional callback to add a task
 }
 
 const LIST_COLORS = [
@@ -46,17 +47,266 @@ const PRIORITY_COLORS = {
   'P4': '#22c55e'  // Green - Lowest priority
 };
 
-const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({ 
-  lists, 
+// Calendar Month View Component
+interface CalendarMonthViewProps {
+  todos: Array<Todo & { listNames: string[]; listColors: string[] }>;
+  onTodoClick: (todo: Todo) => void;
+}
+
+const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({ todos, onTodoClick }) => {
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
+
+  // Generate calendar data
+  const generateCalendar = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - startDate.getDay()); // Start from Sunday
+
+    const weeks: Date[][] = [];
+    let currentWeek: Date[] = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= lastDay || currentWeek.length > 0) {
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+      currentWeek.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+
+      // Stop after 6 weeks
+      if (weeks.length === 5 && currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        break;
+      }
+    }
+
+    if (currentWeek.length > 0 && weeks.length < 6) {
+      weeks.push(currentWeek);
+    }
+
+    return weeks;
+  };
+
+  const weeks = generateCalendar();
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Calculate multi-day event spans for each week
+  const eventSpans = useMemo(() => {
+    const spans: Array<{
+      todo: typeof todos[0];
+      weekIdx: number;
+      startCol: number;
+      span: number;
+      isStart: boolean;
+      isEnd: boolean;
+    }> = [];
+
+    todos.forEach(todo => {
+      if (todo.due_date) {
+        const startDate = todo.start_date ? new Date(todo.start_date) : new Date(todo.due_date);
+        const endDate = new Date(todo.due_date);
+
+        // Find which weeks this event spans
+        weeks.forEach((week, weekIdx) => {
+          const weekStart = week[0];
+          const weekEnd = week[6];
+
+          // Check if event overlaps with this week
+          if (startDate <= weekEnd && endDate >= weekStart) {
+            // Calculate start column (0-6)
+            let startCol = 0;
+            for (let i = 0; i < 7; i++) {
+              if (startDate <= week[i]) {
+                startCol = i;
+                break;
+              }
+            }
+
+            // Calculate end column
+            let endCol = 6;
+            for (let i = 6; i >= 0; i--) {
+              if (endDate >= week[i]) {
+                endCol = i;
+                break;
+              }
+            }
+
+            const span = endCol - startCol + 1;
+            const isStart = startDate >= weekStart && startDate <= weekEnd;
+            const isEnd = endDate >= weekStart && endDate <= weekEnd;
+
+            spans.push({ todo, weekIdx, startCol, span, isStart, isEnd });
+          }
+        });
+      }
+    });
+
+    return spans;
+  }, [todos, weeks]);
+
+  const isToday = (date: Date) => {
+    return date.toDateString() === new Date().toDateString();
+  };
+
+  const isCurrentMonth = (date: Date) => {
+    return date.getMonth() === currentMonth.getMonth();
+  };
+
+  return (
+    <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Month Navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <button
+          onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+          style={{
+            background: '#2d2d2d',
+            border: '1px solid #3d3d3d',
+            borderRadius: '6px',
+            color: '#e0e0e0',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          ← Previous
+        </button>
+        <h3 style={{ margin: 0, color: '#e0e0e0', fontSize: '18px', fontWeight: '600' }}>
+          {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+        </h3>
+        <button
+          onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+          style={{
+            background: '#2d2d2d',
+            border: '1px solid #3d3d3d',
+            borderRadius: '6px',
+            color: '#e0e0e0',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          Next →
+        </button>
+      </div>
+
+      {/* Calendar Grid */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', border: '1px solid #2d2d2d', borderRadius: '8px', overflow: 'hidden' }}>
+        {/* Day Names Header */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#2d2d2d', borderBottom: '1px solid #3d3d3d' }}>
+          {dayNames.map(day => (
+            <div key={day} style={{ padding: '12px', textAlign: 'center', color: '#888', fontSize: '12px', fontWeight: '600' }}>
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Weeks */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {weeks.map((week, weekIdx) => {
+            const weekSpans = eventSpans.filter(span => span.weekIdx === weekIdx);
+
+            return (
+              <div key={weekIdx} style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+                {/* Event bars layer */}
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '28px 0 0 0' }}>
+                  {weekSpans.map((span, idx) => {
+                    const priorityColor = PRIORITY_COLORS[`P${span.todo.priority}` as keyof typeof PRIORITY_COLORS] || '#64c8ca';
+                    return (
+                      <div
+                        key={`${span.todo.id}-${span.startCol}`}
+                        onClick={() => onTodoClick(span.todo)}
+                        style={{
+                          gridColumn: `${span.startCol + 1} / span ${span.span}`,
+                          marginTop: `${idx * 26}px`,
+                          height: '22px',
+                          background: priorityColor,
+                          borderRadius: span.isStart && span.isEnd ? '4px' : span.isStart ? '4px 0 0 4px' : span.isEnd ? '0 4px 4px 0' : '0',
+                          padding: '2px 8px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          color: '#1e1e1e',
+                          textDecoration: span.todo.completed ? 'line-through' : 'none',
+                          opacity: span.todo.completed ? 0.6 : 0.95,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          display: 'flex',
+                          alignItems: 'center',
+                          marginLeft: '4px',
+                          marginRight: '4px',
+                          pointerEvents: 'auto',
+                          transition: 'opacity 0.2s',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = span.todo.completed ? '0.6' : '0.95'}
+                      >
+                        {span.isStart && span.todo.text}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Calendar grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: weekIdx < weeks.length - 1 ? '1px solid #2d2d2d' : 'none', flex: 1 }}>
+                  {week.map((date, dayIdx) => {
+                    const isTodayDate = isToday(date);
+                    const isInCurrentMonth = isCurrentMonth(date);
+
+                    return (
+                      <div
+                        key={dayIdx}
+                        style={{
+                          padding: '8px',
+                          borderRight: dayIdx < 6 ? '1px solid #2d2d2d' : 'none',
+                          background: isTodayDate ? 'rgba(100, 200, 202, 0.05)' : 'transparent',
+                          opacity: isInCurrentMonth ? 1 : 0.4,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          minHeight: '100px'
+                        }}
+                      >
+                        {/* Date Number */}
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: isTodayDate ? '700' : '500',
+                          color: isTodayDate ? '#64c8ca' : '#e0e0e0',
+                          marginBottom: '4px'
+                        }}>
+                          {date.getDate()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
+  lists,
   onTodoClick,
-  onTodoToggle 
+  onTodoToggle,
+  onAddTask
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 400 });
-  const [hoveredTodo, setHoveredTodo] = useState<(Todo & { listName: string; listColor: string }) | null>(null);
+  const [hoveredTodo, setHoveredTodo] = useState<(Todo & { listNames: string[]; listColors: string[] }) | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
-  const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
   const [showCompleted, setShowCompleted] = useState(() => {
     // Load from localStorage on mount
     const saved = localStorage.getItem('gantt-show-completed');
@@ -79,27 +329,50 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
   }, [showCompleted]);
 
   // Calculate effective width for SVG based on view mode
-  const effectiveWidth = viewMode === 'daily' ? dimensions.width * 1.5 : dimensions.width;
+  // Remove the width multiplication to prevent horizontal scrolling
+  const effectiveWidth = dimensions.width;
 
   // Separate todos into scheduled and unscheduled - memoized to prevent recreation
   const { scheduledTodos, unscheduledTodos } = useMemo(() => {
-    const scheduled: Array<Todo & { listName: string; listColor: string }> = [];
-    const unscheduled: Array<Todo & { listName: string; listColor: string }> = [];
+    const scheduledMap: Map<string, Todo & { listNames: string[]; listColors: string[] }> = new Map();
+    const unscheduledMap: Map<string, Todo & { listNames: string[]; listColors: string[] }> = new Map();
 
     lists.forEach((list, idx) => {
       const color = list.color || LIST_COLORS[idx % LIST_COLORS.length];
       list.todos.forEach((todo) => {
         const shouldShow = showCompleted || !todo.completed;
         if (shouldShow) {
-          const todoWithList = { ...todo, listName: list.name, listColor: color };
           if (todo.due_date) {
-            scheduled.push(todoWithList);
+            // Add to scheduled, combining assignees if already exists
+            const existing = scheduledMap.get(todo.id);
+            if (existing) {
+              // Only add if not already in the list (avoid duplicates)
+              if (!existing.listNames.includes(list.name)) {
+                existing.listNames.push(list.name);
+                existing.listColors.push(color);
+              }
+            } else {
+              scheduledMap.set(todo.id, { ...todo, listNames: [list.name], listColors: [color] });
+            }
           } else {
-            unscheduled.push(todoWithList);
+            // Add to unscheduled, combining assignees if already exists
+            const existing = unscheduledMap.get(todo.id);
+            if (existing) {
+              // Only add if not already in the list (avoid duplicates)
+              if (!existing.listNames.includes(list.name)) {
+                existing.listNames.push(list.name);
+                existing.listColors.push(color);
+              }
+            } else {
+              unscheduledMap.set(todo.id, { ...todo, listNames: [list.name], listColors: [color] });
+            }
           }
         }
       });
     });
+
+    const scheduled = Array.from(scheduledMap.values());
+    const unscheduled = Array.from(unscheduledMap.values());
 
     // Sort by start date (or created_at)
     scheduled.sort((a, b) => {
@@ -116,7 +389,10 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
     const updateDimensions = () => {
       if (containerRef.current) {
         const width = containerRef.current.clientWidth;
-        const height = Math.max(400, scheduledTodos.length * 70 + 120);
+        // Calculate height based on content, with proper padding
+        const height = scheduledTodos.length > 0
+          ? Math.max(300, scheduledTodos.length * 70 + 100)
+          : 400;
         setDimensions({ width, height });
       }
     };
@@ -225,10 +501,6 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
     if (viewMode === 'daily') {
       xAxis = axisBottom(xScale)
         .ticks(timeDay.every(1))
-        .tickFormat(timeFormat('%b %d') as any);
-    } else if (viewMode === 'weekly') {
-      xAxis = axisBottom(xScale)
-        .ticks(timeWeek.every(1))
         .tickFormat(timeFormat('%b %d') as any);
     } else { // monthly
       xAxis = axisBottom(xScale)
@@ -387,146 +659,151 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
 
   return (
     <div className="gantt-timeline-container" ref={containerRef}>
-      {/* Control Panel */}
-      <div style={{ 
-        padding: '16px 20px', 
-        background: '#1a1a1a', 
-        borderBottom: '1px solid #333',
-        display: 'flex',
-        gap: '16px',
-        alignItems: 'center',
-        flexWrap: 'wrap'
-      }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
+      {/* Control Panel - matching TodoPanel style */}
+      <div className="timeline-filters">
+        <div className="filter-tabs">
           <button
+            className={`filter-tab ${viewMode === 'daily' ? 'active' : ''}`}
             onClick={() => setViewMode('daily')}
-            style={{
-              padding: '6px 14px',
-              background: viewMode === 'daily' ? '#64c8ca' : '#2a2a2a',
-              border: 'none',
-              borderRadius: '6px',
-              color: viewMode === 'daily' ? '#000' : '#ddd',
-              fontSize: '13px',
-              fontWeight: viewMode === 'daily' ? '600' : '400',
-              cursor: 'pointer'
-            }}
           >
             Daily
           </button>
           <button
-            onClick={() => setViewMode('weekly')}
-            style={{
-              padding: '6px 14px',
-              background: viewMode === 'weekly' ? '#64c8ca' : '#2a2a2a',
-              border: 'none',
-              borderRadius: '6px',
-              color: viewMode === 'weekly' ? '#000' : '#ddd',
-              fontSize: '13px',
-              fontWeight: viewMode === 'weekly' ? '600' : '400',
-              cursor: 'pointer'
-            }}
-          >
-            Weekly
-          </button>
-          <button
+            className={`filter-tab ${viewMode === 'monthly' ? 'active' : ''}`}
             onClick={() => setViewMode('monthly')}
-            style={{
-              padding: '6px 14px',
-              background: viewMode === 'monthly' ? '#64c8ca' : '#2a2a2a',
-              border: 'none',
-              borderRadius: '6px',
-              color: viewMode === 'monthly' ? '#000' : '#ddd',
-              fontSize: '13px',
-              fontWeight: viewMode === 'monthly' ? '600' : '400',
-              cursor: 'pointer'
-            }}
           >
             Monthly
           </button>
         </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ddd', fontSize: '13px', cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={showCompleted}
-            onChange={(e) => setShowCompleted(e.target.checked)}
-            style={{ cursor: 'pointer' }}
-          />
-          Show completed tasks
-        </label>
+        <div className="filter-actions">
+          <label className="show-completed-toggle">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(e) => setShowCompleted(e.target.checked)}
+            />
+            <span>Show done ({scheduledTodos.filter(t => t.completed).length})</span>
+          </label>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '16px', fontSize: '12px', color: '#888' }}>
-          <span>Total: {scheduledTodos.length} tasks</span>
-          <span>•</span>
-          <span>Unscheduled: {unscheduledTodos.length}</span>
+          <div className="task-stats">
+            <span>Total: {scheduledTodos.length}</span>
+            <span className="stat-separator">•</span>
+            <span>Unscheduled: {unscheduledTodos.length}</span>
+          </div>
         </div>
       </div>
 
-      {scheduledTodos.length > 0 ? (
-        <div style={{ display: 'flex', height: dimensions.height, overflow: 'hidden' }}>
-          {/* Fixed left column with task titles */}
-          <div style={{
-            width: '200px',
-            flexShrink: 0,
-            background: '#1a1a1a',
-            borderRight: '1px solid #333',
-            overflow: 'hidden'
-          }}>
-            <div style={{ height: '100%', position: 'relative' }}>
-              {scheduledTodos.map((todo, i) => {
-                const rowHeight = 70;
-                const barHeight = 32;
-                const y = i * rowHeight + (rowHeight - barHeight) / 2 + 40; // +40 for top margin
+      {/* Scrollable content area */}
+      <div className="timeline-content-scroll">
+        {scheduledTodos.length > 0 ? (
+          viewMode === 'monthly' ? (
+            // Calendar View for Monthly Mode
+            <CalendarMonthView
+              todos={scheduledTodos}
+              onTodoClick={(todo) => onTodoClickRef.current && onTodoClickRef.current(todo)}
+            />
+          ) : (
+          <div style={{ display: 'flex', minHeight: '100%' }}>
+            {/* Fixed left column with task titles */}
+            <div style={{
+              width: '200px',
+              flexShrink: 0,
+              background: '#1e1e1e',
+              borderRight: '1px solid #2d2d2d',
+              overflow: 'hidden'
+            }}>
+              <div style={{ height: '100%', position: 'relative' }}>
+                {scheduledTodos.map((todo, i) => {
+                  const rowHeight = 70;
+                  const barHeight = 32;
+                  const y = i * rowHeight + (rowHeight - barHeight) / 2 + 40; // +40 for top margin
 
-                return (
-                  <div
-                    key={todo.id}
-                    style={{
-                      position: 'absolute',
-                      top: `${y}px`,
-                      left: '10px',
-                      right: '10px',
-                      height: `${barHeight}px`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      color: todo.completed ? '#888' : '#e5e7eb',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      textDecoration: todo.completed ? 'line-through' : 'none',
-                      cursor: 'pointer',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                    onClick={() => {
-                      if (onTodoClickRef.current) onTodoClickRef.current(todo);
-                    }}
-                  >
-                    {todo.text}
-                  </div>
-                );
-              })}
+                  return (
+                    <div
+                      key={todo.id}
+                      style={{
+                        position: 'absolute',
+                        top: `${y}px`,
+                        left: '10px',
+                        right: '10px',
+                        height: `${barHeight}px`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: todo.completed ? '#888' : '#e5e7eb',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        textDecoration: todo.completed ? 'line-through' : 'none',
+                        cursor: 'pointer',
+                        overflow: 'hidden'
+                      }}
+                      onClick={() => {
+                        if (onTodoClickRef.current) onTodoClickRef.current(todo);
+                      }}
+                    >
+                      <span style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        flex: 1
+                      }}>
+                        {todo.text}
+                      </span>
+                      {todo.listNames.length > 0 && (
+                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                          {todo.listNames.map((name, idx) => (
+                            <div
+                              key={`${todo.id}-${name}`}
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #64c8ca, #52b6b8)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                fontWeight: '600',
+                                color: '#1e1e1e',
+                                border: '2px solid #1e1e1e'
+                              }}
+                              title={name}
+                            >
+                              {name.substring(0, 2).toUpperCase()}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Scrollable right area with SVG chart */}
+            <div className="timeline-scroll-area" style={{ flex: 1, overflowX: 'hidden', overflowY: 'hidden', background: '#1e1e1e' }}>
+              <svg ref={svgRef} width={effectiveWidth || dimensions.width} height={dimensions.height} />
             </div>
           </div>
-
-          {/* Scrollable right area with SVG chart */}
-          <div className="timeline-scroll-area" style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
-            <svg ref={svgRef} width={effectiveWidth || dimensions.width} height={dimensions.height} />
+          )
+        ) : (
+          <div className="empty-timeline">
+            <CalendarIcon className="empty-icon-svg" />
+            <h3>No scheduled tasks</h3>
+            <p>Add due dates to your tasks to see them on the timeline</p>
+            {onAddTask && (
+              <button className="create-first-btn" onClick={onAddTask}>
+                <PlusIcon className="btn-icon" />
+                Create Task
+              </button>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="empty-timeline">
-          <div className="empty-timeline-icon">
-            <CalendarIcon style={{ width: '64px', height: '64px', opacity: 0.5 }} />
-          </div>
-          <p className="empty-timeline-text">No scheduled todos</p>
-          <p className="empty-timeline-hint">Add due dates to your todos to see them here</p>
-        </div>
-      )}
+        )}
 
-      {/* Unscheduled todos section */}
-      {unscheduledTodos.length > 0 && (
-        <div className="unscheduled-todos">
+        {/* Unscheduled todos section */}
+        {unscheduledTodos.length > 0 && (
+          <div className="unscheduled-todos">
           <h3 className="unscheduled-todos-title">
             ⚠️ Todos without dates ({unscheduledTodos.length})
           </h3>
@@ -542,14 +819,42 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
                   style={{ backgroundColor: '#64c8ca' }}
                 />
                 <div className="unscheduled-todo-content">
-                  <div
-                    className="unscheduled-todo-text"
-                    style={{
-                      textDecoration: todo.completed ? 'line-through' : 'none',
-                      opacity: todo.completed ? 0.6 : 1
-                    }}
-                  >
-                    {todo.text}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div
+                      className="unscheduled-todo-text"
+                      style={{
+                        textDecoration: todo.completed ? 'line-through' : 'none',
+                        opacity: todo.completed ? 0.6 : 1,
+                        flex: 1
+                      }}
+                    >
+                      {todo.text}
+                    </div>
+                    {todo.listNames.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {todo.listNames.map((name, idx) => (
+                          <div
+                            key={`${todo.id}-${name}`}
+                            style={{
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg, #64c8ca, #52b6b8)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '9px',
+                              fontWeight: '600',
+                              color: '#1e1e1e',
+                              border: '1.5px solid #2d2d2d'
+                            }}
+                            title={name}
+                          >
+                            {name.substring(0, 2).toUpperCase()}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="unscheduled-todo-meta">
                     {todo.linked_note ? (
@@ -565,7 +870,8 @@ const EnhancedGanttTimeline: React.FC<GanttTimelineProps> = ({
             ))}
           </div>
         </div>
-      )}
+        )}
+      </div>
 
       {/* Tooltip */}
       {hoveredTodo && tooltipPos && (

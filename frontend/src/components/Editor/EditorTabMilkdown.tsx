@@ -280,13 +280,22 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
         let fileContent: string
 
         if (isTeamMode && storageBackend) {
-          // Team mode: load from Google Drive
-          fileContent = await storageBackend.getFile(fileName)
+          // Team mode: load from Firebase Storage
+          // Use filePath (which contains folder structure) instead of just fileName
+          // filePath is like "marketing/phase 1 2026.md", fileName is just "phase 1 2026.md"
+          const fileToLoad = filePath || fileName;
+
+          // Optimization: Load file content and file list in parallel
+          const [content, allFiles] = await Promise.all([
+            storageBackend.getFile(fileToLoad),
+            fileId ? storageBackend.listFiles() : Promise.resolve([]),
+          ])
+
+          fileContent = content
 
           // Determine the parent folder ID for this file
-          if (fileId) {
+          if (fileId && allFiles.length > 0) {
             try {
-              const allFiles = await storageBackend.listFiles()
               const currentFile = allFiles.find((f: any) => f.id === fileId)
 
               if (currentFile) {
@@ -294,25 +303,14 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
                 const pathParts = currentFullPath.split('\\')
 
                 if (pathParts.length > 1) {
-                  // File is in a subfolder - find the folder ID
+                  // File is in a subfolder - extract parent folder path
                   const parentFolderName = pathParts[pathParts.length - 2]
-                  const fileTree = await storageBackend.getFileTree()
-
-                  const findFolderId = (nodes: any[], folderName: string): string | undefined => {
-                    for (const node of nodes) {
-                      if (node.type === 'folder' && node.name === parentFolderName) {
-                        return node.id
-                      }
-                      if (node.children) {
-                        const found = findFolderId(node.children, folderName)
-                        if (found) return found
-                      }
-                    }
-                    return undefined
-                  }
-
-                  const folderIdFound = findFolderId(fileTree, parentFolderName)
-                  setParentFolderId(folderIdFound)
+                  // Find folder in the allFiles list instead of calling getFileTree
+                  const parentFolder = allFiles.find((f: any) =>
+                    f.name === parentFolderName &&
+                    f.contentType === 'application/vnd.google-apps.folder'
+                  )
+                  setParentFolderId(parentFolder?.id)
                 } else {
                   // File is at root level
                   setParentFolderId(undefined)
