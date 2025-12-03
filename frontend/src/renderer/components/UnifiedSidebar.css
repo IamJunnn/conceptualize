@@ -39,6 +39,57 @@
   text-decoration: underline;
 }
 
+/* Team header with role badge */
+.team-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-header-info .sidebar-title {
+  cursor: default;
+}
+
+.team-header-info .sidebar-title:hover {
+  text-decoration: none;
+}
+
+/* Role badge styles */
+.role-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: capitalize;
+  letter-spacing: 0.3px;
+  width: fit-content;
+}
+
+.role-badge.role-owner {
+  background-color: rgba(147, 51, 234, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(147, 51, 234, 0.3);
+}
+
+.role-badge.role-admin {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.role-badge.role-leader {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.role-badge.role-member {
+  background-color: rgba(156, 163, 175, 0.2);
+  color: #d1d5db;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
 .sidebar-actions {
   display: flex;
   gap: 4px;
@@ -48,12 +99,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
   color: #808080;
@@ -70,41 +121,30 @@
 }
 
 .action-icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 /* File Tree Content */
 .sidebar-content {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
   overflow-x: hidden;
   padding: 4px 0;
   transition: background-color 0.2s ease;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.sidebar-content::-webkit-scrollbar {
+  display: none;
 }
 
 .sidebar-content.root-drag-over {
   background-color: rgba(9, 71, 113, 0.3);
   outline: 2px dashed #64c8ca;
   outline-offset: -2px;
-}
-
-/* Scrollbar Styling */
-.sidebar-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.sidebar-content::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.sidebar-content::-webkit-scrollbar-thumb {
-  background: #3e3e3e;
-  border-radius: 5px;
-}
-
-.sidebar-content::-webkit-scrollbar-thumb:hover {
-  background: #4e4e4e;
 }
 
 /* Tree Node Container */
@@ -122,10 +162,18 @@
   padding: 0 4px;
   cursor: pointer !important;
   border-radius: 4px;
-  transition: background-color 0.1s ease;
+  transition: none; /* Disable transitions during normal interaction for snappier feel */
   position: relative;
   -webkit-user-select: none;
   user-select: none;
+  contain: layout style paint; /* CSS containment for better performance */
+  backface-visibility: hidden; /* Prevent flicker */
+}
+
+/* Tree node container for better containment */
+.tree-node-container {
+  contain: layout style;
+  transform: translateZ(0); /* GPU layer per container for isolation */
 }
 
 .tree-node.hovered {
@@ -160,6 +208,8 @@
   background-color: rgba(9, 71, 113, 0.4) !important;
   border-left: 3px solid #64c8ca;
   box-shadow: inset 0 0 0 1px #64c8ca;
+  /* Quick visual feedback for drag-over */
+  transition: background-color 0.1s ease-out, box-shadow 0.1s ease-out;
 }
 
 /* Dragging state - item being dragged */
@@ -327,6 +377,8 @@
 .drag-preview {
   pointer-events: none;
   user-select: none;
+  will-change: transform;
+  transition: none; /* No transitions for better performance */
 }
 
 .drag-preview-content {
@@ -360,45 +412,3 @@
   font-weight: 500;
 }
 
-/* Quick Action Buttons */
-.sidebar-quick-actions {
-  display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid #333;
-  background-color: #1e1e1e;
-  margin-top: auto;
-}
-
-.quick-action-button {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background-color: #252525;
-  border: 1px solid #333;
-  border-radius: 6px;
-  color: #cccccc;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.quick-action-button:hover {
-  background-color: #2a2a2a;
-  border-color: #64c8ca;
-  color: #64c8ca;
-}
-
-.quick-action-button:active {
-  transform: scale(0.98);
-}
-
-.quick-action-icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}

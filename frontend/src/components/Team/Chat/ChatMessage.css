@@ -1,0 +1,233 @@
+/* ChatMessage - Individual message styling */
+
+.chat-message {
+  display: flex;
+  gap: 12px;
+  padding: 4px 12px;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.chat-message:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-message.deleted {
+  opacity: 0.5;
+}
+
+.chat-message.deleted .deleted-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #888;
+  font-style: italic;
+}
+
+/* Avatar */
+.message-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e1e1e;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Message body */
+.message-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.message-sender {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #888;
+}
+
+.message-edited {
+  font-size: 11px;
+  color: #666;
+  font-style: italic;
+}
+
+.message-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #ccc;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* @mentions */
+.mention {
+  color: #64c8ca;
+  background: rgba(100, 200, 202, 0.15);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* Edit form */
+.message-edit-form {
+  margin-top: 4px;
+}
+
+.edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border: 1px solid #64c8ca;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+
+.edit-textarea:focus {
+  border-color: #64c8ca;
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.2);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.edit-actions button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: transparent;
+  color: #888;
+  border: 1px solid #3d3d3d;
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: #2d2d2d;
+  color: #ccc;
+}
+
+.btn-save {
+  background: #64c8ca;
+  color: #1e1e1e;
+}
+
+.btn-save:hover:not(:disabled) {
+  background: #52b6b8;
+  transform: translateY(-1px);
+}
+
+.btn-save:disabled,
+.btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.edit-hint {
+  font-size: 11px;
+  color: #666;
+  margin-top: 6px;
+}
+
+/* Reactions */
+.message-reactions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.reaction-bubble {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(100, 200, 202, 0.15);
+  border: 1px solid rgba(100, 200, 202, 0.3);
+  border-radius: 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reaction-bubble:hover {
+  background: rgba(100, 200, 202, 0.25);
+  border-color: rgba(100, 200, 202, 0.5);
+  transform: scale(1.05);
+}
+
+.reaction-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64c8ca;
+}
+
+/* Action buttons */
+.message-actions {
+  position: absolute;
+  top: -12px;
+  right: 16px;
+  display: flex;
+  gap: 4px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+/* Own message highlighting */
+.chat-message.own-message .message-avatar {
+  background: linear-gradient(135deg, #52b6b8, #64c8ca);
+}

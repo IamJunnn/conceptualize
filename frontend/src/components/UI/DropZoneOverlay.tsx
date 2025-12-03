@@ -6,7 +6,7 @@ interface DropZoneOverlayProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
-const EDGE_THRESHOLD = 150; // pixels from edge to trigger drop zone
+const EDGE_THRESHOLD = 200; // pixels from edge to trigger drop zone (increased for easier targeting)
 
 export function DropZoneOverlay({ containerRef }: DropZoneOverlayProps) {
   const { draggedTab, dropZone, setDropZone } = useDragDrop();
@@ -25,6 +25,15 @@ export function DropZoneOverlay({ containerRef }: DropZoneOverlayProps) {
       const x = e.clientX - rect.left;
       const width = rect.width;
 
+      // Check if cursor is over a tab bar (don't show drop zones when reordering tabs)
+      const tabBar = document.elementFromPoint(e.clientX, e.clientY)?.closest('.tab-bar');
+      if (tabBar) {
+        if (dropZone !== null) {
+          setDropZone(null);
+        }
+        return;
+      }
+
       // Determine which edge is closest - ONLY LEFT/RIGHT
       let newZone: DropZone | null = null;
 
@@ -37,13 +46,6 @@ export function DropZoneOverlay({ containerRef }: DropZoneOverlayProps) {
       // If not near left or right edge, set to null (no zone)
 
       if (newZone !== dropZone) {
-        console.log('📍 [DROP ZONE] Changed:', {
-          from: dropZone,
-          to: newZone,
-          mouseX: x,
-          width,
-          threshold: EDGE_THRESHOLD
-        });
         setDropZone(newZone);
       }
     };

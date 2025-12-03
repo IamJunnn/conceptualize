@@ -54,8 +54,8 @@ User A → Grants permission via Google OAuth → App gets access_token
 - [ ] Add `.env` file with `DATABASE_URL`
 
 ### Phase 2: Extend OAuth for Drive Scope
-- [ ] Update [src/services/authServiceTauri.ts](src/services/authServiceTauri.ts) line 92
-  - Add `https://www.googleapis.com/auth/drive.file` to scope
+- [x] Update [src/services/authServiceTauri.ts](src/services/authServiceTauri.ts) line 92
+  - Use `https://www.googleapis.com/auth/drive` scope (full access needed for shared folders)
 - [ ] Store `access_token` and `refresh_token` in PostgreSQL
 - [ ] Implement token refresh logic
 

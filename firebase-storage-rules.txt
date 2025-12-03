@@ -1,0 +1,45 @@
+// Firebase Cloud Storage Security Rules for Conceptualize Teams
+//
+// IMPORTANT: Copy these rules to your Firebase Console:
+// 1. Go to Firebase Console → Storage → Rules
+// 2. Replace the existing rules with these
+// 3. Click "Publish"
+//
+// NOTE: These rules use cross-service Firestore lookups. Make sure:
+// - Firestore and Storage are in the same Firebase project
+// - The memberEmails array in teams collection contains lowercase emails
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Team files - only accessible by team members
+    match /teams/{teamId}/{allPaths=**} {
+      // Allow read/write if:
+      // 1. User is authenticated
+      // 2. User's email (lowercase) is in the team's memberEmails array
+      allow read, write: if request.auth != null
+        && exists(/databases/(default)/documents/teams/$(teamId))
+        && (
+          // Check if email exists in memberEmails (case-insensitive check)
+          request.auth.token.email.lower() in get(/databases/(default)/documents/teams/$(teamId)).data.memberEmails
+          || request.auth.token.email in get(/databases/(default)/documents/teams/$(teamId)).data.memberEmails
+        );
+    }
+
+    // ALTERNATIVE: Simpler rule for testing (use this if the above doesn't work)
+    // This allows any authenticated user to access team files if they know the team ID
+    // Less secure but good for initial testing
+    //
+    // match /teams/{teamId}/{allPaths=**} {
+    //   allow read, write: if request.auth != null;
+    // }
+
+    // ALTERNATIVE 2: If cross-service lookup is not working, use this approach:
+    // This relies on custom claims set by Cloud Functions
+    //
+    // match /teams/{teamId}/{allPaths=**} {
+    //   allow read, write: if request.auth != null
+    //     && teamId in request.auth.token.teams;
+    // }
+  }
+}

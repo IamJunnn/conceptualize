@@ -1,135 +1,229 @@
 .tab-bar {
   display: flex;
-  align-items: center;
-  background: #1a1a1a;
-  border-bottom: 1px solid #333;
-  overflow-x: auto;
-  overflow-y: hidden;
-  min-height: 40px;
-  gap: 4px;
-  padding: 0 8px;
+  align-items: stretch;
+  background: #181818;
+  border-bottom: 1px solid #2d2d2d;
+  overflow: hidden;
+  min-height: 35px;
+  height: 35px;
+  gap: 0;
+  padding-left: 0;
 }
 
+/* VS Code-like tab sizing:
+   - flex: 1 1 0 makes all tabs equal width and shrink together
+   - min-width prevents tabs from becoming too small (very small to allow many tabs)
+   - max-width prevents single tabs from being too wide
+*/
 .tab {
-  padding: 8px 16px;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 20px 0 8px; /* Extra right padding for close button overlay */
+  background: #1e1e1e;
   border: none;
-  color: #999;
+  border-right: 1px solid #2d2d2d;
+  color: #8a8a8a;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 400;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
-  border-radius: 4px 4px 0 0;
+  transition: background 0.1s ease, color 0.1s ease;
   user-select: none;
-  will-change: background, color;
+  position: relative;
+  height: 100%;
+  flex: 1 1 0;
+  min-width: 28px;
+  max-width: 180px;
+  overflow: hidden;
 }
 
 .tab:hover {
-  background: #3a3a3a;
-  color: #ddd;
+  background: #2a2a2a;
+  color: #cccccc;
 }
 
 .tab.active {
-  background: #2a2a2a;
-  color: #fff;
-}
-
-/* Blue line ONLY on active pane's active tab */
-.tab.active.pane-active {
-  border-bottom: 2px solid #64c8ca;
-}
-
-/* No blue line on inactive pane's tabs */
-.tab.active.pane-inactive {
-  border-bottom: 2px solid transparent;
+  background: #2d2d2d;
+  color: #ffffff;
+  font-weight: 500;
+  border-top: 2px solid #64c8ca;
 }
 
 .file-tab {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: transparent;
-  color: #999;
+  gap: 4px;
+  padding: 0 20px 0 8px; /* Extra right padding for close button overlay */
+  background: #1e1e1e;
+  border: none;
+  border-right: 1px solid #2d2d2d;
+  color: #8a8a8a;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 400;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
-  border-radius: 4px 4px 0 0;
+  transition: background 0.1s ease, color 0.1s ease;
   user-select: none;
   position: relative;
-  will-change: background, color;
+  height: 100%;
+  flex: 1 1 0;
+  min-width: 28px;
+  max-width: 180px;
+  justify-content: flex-start;
+  overflow: hidden;
 }
 
 .file-tab:hover {
-  background: #3a3a3a;
-  color: #ddd;
+  background: #2a2a2a;
+  color: #cccccc;
 }
 
 .file-tab.active {
-  background: #2a2a2a;
-  color: #fff;
+  background: #2d2d2d;
+  color: #ffffff;
+  font-weight: 600;
+  border-top: 2px solid #64c8ca;
 }
 
-/* Blue line ONLY on active pane's active tab */
-.file-tab.active.pane-active {
-  border-bottom: 2px solid #64c8ca;
-}
-
-/* No blue line on inactive pane's tabs */
+/* Inactive pane styling - dim the active tab indicator */
 .file-tab.active.pane-inactive {
-  border-bottom: 2px solid transparent;
+  border-top-color: #4a4a4a;
+  color: #aaaaaa;
+}
+
+.tab.active.pane-inactive {
+  border-top-color: #4a4a4a;
+  color: #aaaaaa;
 }
 
 .file-tab.dragging {
-  opacity: 0.5;
-  cursor: default;
-  transition: none !important; /* Disable transitions during drag */
+  opacity: 0.4;
+  cursor: grabbing;
+  transition: none !important;
 }
 
 .file-tab[draggable="true"] {
-  cursor: default;
+  cursor: grab;
 }
 
 .file-tab[draggable="true"]:active {
-  cursor: default;
+  cursor: grabbing;
+}
+
+/* File type icon in tab */
+.tab-file-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.tab-file-icon.markdown {
+  color: #519aba;
+}
+
+.tab-file-icon.text {
+  color: #a9a9a9;
+}
+
+.tab-file-icon.graph {
+  color: currentColor;
+}
+
+.tab-file-icon.dashboard {
+  color: currentColor;
+}
+
+.tab-file-icon.settings {
+  color: currentColor;
 }
 
 .tab-name {
   pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Tab name in file tabs - allow truncation */
+.file-tab .tab-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tab-close {
-  background: none;
+  background: #1e1e1e;
   border: none;
-  color: #666;
+  color: #5a5a5a;
   cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 4px;
-  margin-left: 4px;
+  padding: 0;
   border-radius: 3px;
-  transition: opacity 0.1s ease, background 0.15s ease, color 0.15s ease;
+  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   opacity: 0;
   pointer-events: none;
-  will-change: opacity, background;
+  flex-shrink: 0;
+  align-self: center;
+  position: absolute;
+  right: 4px;
+  z-index: 1;
+}
+
+.tab-close-icon {
+  width: 12px;
+  height: 12px;
 }
 
 /* Show close button on tab hover or when tab is active */
 .file-tab:hover .tab-close,
-.file-tab.active .tab-close {
+.file-tab.active .tab-close,
+.tab:hover .tab-close,
+.tab.active .tab-close {
   opacity: 1;
   pointer-events: auto;
 }
 
+/* Match close button background to tab state */
+.file-tab:hover .tab-close,
+.tab:hover .tab-close {
+  background: #2a2a2a;
+}
+
+.file-tab.active .tab-close,
+.tab.active .tab-close {
+  background: #2d2d2d;
+}
+
 .tab-close:hover {
-  background: #444;
-  color: #fff;
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff;
+}
+
+/* Modified indicator dot - replaces close button when file is modified */
+.tab-modified-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c4c4c4;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.file-tab:hover .tab-modified-dot {
+  display: none;
+}
+
+.file-tab:hover .tab-close.has-modified {
+  opacity: 1;
 }
 
 .close-split-btn {
@@ -222,4 +316,28 @@
   color: #fff;
   white-space: nowrap;
   font-weight: 500;
+}
+
+/* Tab reorder drop indicators */
+.file-tab.drop-target-left::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  background: #64c8ca;
+  border-radius: 2px;
+  z-index: 100;
+  box-shadow: 0 0 6px rgba(100, 200, 202, 0.8);
+}
+
+.tab-drop-indicator-end {
+  width: 3px;
+  background: #64c8ca;
+  margin: 2px 2px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(100, 200, 202, 0.8);
+  align-self: stretch;
 }

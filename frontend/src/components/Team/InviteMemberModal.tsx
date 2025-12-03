@@ -144,22 +144,29 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
         <div className="current-members">
           <h3>Current Members ({Object.keys(team.members).length})</h3>
           <div className="members-list">
-            {Object.values(team.members).map((member) => (
-              <div key={member.email} className="member-item">
-                <div className="member-avatar">
-                  {(member.displayName || member.email)[0].toUpperCase()}
-                </div>
-                <div className="member-info">
-                  <div className="member-name">
-                    {member.displayName || member.email.split('@')[0]}
+            {Object.values(team.members).map((member, index) => {
+              // Handle cases where member data might be incomplete
+              const displayName = member.displayName || member.email || 'Unknown';
+              const email = member.email || 'No email';
+              const initial = displayName[0]?.toUpperCase() || '?';
+
+              return (
+                <div key={member.email || `member-${index}`} className="member-item">
+                  <div className="member-avatar">
+                    {initial}
                   </div>
-                  <div className="member-email">{member.email}</div>
+                  <div className="member-info">
+                    <div className="member-name">
+                      {displayName.split('@')[0]}
+                    </div>
+                    <div className="member-email">{email}</div>
+                  </div>
+                  <div className={`member-role role-${member.role || 'member'}`}>
+                    {member.role || 'member'}
+                  </div>
                 </div>
-                <div className={`member-role role-${member.role}`}>
-                  {member.role}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

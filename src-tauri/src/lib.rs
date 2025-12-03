@@ -575,6 +575,20 @@ fn read_binary_file(file_path: String) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
+fn get_file_size(file_path: String) -> Result<u64, String> {
+    let path = PathBuf::from(&file_path);
+    if !path.exists() {
+        return Err("File does not exist".to_string());
+    }
+    if !path.is_file() {
+        return Err("Path is not a file".to_string());
+    }
+    fs::metadata(&path)
+        .map(|m| m.len())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn write_file(file_path: String, content: String) -> CreateResult {
     let path = PathBuf::from(&file_path);
     match fs::write(&path, content) {
@@ -2054,7 +2068,7 @@ pub fn run() {
             get_root_folder, select_folder, save_root_folder,
             get_config_value, set_config_value, delete_config_value,
             get_file_tree, create_file, create_folder,
-            get_markdown_files, delete_item, rename_item, move_item, read_file, read_binary_file, write_file,
+            get_markdown_files, delete_item, rename_item, move_item, read_file, read_binary_file, get_file_size, write_file,
             reveal_in_explorer, open_file_external, find_file_by_name, search_files,
             // Old Todo commands (to be deprecated)
             get_todos, save_todos, add_todo_list, add_todo, update_todo, delete_todo,

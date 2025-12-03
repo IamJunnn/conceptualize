@@ -1,9 +1,124 @@
 .gantt-timeline-container {
   width: 100%;
   height: 100%;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1e1e1e;
+  padding: 0;
+}
+
+/* Timeline Filters - matching TodoPanel style */
+.timeline-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid #2d2d2d;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 48px;
+}
+
+/* Scrollable content area - only the timeline content scrolls */
+.timeline-content-scroll {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+  background: #1e1e1e;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar styling for timeline content */
+.timeline-content-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.timeline-content-scroll::-webkit-scrollbar-track {
   background: transparent;
-  padding: 20px;
+}
+
+.timeline-content-scroll::-webkit-scrollbar-thumb {
+  background: #3d3d3d;
+  border-radius: 4px;
+}
+
+.timeline-content-scroll::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+.timeline-filters .filter-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.timeline-filters .filter-tab {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #888;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timeline-filters .filter-tab:hover {
+  background: #2d2d2d;
+  color: #e0e0e0;
+}
+
+.timeline-filters .filter-tab.active {
+  background: #2d2d2d;
+  color: #64c8ca;
+  font-weight: 500;
+}
+
+.timeline-filters .filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.timeline-filters .show-completed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #888;
+  font-size: 13px;
+}
+
+.timeline-filters .show-completed-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #64c8ca;
+}
+
+.timeline-filters .show-completed-toggle:hover {
+  color: #e0e0e0;
+}
+
+.timeline-filters .task-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  color: #888;
+  flex-wrap: wrap;
+  white-space: nowrap;
+}
+
+.timeline-filters .stat-separator {
+  color: #555;
 }
 
 /* Scrollbar Styling - Conceptualize Theme */
@@ -44,7 +159,7 @@
   background: #4e4e4e;
 }
 
-svg {
+.gantt-timeline-container svg {
   display: block;
   background: transparent;
   border-radius: 8px;
@@ -55,26 +170,58 @@ svg {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 400px;
-  color: #6b7280;
+  padding: 60px 20px;
+  text-align: center;
+  background: transparent !important;
+  border-radius: 0 !important;
+  flex: 1;
+  min-height: 0;
 }
 
-.empty-timeline-icon {
-  font-size: 64px;
+.timeline-content-scroll .empty-icon-svg {
+  width: 64px;
+  height: 64px;
+  color: #64c8ca;
+  opacity: 0.6;
   margin-bottom: 16px;
-  opacity: 0.5;
 }
 
-.empty-timeline-text {
+.timeline-content-scroll .empty-timeline h3 {
+  margin: 0 0 8px 0;
+  color: #e0e0e0;
   font-size: 18px;
   font-weight: 600;
-  margin: 0 0 8px 0;
 }
 
-.empty-timeline-hint {
-  font-size: 14px;
+.timeline-content-scroll .empty-timeline p {
   margin: 0;
-  opacity: 0.7;
+  color: #888;
+  font-size: 14px;
+}
+
+.empty-timeline .create-first-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+  padding: 10px 20px;
+  background: #64c8ca;
+  border: none;
+  border-radius: 6px;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.empty-timeline .create-first-btn:hover {
+  background: #52b6b8;
+}
+
+.empty-timeline .create-first-btn .btn-icon {
+  width: 18px;
+  height: 18px;
 }
 
 /* Unscheduled todos section */

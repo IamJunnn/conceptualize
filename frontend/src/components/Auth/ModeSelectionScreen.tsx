@@ -1,12 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import SimpleTitleBar from '../UI/SimpleTitleBar';
+import CreateLocalWorkspaceModal from '../Workspace/CreateLocalWorkspaceModal';
 import './ModeSelectionScreen.css';
 
 interface ModeSelectionScreenProps {
   onModeSelected: (mode: 'local' | 'team') => void;
+  onLocalWorkspaceCreated?: (path: string, name: string) => void;
 }
 
-const ModeSelectionScreen: React.FC<ModeSelectionScreenProps> = ({ onModeSelected }) => {
+const ModeSelectionScreen: React.FC<ModeSelectionScreenProps> = ({ onModeSelected, onLocalWorkspaceCreated }) => {
+  const [showLocalWorkspaceModal, setShowLocalWorkspaceModal] = useState(false);
+
+  const handleLocalClick = () => {
+    setShowLocalWorkspaceModal(true);
+  };
+
+  const handleLocalWorkspaceCreate = (path: string, name: string) => {
+    setShowLocalWorkspaceModal(false);
+    if (onLocalWorkspaceCreated) {
+      onLocalWorkspaceCreated(path, name);
+    }
+    onModeSelected('local');
+  };
+
   return (
     <div className="mode-selection-screen">
       <SimpleTitleBar />
@@ -27,7 +43,7 @@ const ModeSelectionScreen: React.FC<ModeSelectionScreenProps> = ({ onModeSelecte
             {/* Local Mode */}
             <button
               className="mode-option"
-              onClick={() => onModeSelected('local')}
+              onClick={handleLocalClick}
             >
               <div className="mode-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -61,12 +77,11 @@ const ModeSelectionScreen: React.FC<ModeSelectionScreenProps> = ({ onModeSelecte
               <div className="mode-info">
                 <h3>Start as a Team</h3>
                 <p>
-                  Collaborate with your team in real-time. Share notes, manage
-                  permissions, and work together seamlessly in the cloud.
+                  Collaborate with your team. Create shared workspaces, invite members, and keep everyone's knowledge in sync.
                 </p>
               </div>
               <div className="mode-features">
-                <div className="feature-tag">Real-time collaboration</div>
+                <div className="feature-tag">Google sign-in</div>
                 <div className="feature-tag">Cloud sync</div>
                 <div className="feature-tag">Team management</div>
               </div>
@@ -78,6 +93,13 @@ const ModeSelectionScreen: React.FC<ModeSelectionScreenProps> = ({ onModeSelecte
           </p>
         </div>
       </div>
+
+      {showLocalWorkspaceModal && (
+        <CreateLocalWorkspaceModal
+          onClose={() => setShowLocalWorkspaceModal(false)}
+          onCreate={handleLocalWorkspaceCreate}
+        />
+      )}
     </div>
   );
 };

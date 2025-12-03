@@ -1,0 +1,115 @@
+/* Storage Usage Meter Styles */
+
+.storage-meter {
+  padding: 12px;
+  background: var(--bg-secondary, #1e1e1e);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #333);
+}
+
+.storage-meter.warning {
+  border-color: var(--color-warning, #f59e0b);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.storage-meter.exceeded,
+.storage-meter.enterprise {
+  border-color: var(--color-error, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.storage-meter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.storage-meter-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #fff);
+}
+
+.storage-meter-value {
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+.storage-meter-bar {
+  height: 8px;
+  background: var(--bg-tertiary, #2a2a2a);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.storage-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.storage-meter-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  min-height: 24px;
+}
+
+.storage-meter-status {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.storage-meter-percent {
+  font-size: 11px;
+  color: var(--text-secondary, #888);
+  margin-left: auto;
+}
+
+.storage-meter-upgrade-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.storage-meter-upgrade-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+/* Compact variant */
+.storage-meter-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.storage-meter-bar-compact {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-tertiary, #2a2a2a);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.storage-meter-fill-compact {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.storage-meter-text-compact {
+  font-size: 10px;
+  color: var(--text-secondary, #888);
+  white-space: nowrap;
+}

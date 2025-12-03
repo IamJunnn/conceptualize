@@ -712,22 +712,22 @@
   right: 32px;
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, #4a9eff 0%, #007acc 100%);
+  background: linear-gradient(135deg, #7dd3d5 0%, #64c8ca 100%);
   border: none;
   border-radius: 50%;
-  color: #ffffff;
+  color: #1e1e1e;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(100, 200, 202, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 999;
 }
 
 .fab-add-todo:hover {
   transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(74, 158, 255, 0.5), 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 16px rgba(100, 200, 202, 0.5), 0 12px 32px rgba(0, 0, 0, 0.4);
 }
 
 .fab-add-todo:active {

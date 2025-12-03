@@ -1,4 +1,4 @@
-import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon, ClipboardDocumentListIcon, CalendarIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { isImportantNote } from '../../utils/importantNotes';
 import React from 'react';
@@ -21,8 +21,6 @@ interface UnifiedSidebarProps {
   onChangeFolderPath?: () => void;
   filesWithIncomingLinks?: Set<string>;
   teamName?: string;  // Optional team name to display at the top
-  onTeamManagement?: () => void;  // Optional callback to open team management
-  userRole?: 'owner' | 'admin' | 'leader' | 'member';  // User's role in the team
 }
 
 // Ensure TreeNodeProps is defined
@@ -48,6 +46,8 @@ interface TreeNodeProps {
     hoveredFolder: string | null;
     draggedNode: FileTreeNode | null;
   }>>;
+  // Ref for tracking hovered folder without causing re-renders
+  hoveredFolderRef: React.MutableRefObject<string | null>;
   highlightedPath: string | null;
   filesWithIncomingLinks?: Set<string>;
 }
@@ -94,7 +94,7 @@ const sortFileTreeNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
   });
 };
 
-const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, highlightedPath, filesWithIncomingLinks }) => {
+const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, hoveredFolderRef, highlightedPath, filesWithIncomingLinks }) => {
   // Load saved folder state from localStorage, default to true (open) for first time
   const getSavedFolderState = () => {
     if (node.type !== 'folder') return true;
@@ -112,8 +112,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 
   const [isOpen, setIsOpen] = React.useState(getSavedFolderState());
   const [isHovered, setIsHovered] = React.useState(false);
-  const [isDragOver, setIsDragOver] = React.useState(false);
   const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+
+  // Refs for direct DOM manipulation (avoid re-renders during drag)
+  const nodeRef = React.useRef<HTMLDivElement>(null);
+  const childrenRef = React.useRef<HTMLDivElement>(null);
 
   // Listen for important notes changes to re-render
   React.useEffect(() => {
@@ -126,6 +129,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
 
   const isCurrentlyEditing = editing?.type === 'rename' && editing.path === node.path;
   const isAddingChild = (editing?.type === 'new-note' || editing?.type === 'new-folder') && editing.path === node.path;
+
+  // Memoize sorted children to avoid re-sorting on every render
+  const sortedChildren = React.useMemo(() => {
+    return sortFileTreeNodes(node.children || []);
+  }, [node.children]);
 
   // Auto-open folder when creating a new item inside it
   React.useEffect(() => {
@@ -154,42 +162,41 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
     localStorage.setItem('folderStates', JSON.stringify(states));
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleContextMenu = React.useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     onContextMenu(e, node.path, node.type, node.name, node.id);
-  };
+  }, [onContextMenu, node.path, node.type, node.name, node.id]);
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (isDev) console.log('🖱️ Click:', node.name, 'isDragging:', isDragging);
-
+  const handleClick = React.useCallback((e: React.MouseEvent) => {
     // Don't handle click if we just finished dragging
     if (isDragging) {
       e.preventDefault();
-      if (isDev) console.log('⚠️ Click prevented - was dragging');
       return;
     }
 
     if (node.type === 'folder') {
-      const newState = !isOpen;
-      setIsOpen(newState);
-      saveFolderState(node.path, newState);
-      if (isDev) console.log('📁 Folder toggled:', node.name, 'isOpen:', newState);
+      setIsOpen(prev => {
+        const newState = !prev;
+        saveFolderState(node.path, newState);
+        return newState;
+      });
     } else {
-      if (isDev) console.log('📄 File selected:', node.name);
       onSelectFile(node.path, node.name);
     }
-  };
+  }, [isDragging, node.type, node.path, node.name, onSelectFile]);
 
-  const handleChevronClick = (e: React.MouseEvent) => {
+  const handleChevronClick = React.useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    const newState = !isOpen;
-    setIsOpen(newState);
-    saveFolderState(node.path, newState);
-  };
+    setIsOpen(prev => {
+      const newState = !prev;
+      saveFolderState(node.path, newState);
+      return newState;
+    });
+  }, [node.path]);
 
   // Mouse-based drag and drop handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
     // Don't allow dragging while editing
     if (isCurrentlyEditing) {
       return;
@@ -208,37 +215,47 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       hoveredFolder: null,
       draggedNode: node
     });
+  }, [isCurrentlyEditing, node, setDragState]);
 
-    if (isDev) console.log('🖱️ Mouse down on:', node.name);
-  };
-
-  const handleMouseEnter = () => {
+  const handleMouseEnter = React.useCallback(() => {
     setIsHovered(true);
 
     // Check if something is being dragged and this is a folder
     if (dragState.draggedPath && node.type === 'folder' && dragState.draggedPath !== node.path) {
-      setIsDragOver(true);
-      // Update the parent's dragState to track which folder we're hovering over
-      setDragState(prev => ({ ...prev, hoveredFolder: node.path }));
-      if (isDev) console.log('🎯 Mouse enter folder:', node.name, 'while dragging:', dragState.draggedPath);
+      // Use direct DOM manipulation for drag-over styling (no re-render)
+      if (nodeRef.current) {
+        nodeRef.current.classList.add('drag-over');
+      }
+      if (childrenRef.current) {
+        childrenRef.current.classList.add('folder-children-drag-over');
+      }
+      // Update ref instead of state for hovered folder tracking
+      hoveredFolderRef.current = node.path;
     }
-  };
+  }, [dragState.draggedPath, node.type, node.path, hoveredFolderRef]);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = React.useCallback(() => {
     setIsHovered(false);
-    setIsDragOver(false);
-    // Clear the hovered folder when we leave
-    if (dragState.hoveredFolder === node.path) {
-      setDragState(prev => ({ ...prev, hoveredFolder: null }));
+    // Use direct DOM manipulation to remove drag-over styling
+    if (nodeRef.current) {
+      nodeRef.current.classList.remove('drag-over');
     }
-  };
+    if (childrenRef.current) {
+      childrenRef.current.classList.remove('folder-children-drag-over');
+    }
+    // Clear the hovered folder ref if this was the hovered one
+    if (hoveredFolderRef.current === node.path) {
+      hoveredFolderRef.current = null;
+    }
+  }, [node.path, hoveredFolderRef]);
 
   const isHighlighted = highlightedPath === node.path;
 
   return (
     <div className="tree-node-container">
       <div
-        className={`tree-node ${isHovered ? 'hovered' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragging ? 'dragging' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+        ref={nodeRef}
+        className={`tree-node ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''} ${isHighlighted ? 'highlighted' : ''}`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         data-file-path={node.path}
         onClick={handleClick}
@@ -300,14 +317,20 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       {/* Children */}
       {isOpen && node.type === 'folder' && (
         <div
-          className={`tree-node-children ${isDragOver ? 'folder-children-drag-over' : ''}`}
+          ref={childrenRef}
+          className="tree-node-children"
           onMouseEnter={(e) => {
             // When hovering over the children area, set the parent folder as hovered
             if (dragState.draggedPath && dragState.draggedPath !== node.path) {
               e.stopPropagation();
-              setIsDragOver(true);
-              setDragState(prev => ({ ...prev, hoveredFolder: node.path }));
-              if (isDev) console.log('🎯 Mouse enter folder children area:', node.name);
+              // Use direct DOM manipulation
+              if (nodeRef.current) {
+                nodeRef.current.classList.add('drag-over');
+              }
+              if (childrenRef.current) {
+                childrenRef.current.classList.add('folder-children-drag-over');
+              }
+              hoveredFolderRef.current = node.path;
             }
           }}
           onMouseLeave={(e) => {
@@ -318,14 +341,20 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
             // Check if relatedTarget is a valid Node before using contains
             // If relatedTarget is null or not a child of currentTarget, we're leaving
             if (!relatedTarget || !(relatedTarget instanceof Node) || !currentTarget.contains(relatedTarget)) {
-              setIsDragOver(false);
-              if (dragState.hoveredFolder === node.path) {
-                setDragState(prev => ({ ...prev, hoveredFolder: null }));
+              // Use direct DOM manipulation
+              if (nodeRef.current) {
+                nodeRef.current.classList.remove('drag-over');
+              }
+              if (childrenRef.current) {
+                childrenRef.current.classList.remove('folder-children-drag-over');
+              }
+              if (hoveredFolderRef.current === node.path) {
+                hoveredFolderRef.current = null;
               }
             }
           }}
         >
-          {sortFileTreeNodes(node.children || []).map((child: FileTreeNode) => (
+          {sortedChildren.map((child: FileTreeNode) => (
             <TreeNode
               key={child.id || child.path}
               node={child}
@@ -337,6 +366,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
               onMoveItem={onMoveItem}
               dragState={dragState}
               setDragState={setDragState}
+              hoveredFolderRef={hoveredFolderRef}
               highlightedPath={highlightedPath}
               filesWithIncomingLinks={filesWithIncomingLinks}
             />
@@ -366,16 +396,37 @@ const TreeNode: React.FC<TreeNodeProps> = ({ node, onSelectFile, level, editing,
       )}
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  // Only re-render if these specific props change
+  // NOTE: We intentionally exclude hoveredFolder from comparison to avoid re-renders
+  // The drag-over visual is handled via local isDragOver state instead
+  const prevIsBeingDragged = prevProps.dragState.draggedPath === prevProps.node.path;
+  const nextIsBeingDragged = nextProps.dragState.draggedPath === nextProps.node.path;
+
+  return (
+    prevProps.node.path === nextProps.node.path &&
+    prevProps.node.name === nextProps.node.name &&
+    prevProps.node.type === nextProps.node.type &&
+    prevProps.level === nextProps.level &&
+    prevProps.editing?.path === nextProps.editing?.path &&
+    prevProps.editing?.type === nextProps.editing?.type &&
+    prevProps.highlightedPath === nextProps.highlightedPath &&
+    prevProps.dragState.isDragging === nextProps.dragState.isDragging &&
+    prevIsBeingDragged === nextIsBeingDragged &&
+    // Only compare children length for folders to detect structural changes
+    (prevProps.node.children?.length || 0) === (nextProps.node.children?.length || 0)
+  );
+});
 
 const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName, onTeamManagement, userRole } = props;
+  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
   const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
   const sidebarContentRef = React.useRef<HTMLDivElement>(null);
 
-  // Shared drag state for all tree nodes
+  // Shared drag state for all tree nodes - minimal state to reduce re-renders
   const [dragState, setDragState] = React.useState<{
     isDragging: boolean;
     draggedPath: string | null;
@@ -390,8 +441,12 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     draggedNode: null
   });
 
-  // State for drag preview cursor position
-  const [cursorPos, setCursorPos] = React.useState<{ x: number; y: number } | null>(null);
+  // Use ref to track hovered folder without causing re-renders during drag
+  const hoveredFolderRef = React.useRef<string | null>(null);
+
+  // Ref for drag preview cursor position (using ref to avoid re-renders)
+  const cursorPosRef = React.useRef<{ x: number; y: number } | null>(null);
+  const dragPreviewRef = React.useRef<HTMLDivElement>(null);
 
   const rootPath = getRootPath();
   const folderName = rootPath.split(/\\/g).pop(); // Extract folder name from path
@@ -475,6 +530,10 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
 
   // Global mouse event listeners for drag (single set for entire sidebar)
   React.useEffect(() => {
+    let rafId: number | null = null;
+    let lastUpdateTime = 0;
+    const THROTTLE_MS = 16; // ~60fps
+
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!dragState.dragStartPos || !dragState.draggedPath) {
         return;
@@ -489,9 +548,26 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
         setDragState(prev => ({ ...prev, isDragging: true }));
       }
 
-      // Update cursor position for drag preview
+      // Throttle cursor position updates using requestAnimationFrame
       if (dragState.isDragging || (dx > 5 || dy > 5)) {
-        setCursorPos({ x: e.clientX, y: e.clientY });
+        const now = Date.now();
+        if (now - lastUpdateTime < THROTTLE_MS && rafId !== null) {
+          return; // Skip this update
+        }
+
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+
+        rafId = requestAnimationFrame(() => {
+          // Update cursor position via ref and directly manipulate DOM
+          cursorPosRef.current = { x: e.clientX, y: e.clientY };
+          if (dragPreviewRef.current) {
+            dragPreviewRef.current.style.transform = `translate(${e.clientX + 10}px, ${e.clientY + 10}px)`;
+          }
+          lastUpdateTime = Date.now();
+          rafId = null;
+        });
       }
     };
 
@@ -499,11 +575,31 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       if (dragState.dragStartPos || dragState.draggedPath) {
         if (isDev) console.log('🏁 DRAG END (global)');
 
-        // Check if we're dropping on a folder
-        if (dragState.hoveredFolder && dragState.draggedPath && onMoveItem) {
-          const sourcePath = dragState.draggedPath;
-          const destPath = dragState.hoveredFolder;
+        // Store the drop info before resetting state - use ref for hoveredFolder
+        const destPath = hoveredFolderRef.current;
+        const shouldMove = destPath && dragState.draggedPath && onMoveItem;
+        const sourcePath = dragState.draggedPath;
 
+        // Reset drag state IMMEDIATELY for responsive UI
+        setDragState({
+          isDragging: false,
+          draggedPath: null,
+          dragStartPos: null,
+          hoveredFolder: null,
+          draggedNode: null
+        });
+
+        // Reset refs
+        hoveredFolderRef.current = null;
+        cursorPosRef.current = null;
+
+        // Clear all drag-over highlights via DOM
+        document.querySelectorAll('.drag-over, .folder-children-drag-over').forEach(el => {
+          el.classList.remove('drag-over', 'folder-children-drag-over');
+        });
+
+        // Perform the move operation in the background (non-blocking)
+        if (shouldMove && sourcePath && destPath) {
           if (isDev) {
             console.log('💧 DROP detected');
             console.log('   📦 Source:', sourcePath);
@@ -517,23 +613,14 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           // Validate
           if (normalizedSource !== normalizedDest && !normalizedDest.startsWith(normalizedSource + '/')) {
             if (isDev) console.log('   ✅ Valid drop - moving item');
-            await onMoveItem(sourcePath, destPath);
+            // Execute move asynchronously without blocking UI
+            onMoveItem(sourcePath, destPath).catch((error) => {
+              console.error('Error moving item:', error);
+            });
           } else {
             if (isDev) console.log('   ❌ Invalid drop');
           }
         }
-
-        // Reset drag state
-        setDragState({
-          isDragging: false,
-          draggedPath: null,
-          dragStartPos: null,
-          hoveredFolder: null,
-          draggedNode: null
-        });
-
-        // Reset cursor position
-        setCursorPos(null);
       }
     };
 
@@ -541,6 +628,9 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     document.addEventListener('mouseup', handleGlobalMouseUp);
 
     return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       document.removeEventListener('mousemove', handleGlobalMouseMove);
       document.removeEventListener('mouseup', handleGlobalMouseUp);
     };
@@ -551,6 +641,11 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   };
 
   const isCreatingAtRoot = editing && (editing.type === 'new-note' || editing.type === 'new-folder') && (editing.path === rootPath || editing.path === '');
+
+  // Memoize sorted file tree to avoid re-sorting on every render
+  const sortedFileTree = React.useMemo(() => {
+    return sortFileTreeNodes(fileTree);
+  }, [fileTree]);
 
   // Root-level drag and drop handlers
   const handleRootDragOver = (e: React.DragEvent) => {
@@ -597,9 +692,11 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       {/* Header */}
       <div className="sidebar-header">
         {teamName && (
-          <h2 className="sidebar-title team-name">
-            {teamName}
-          </h2>
+          <div className="team-header-info">
+            <h2 className="sidebar-title team-name">
+              {teamName}
+            </h2>
+          </div>
         )}
         {!isGoogleDriveFolderId && !teamName && (
           <h2
@@ -611,16 +708,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           </h2>
         )}
         <div className="sidebar-actions">
-          {teamName && onTeamManagement && (userRole === 'owner' || userRole === 'admin') && (
-            <button
-              onClick={onTeamManagement}
-              className="action-button"
-              title="Team Management"
-            >
-              <UserGroupIcon className="action-icon" />
-            </button>
-          )}
-          {onChangeFolderPath && !isGoogleDriveFolderId && (
+          {onChangeFolderPath && !isGoogleDriveFolderId && !teamName && (
             <button
               onClick={onChangeFolderPath}
               className="action-button"
@@ -672,7 +760,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
             />
           </div>
         )}
-        {sortFileTreeNodes(fileTree).map((node: FileTreeNode) => (
+        {sortedFileTree.map((node: FileTreeNode) => (
           <TreeNode
             key={node.id ? `${node.id}-${treeKey}` : `${node.path}-${treeKey}`}
             node={node}
@@ -684,6 +772,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
             onMoveItem={onMoveItem}
             dragState={dragState}
             setDragState={setDragState}
+            hoveredFolderRef={hoveredFolderRef}
             highlightedPath={highlightedPath}
             filesWithIncomingLinks={filesWithIncomingLinks}
           />
@@ -691,15 +780,17 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       </div>
 
       {/* Drag Preview - follows cursor */}
-      {dragState.isDragging && cursorPos && dragState.draggedNode && (
+      {dragState.isDragging && dragState.draggedNode && (
         <div
+          ref={dragPreviewRef}
           className="drag-preview"
           style={{
             position: 'fixed',
-            left: `${cursorPos.x + 10}px`,
-            top: `${cursorPos.y + 10}px`,
+            left: 0,
+            top: 0,
             pointerEvents: 'none',
             zIndex: 10000,
+            willChange: 'transform',
           }}
         >
           <div className="drag-preview-content">
@@ -721,26 +812,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
         </div>
       )}
 
-      {/* Quick Action Buttons */}
-      <div className="sidebar-quick-actions">
-        <button
-          className="quick-action-button"
-          onClick={() => onSelectFile('special://todos', 'Todos')}
-          title="Todo Lists"
-        >
-          <ClipboardDocumentListIcon className="quick-action-icon" />
-          <span>Todos</span>
-        </button>
-        <button
-          className="quick-action-button"
-          onClick={() => onSelectFile('special://timeline', 'Timeline')}
-          title="Timeline"
-        >
-          <CalendarIcon className="quick-action-icon" />
-          <span>Timeline</span>
-        </button>
       </div>
-    </div>
   );
 });
 

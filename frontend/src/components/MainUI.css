@@ -16,7 +16,7 @@
 
 .explorer-sidebar {
   background: #252525;
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
 }
 
@@ -40,121 +40,7 @@
   position: relative;
 }
 
-.tab-bar {
-  display: flex;
-  gap: 4px;
-  padding: 8px 16px 0 16px;
-  background: #1e1e1e;
-  border-bottom: none;
-  overflow: hidden;
-  flex-wrap: nowrap;
-}
-
-.tab {
-  flex: 1 1 0;
-  min-width: 50px;
-  max-width: 200px;
-  padding: 8px 16px;
-  background: transparent;
-  border: none;
-  color: #888;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: 6px 6px 0 0;
-  transition: all 0.2s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-bottom: 2px solid transparent;
-}
-
-.tab:hover {
-  background: #2a2a2a;
-  color: #ccc;
-}
-
-.tab.active {
-  flex: 1 1 20px;
-  min-width: 70px;
-  background: #1e1e1e;
-  color: #fff;
-  border-bottom: 2px solid #64c8ca;
-}
-
-.file-tab {
-  flex: 1 1 0;
-  min-width: 50px;
-  max-width: 200px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  background: transparent;
-  border: none;
-  color: #888;
-  font-size: 13px;
-  cursor: pointer;
-  border-radius: 6px 6px 0 0;
-  transition: all 0.2s;
-  border-bottom: 2px solid transparent;
-  overflow: hidden;
-}
-
-.file-tab:hover {
-  background: #2a2a2a;
-  color: #ccc;
-  padding-right: 4px;
-}
-
-.file-tab.active {
-  flex: 1 1 20px;
-  min-width: 70px;
-  background: #1e1e1e;
-  color: #fff;
-  border-bottom: 2px solid #64c8ca;
-  padding-right: 4px;
-}
-
-.tab-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.tab-close {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 0;
-  height: 18px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: #888;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 3px;
-  opacity: 0;
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.file-tab:hover .tab-close,
-.file-tab.active .tab-close {
-  display: flex;
-  width: 18px;
-  opacity: 1;
-  margin-left: 4px;
-}
-
-.tab-close:hover {
-  background: #555;
-  color: #fff;
-}
+/* Tab styles are defined in TabBar.css */
 
 .tab-content {
   flex: 1;

@@ -168,47 +168,12 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
   }
 
   if (!graphData || graphData.nodes.length === 0) {
-    const handleDiagnostics = async () => {
-      if (isTeamMode && storageBackend) {
-        console.log('=== TEAM MODE DIAGNOSTICS ===');
-        console.log('📁 Root path (Drive folder ID):', rootPath);
-
-        try {
-          // Check folder metadata and permissions
-          const { getFolderMetadata } = await import('../../services/googleDriveService');
-          console.log('🔍 Checking folder metadata...');
-          const folderMeta = await getFolderMetadata(rootPath);
-          console.log('📂 Folder metadata:', folderMeta);
-
-          // Try to list files
-          const files = await storageBackend.listFiles();
-          console.log('📊 Files found via API:', files.length);
-          console.log('📋 File details:', files);
-
-          if (files.length === 0) {
-            console.log('⚠️ No files found in Google Drive folder');
-            console.log('');
-            console.log('🔍 Possible reasons:');
-            console.log('  1. The folder is owned by someone else and you only have view-only access');
-            console.log('  2. The folder was shared with you but the contents were not');
-            console.log('  3. The folder is genuinely empty');
-            console.log('');
-            console.log('💡 Solution: Ask the folder owner to re-share with "Editor" permissions');
-            console.log('   OR: Try creating a new note to test if you have write access');
-          }
-        } catch (error) {
-          console.error('❌ Diagnostics failed:', error);
-          console.error('📊 Error details:', error);
-        }
-      }
-    };
-
     return (
       <div className="graph-view">
         <div className="graph-empty">
           <div className="graph-empty-icons">
-            <FilePlus size={48} strokeWidth={1.5} style={{ color: '#c44fc4', marginRight: '12px' }} />
-            <FolderPlus size={48} strokeWidth={1.5} style={{ color: '#64c8ca' }} />
+            <FilePlus size={48} strokeWidth={1.5} style={{ color: '#64c8ca', marginRight: '12px' }} />
+            <FolderPlus size={48} strokeWidth={1.5} style={{ color: '#c44fc4' }} />
           </div>
           <h2 className="graph-empty-title">Your Knowledge Graph Awaits</h2>
           {isTeamMode && (
@@ -238,20 +203,6 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
               <FolderPlus size={20} strokeWidth={2} style={{ marginRight: '8px', flexShrink: 0 }} />
               <span>Create a new folder</span>
             </button>
-            {isTeamMode && (
-              <button
-                className="graph-empty-button"
-                onClick={handleDiagnostics}
-                style={{
-                  marginTop: '12px',
-                  backgroundColor: '#444',
-                  border: '1px solid #666'
-                }}
-              >
-                <AlertCircle size={20} strokeWidth={2} style={{ marginRight: '8px', flexShrink: 0 }} />
-                <span>Run Diagnostics</span>
-              </button>
-            )}
           </div>
         </div>
       </div>

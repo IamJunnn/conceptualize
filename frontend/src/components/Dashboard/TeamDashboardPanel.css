@@ -1,0 +1,324 @@
+/* Team Dashboard Specific Styles */
+
+/* Team icon styling */
+.dashboard-icon.team-icon {
+  color: #c44fc4;
+}
+
+/* Team info banner */
+.team-info-banner {
+  display: flex;
+  gap: 20px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(196, 79, 196, 0.1) 0%, rgba(100, 200, 202, 0.1) 100%);
+  border-radius: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.team-info-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.team-info-stat svg {
+  color: #888;
+}
+
+.team-info-stat.storage-ok svg {
+  color: #64c8ca;
+}
+
+.team-info-stat.storage-warning svg {
+  color: #d9a04a;
+}
+
+.team-info-stat.storage-exceeded svg {
+  color: #d94a6d;
+}
+
+/* Team stat card accent */
+.stat-card-dashboard.team-stat {
+  border-color: rgba(196, 79, 196, 0.3);
+}
+
+.stat-card-dashboard.team-stat:hover {
+  border-color: #c44fc4;
+}
+
+.stat-card-dashboard.team-stat .stat-icon {
+  color: #c44fc4;
+}
+
+/* Storage quota bar */
+.storage-quota-bar {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #333;
+  border-radius: 10px;
+}
+
+.storage-quota-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.storage-status {
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.storage-status.ok {
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+.storage-status.warning {
+  background: rgba(217, 160, 74, 0.15);
+  color: #d9a04a;
+}
+
+.storage-status.exceeded {
+  background: rgba(217, 74, 109, 0.15);
+  color: #d94a6d;
+}
+
+.storage-quota-track {
+  height: 8px;
+  background: #252525;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.storage-quota-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.storage-quota-fill.ok {
+  background: linear-gradient(90deg, #64c8ca, #4a90d9);
+}
+
+.storage-quota-fill.warning {
+  background: linear-gradient(90deg, #d9a04a, #d94a6d);
+}
+
+.storage-quota-fill.exceeded {
+  background: #d94a6d;
+}
+
+/* Members section */
+.members-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.invite-btn,
+.manage-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.invite-btn {
+  background: linear-gradient(135deg, #64c8ca 0%, #c44fc4 100%);
+  border: none;
+  color: #fff;
+}
+
+.invite-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(100, 200, 202, 0.3);
+}
+
+.manage-btn {
+  background: #333;
+  border: 1px solid #444;
+  color: #ccc;
+}
+
+.manage-btn:hover {
+  background: #3d3d3d;
+  border-color: #555;
+  color: #fff;
+}
+
+/* Members list */
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #333;
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+.member-item:hover {
+  background: #3a3a3a;
+}
+
+.member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #64c8ca 0%, #c44fc4 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.member-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.member-email {
+  font-size: 12px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.member-role {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.member-role.owner {
+  background: rgba(217, 160, 74, 0.15);
+  color: #d9a04a;
+}
+
+.member-role.admin {
+  background: rgba(196, 79, 196, 0.15);
+  color: #c44fc4;
+}
+
+.member-role.leader {
+  background: rgba(74, 144, 217, 0.15);
+  color: #4a90d9;
+}
+
+.member-role.member {
+  background: rgba(136, 136, 136, 0.15);
+  color: #888;
+}
+
+.member-joined {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #666;
+}
+
+/* Role icons */
+.role-icon {
+  flex-shrink: 0;
+}
+
+.role-icon.owner {
+  color: #d9a04a;
+}
+
+.role-icon.admin {
+  color: #c44fc4;
+}
+
+.role-icon.leader {
+  color: #4a90d9;
+}
+
+.role-icon.member {
+  color: #888;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .team-info-banner {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .members-actions {
+    flex-direction: column;
+  }
+
+  .invite-btn,
+  .manage-btn {
+    justify-content: center;
+  }
+
+  .member-item {
+    flex-wrap: wrap;
+  }
+
+  .member-meta {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #3a3a3a;
+  }
+}
+
+/* Team dashboard specific overrides */
+.team-dashboard .stats-grid-dashboard {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+@media (min-width: 700px) {
+  .team-dashboard .stats-grid-dashboard {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
