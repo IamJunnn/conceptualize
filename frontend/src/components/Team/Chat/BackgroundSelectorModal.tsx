@@ -1,10 +1,10 @@
 /**
  * BackgroundSelectorModal - Modal for selecting video call background
- * Sections: Blur, Gradients, Team Background, Your Backgrounds
+ * Sections: Blur, Team background, Your backgrounds
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Upload, Trash2, Check, Building2, User, Sparkles, FlipHorizontal2, Palette } from 'lucide-react';
+import { X, Upload, Trash2, Check, Building2, User, Sparkles, FlipHorizontal2 } from 'lucide-react';
 import {
   setBackgroundMode,
   setBlurLevel,
@@ -33,70 +33,6 @@ interface BackgroundSelectorModalProps {
   teamId: string;
   userEmail: string;
 }
-
-// Preset gradient backgrounds
-const GRADIENT_BACKGROUNDS = [
-  {
-    id: 'ocean-breeze',
-    name: 'Ocean breeze',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  },
-  {
-    id: 'sunset-glow',
-    name: 'Sunset glow',
-    gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  },
-  {
-    id: 'forest-mist',
-    name: 'Forest mist',
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  },
-  {
-    id: 'purple-haze',
-    name: 'Purple haze',
-    gradient: 'linear-gradient(135deg, #c44fc4 0%, #64c8ca 100%)',
-  },
-  {
-    id: 'midnight-blue',
-    name: 'Midnight blue',
-    gradient: 'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
-  },
-  {
-    id: 'warm-flame',
-    name: 'Warm flame',
-    gradient: 'linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%)',
-  },
-  {
-    id: 'cool-sky',
-    name: 'Cool sky',
-    gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-  },
-  {
-    id: 'deep-space',
-    name: 'Deep space',
-    gradient: 'linear-gradient(135deg, #2b5876 0%, #4e4376 100%)',
-  },
-  {
-    id: 'mint-fresh',
-    name: 'Mint fresh',
-    gradient: 'linear-gradient(135deg, #a8e063 0%, #56ab2f 100%)',
-  },
-  {
-    id: 'cotton-candy',
-    name: 'Cotton candy',
-    gradient: 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)',
-  },
-  {
-    id: 'aurora-green',
-    name: 'Aurora green',
-    gradient: 'linear-gradient(135deg, #00b4db 0%, #0083b0 100%)',
-  },
-  {
-    id: 'rose-gold',
-    name: 'Rose gold',
-    gradient: 'linear-gradient(135deg, #f857a6 0%, #ff5858 100%)',
-  },
-];
 
 export default function BackgroundSelectorModal({
   isOpen,
@@ -212,14 +148,6 @@ export default function BackgroundSelectorModal({
       await setVirtualBackground(teamBackground);
     } catch (error) {
       console.error('Failed to set team background:', error);
-    }
-  };
-
-  const handleSelectGradient = async (gradient: string) => {
-    try {
-      await setVirtualBackground(gradient);
-    } catch (error) {
-      console.error('Failed to set gradient background:', error);
     }
   };
 
@@ -369,38 +297,11 @@ export default function BackgroundSelectorModal({
             </div>
           </div>
 
-          {/* Gradients section */}
-          <div className="background-section">
-            <div className="section-header">
-              <Palette size={16} />
-              <span>Gradients</span>
-            </div>
-            <div className="gradient-options">
-              {GRADIENT_BACKGROUNDS.map((bg) => {
-                const isActive = currentMode === 'image' && currentImageUrl === bg.gradient;
-                return (
-                  <button
-                    key={bg.id}
-                    className={`background-option gradient-option ${isActive ? 'active' : ''}`}
-                    onClick={() => handleSelectGradient(bg.gradient)}
-                    title={bg.name}
-                  >
-                    <div className="option-preview gradient-preview" style={{ background: bg.gradient }}>
-                      {/* Gradient preview */}
-                    </div>
-                    <span>{bg.name}</span>
-                    {isActive && <Check size={16} className="check-icon" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Team background section */}
           <div className="background-section">
             <div className="section-header">
               <Building2 size={16} />
-              <span>Team Background</span>
+              <span>Team background</span>
             </div>
             {teamBackground ? (
               <button
@@ -425,7 +326,7 @@ export default function BackgroundSelectorModal({
           <div className="background-section">
             <div className="section-header">
               <User size={16} />
-              <span>Your Backgrounds</span>
+              <span>Your backgrounds</span>
             </div>
             <div className="user-backgrounds">
               {userBackgrounds.map((bg) => {

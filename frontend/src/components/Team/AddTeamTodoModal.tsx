@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import { TeamMember } from '../../services/teamService';
 import { TeamTodo, TeamTodoFormData, TodoPriority, TodoType, RecurrencePattern, PRIORITY_CONFIG, MEETING_COLORS } from '../../services/teamTodoTypes';
 import { createTodo, updateTodo } from '../../services/teamTodoService';
-import { createCalendarEvent, updateCalendarEvent, meetingToCalendarParams, hasCalendarAccess } from '../../services/googleCalendarService';
+// TODO: Re-enable when Google OAuth verification is complete
+// import { createCalendarEvent, updateCalendarEvent, meetingToCalendarParams, hasCalendarAccess } from '../../services/googleCalendarService';
 import AssigneeSelector from './AssigneeSelector';
 import CustomDatePicker from '../UI/CustomDatePicker';
 import CustomTimePicker, { getNextTimeSlot, addHoursToTime } from '../UI/CustomTimePicker';
 import RepeatSelector from '../UI/RepeatSelector';
 import CustomRecurrenceModal from '../UI/CustomRecurrenceModal';
-import { ClipboardList, Video, Calendar, Mail } from 'lucide-react';
+import { ClipboardList, Video } from 'lucide-react';
+// Calendar, Mail - disabled until Google OAuth verification is complete
 import './AddTeamTodoModal.css';
 
 interface AddTeamTodoModalProps {
@@ -57,7 +59,8 @@ export default function AddTeamTodoModal({
   );
   const [color, setColor] = useState(editingTodo?.meetingDetails?.color || MEETING_COLORS[0].value);
   const [hasVideoRoom, setHasVideoRoom] = useState(editingTodo?.meetingDetails?.hasVideoRoom ?? true); // Default to true for new meetings
-  const [addToCalendar, setAddToCalendar] = useState(true);
+  // TODO: Re-enable when Google OAuth verification is complete
+  // const [addToCalendar, setAddToCalendar] = useState(true);
 
   // Custom recurrence modal
   const [showRecurrenceModal, setShowRecurrenceModal] = useState(false);
@@ -156,6 +159,9 @@ export default function AddTeamTodoModal({
     try {
       setIsSaving(true);
 
+      // TODO: Re-enable Google Calendar integration when app is verified by Google
+      // Google Calendar integration is disabled for now
+      /*
       let calendarEventId: string | undefined;
 
       // Handle Google Calendar integration for meetings
@@ -207,6 +213,7 @@ export default function AddTeamTodoModal({
       if (calendarEventId && formData.meetingDetails) {
         formData.meetingDetails.calendarEventId = calendarEventId;
       }
+      */
 
       if (isEditing) {
         await updateTodo(teamId, editingTodo!.id, formData, currentUserEmail, currentUserName);
@@ -430,9 +437,9 @@ export default function AddTeamTodoModal({
             />
           </div>
 
-          {/* Google Calendar - hidden until app is verified by Google */}
-          {/* TODO: Re-enable when Google OAuth verification is complete */}
-          {false && isMeeting && (
+          {/* Google Calendar - hidden until app is verified by Google
+              TODO: Re-enable when Google OAuth verification is complete
+          {isMeeting && (
             <div className="form-group calendar-option">
               <label className="checkbox-label">
                 <input
@@ -457,6 +464,7 @@ export default function AddTeamTodoModal({
               )}
             </div>
           )}
+          */}
 
           {error && <div className="error-message">{error}</div>}
 

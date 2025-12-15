@@ -4636,6 +4636,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                 currentUserEmail={user.email}
                 currentUserName={selectedTeam.members[user.email.toLowerCase()]?.displayName || user.email.split('@')[0]}
                 channelName={globalCallChannelName || 'Meeting'}
+                members={selectedTeam.members}
               />
             </div>
           )}

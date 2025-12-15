@@ -42,3 +42,5 @@ chrono = "0.4"
 lettre = { version = "0.11", features = ["tokio1-native-tls", "smtp-transport", "builder"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
 dotenv = "0.15"
+jsonwebtoken = "9"
+base64 = "0.22"

@@ -40,7 +40,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkPromoExpiration = exports.getActivePromo = exports.redeemPartnerPromo = exports.checkPartnerDomain = exports.redeemPromoCode = exports.validatePromoCode = exports.livekitEgressWebhook = exports.processRecordingRequest = exports.getActiveEgressV2 = exports.getActiveEgress = exports.retryFailedCharges = exports.checkGracePeriodExpiry = exports.onTeamMemberChange = exports.acceptTeamInvite = exports.verifyCheckoutSession = exports.syncSubscriptionStatus = exports.stripeWebhook = exports.cancelStripeSubscription = exports.updateStripeSubscription = exports.createStripePortal = exports.createStripeCheckout = exports.generateLiveKitToken = void 0;
+exports.checkPromoExpiration = exports.getActivePromo = exports.redeemPartnerPromo = exports.checkPartnerDomain = exports.redeemPromoCode = exports.validatePromoCode = exports.livekitEgressWebhook = exports.processRecordingRequest = exports.getActiveEgressV2 = exports.getActiveEgress = exports.retryFailedCharges = exports.checkGracePeriodExpiry = exports.onTeamMemberChange = exports.acceptTeamInvite = exports.verifyCheckoutSession = exports.syncSubscriptionStatus = exports.stripeWebhook = exports.cancelStripeSubscription = exports.updateStripeSubscription = exports.createStripePortal = exports.createStripeCheckout = exports.processTokenRequest = exports.generateLiveKitToken = void 0;
 // Firebase Functions V1 for all functions (avoids IAM invoker issues)
 const functionsV1 = __importStar(require("firebase-functions/v1"));
 const admin = __importStar(require("firebase-admin"));
@@ -78,6 +78,8 @@ function getEgressClient() {
 /**
  * Generate a LiveKit access token for video calls
  * This securely generates tokens server-side instead of exposing secrets in the frontend
+ * NOTE: This callable function may not work if organization policy blocks allUsers IAM binding
+ * Use the Firestore trigger (processTokenRequest) instead
  */
 exports.generateLiveKitToken = functionsV1
     .runWith({
@@ -117,6 +119,84 @@ exports.generateLiveKitToken = functionsV1
     catch (error) {
         console.error('Error generating LiveKit token:', error);
         throw new functionsV1.https.HttpsError('internal', 'Failed to generate token');
+    }
+});
+/**
+ * Process LiveKit token requests via Firestore trigger
+ * This bypasses IAM/CORS issues because:
+ * - Firestore writes use the Firebase SDK (no CORS)
+ * - Firestore triggers run server-side (no public access needed)
+ *
+ * Client writes to 'tokenRequests/{requestId}' with:
+ *   - roomName, participantName, participantIdentity, requestedBy (email)
+ * Trigger generates token and updates document with:
+ *   - token, url, status: 'completed'
+ */
+exports.processTokenRequest = functionsV1.firestore
+    .document('tokenRequests/{requestId}')
+    .onCreate(async (snapshot, context) => {
+    const { requestId } = context.params;
+    const requestData = snapshot.data();
+    // Use snapshot.ref directly - this is the Admin SDK reference that bypasses security rules
+    const requestRef = snapshot.ref;
+    console.log(`Processing token request ${requestId}:`, requestData);
+    try {
+        const { roomName, participantName, participantIdentity } = requestData;
+        // Validate required fields
+        if (!roomName || !participantName || !participantIdentity) {
+            await requestRef.set({
+                status: 'error',
+                error: 'roomName, participantName, and participantIdentity are required',
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return;
+        }
+        // Validate LiveKit credentials
+        if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+            await requestRef.set({
+                status: 'error',
+                error: 'LiveKit API credentials not configured',
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return;
+        }
+        // Generate the token
+        const token = new livekit_server_sdk_1.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+            identity: participantIdentity,
+            name: participantName,
+            ttl: 3600, // 1 hour
+        });
+        token.addGrant({
+            roomJoin: true,
+            room: roomName,
+            canPublish: true,
+            canSubscribe: true,
+            canPublishData: true,
+        });
+        const jwt = await token.toJwt();
+        const wsUrl = LIVEKIT_URL.replace('https://', 'wss://');
+        // Update the request document with the token
+        await requestRef.set({
+            status: 'completed',
+            token: jwt,
+            url: wsUrl,
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        console.log(`✅ Token generated for ${participantIdentity} in room ${roomName}`);
+    }
+    catch (error) {
+        console.error('Error processing token request:', error);
+        // Update with error status
+        try {
+            await requestRef.set({
+                status: 'error',
+                error: error.message || 'Failed to generate token',
+                processedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        catch (updateError) {
+            console.error('Failed to update error status:', updateError);
+        }
     }
 });
 /**

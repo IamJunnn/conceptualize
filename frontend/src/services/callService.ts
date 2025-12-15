@@ -25,8 +25,8 @@ import {
   Timestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db, functions } from './firebase';
-import { httpsCallable } from 'firebase/functions';
+import { invoke } from '@tauri-apps/api/core';
+import { db } from './firebase';
 import {
   Call,
   CallFirestore,
@@ -162,23 +162,34 @@ function updateCallState(updates: Partial<CallState>): void {
 // LIVEKIT TOKEN GENERATION
 // ============================================================================
 
+interface LiveKitTokenResult {
+  token: string;
+  url: string;
+}
+
 /**
- * Generate LiveKit access token via secure backend
+ * Generate LiveKit access token via Tauri backend
+ * This bypasses all cloud IAM/permission issues by generating tokens locally
+ * using credentials stored in the app config
  */
 async function getLiveKitToken(roomName: string, participantName: string, participantIdentity: string): Promise<string> {
-  const generateToken = httpsCallable<
-    { roomName: string; participantName: string; participantIdentity: string },
-    { token: string; url: string }
-  >(functions, 'generateLiveKitToken');
+  try {
+    const result = await invoke<LiveKitTokenResult>('generate_livekit_token', {
+      roomName,
+      participantName,
+      participantIdentity,
+    });
 
-  const result = await generateToken({ roomName, participantName, participantIdentity });
+    // Update LIVEKIT_URL from the result
+    if (result.url) {
+      LIVEKIT_URL = result.url;
+    }
 
-  // Update LIVEKIT_URL from server response (in case it changes)
-  if (result.data.url) {
-    LIVEKIT_URL = result.data.url;
+    return result.token;
+  } catch (error) {
+    console.error('Failed to generate LiveKit token:', error);
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
-
-  return result.data.token;
 }
 
 // ============================================================================

@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 use regex::Regex; // Still needed for todo parsing
+use jsonwebtoken::{encode, Header, Algorithm, EncodingKey};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // OAuth module
 mod oauth;
@@ -122,6 +124,112 @@ struct SearchResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     line_content: Option<String>,
     match_type: String, // "filename" or "content"
+}
+
+// ============================================================================
+// LIVEKIT TOKEN GENERATION
+// ============================================================================
+
+/// LiveKit video grant claims
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LiveKitVideoGrant {
+    room_join: bool,
+    room: String,
+    can_publish: bool,
+    can_subscribe: bool,
+    can_publish_data: bool,
+}
+
+/// LiveKit JWT claims structure
+#[derive(Debug, Serialize, Deserialize)]
+struct LiveKitClaims {
+    iss: String,                    // API Key (issuer)
+    sub: String,                    // Participant identity (subject)
+    nbf: u64,                       // Not before (Unix timestamp)
+    exp: u64,                       // Expiration (Unix timestamp)
+    name: String,                   // Participant name
+    video: LiveKitVideoGrant,       // Video permissions
+}
+
+/// Result from LiveKit token generation
+#[derive(Debug, Serialize, Deserialize)]
+struct LiveKitTokenResult {
+    token: String,
+    url: String,
+}
+
+/// Generate a LiveKit access token locally
+/// This bypasses all cloud IAM/permission issues by generating tokens directly in the client
+#[tauri::command]
+fn generate_livekit_token(
+    app: tauri::AppHandle,
+    room_name: String,
+    participant_name: String,
+    participant_identity: String,
+) -> Result<LiveKitTokenResult, String> {
+    // Read LiveKit credentials from config
+    let config_path = app.path().app_config_dir().map_err(|e| e.to_string())?.join("config.json");
+
+    let config: serde_json::Value = if config_path.exists() {
+        let content = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
+    } else {
+        return Err("Config file not found. Please configure LiveKit credentials.".to_string());
+    };
+
+    // Get LiveKit API key and secret from config
+    let api_key = config.get("livekitApiKey")
+        .and_then(|v| v.as_str())
+        .ok_or("LiveKit API key not configured")?;
+
+    let api_secret = config.get("livekitApiSecret")
+        .and_then(|v| v.as_str())
+        .ok_or("LiveKit API secret not configured")?;
+
+    let livekit_url = config.get("livekitUrl")
+        .and_then(|v| v.as_str())
+        .unwrap_or("wss://conceptualize-ucbg0je6.livekit.cloud");
+
+    // Get current timestamp
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+
+    // Token valid for 6 hours
+    let exp = now + (6 * 60 * 60);
+
+    // Build claims
+    let claims = LiveKitClaims {
+        iss: api_key.to_string(),
+        sub: participant_identity.clone(),
+        nbf: now,
+        exp,
+        name: participant_name,
+        video: LiveKitVideoGrant {
+            room_join: true,
+            room: room_name,
+            can_publish: true,
+            can_subscribe: true,
+            can_publish_data: true,
+        },
+    };
+
+    // Create JWT header
+    let header = Header::new(Algorithm::HS256);
+
+    // Encode the token
+    let token = encode(
+        &header,
+        &claims,
+        &EncodingKey::from_secret(api_secret.as_bytes())
+    ).map_err(|e| format!("Failed to generate token: {}", e))?;
+
+    Ok(LiveKitTokenResult {
+        token,
+        url: livekit_url.to_string(),
+    })
 }
 
 #[tauri::command]
@@ -2226,6 +2334,8 @@ pub fn run() {
             oauth::start_oauth_callback_server, oauth::open_oauth_url,
             // Email commands
             email::send_invitation_email, email::send_team_invitation_email,
+            // LiveKit token generation (local, no cloud needed)
+            generate_livekit_token,
             // AI Smart Suggestions commands - Hidden for now
             // auto_index_notes, get_index_status, find_cross_folder_suggestions, analyze_idea
         ])
