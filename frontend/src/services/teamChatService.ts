@@ -1454,6 +1454,12 @@ export async function sendCallSystemMessage(
       ...(senderPhotoURL && { senderPhotoURL }),
     };
 
+    // Skip message creation for meeting channels (they're virtual, no chat)
+    if (channelId.startsWith('meeting_')) {
+      console.log('Skipping call system message for meeting channel:', channelId);
+      return ''; // Return empty - no message ID for meetings
+    }
+
     const messagesRef = collection(
       db,
       'teams',
@@ -1464,7 +1470,7 @@ export async function sendCallSystemMessage(
     );
     const messageRef = await addDoc(messagesRef, messageData);
 
-    // Update channel's last message info
+    // Update channel's last message info (only for real channels, not meeting channels)
     const channelRef = doc(db, 'teams', teamId, 'channels', channelId);
     await updateDoc(channelRef, {
       lastMessageAt: Timestamp.now(),
@@ -1490,6 +1496,12 @@ export async function updateCallSystemMessage(
   duration: number,
   status: 'ended' | 'missed' | 'declined'
 ): Promise<void> {
+  // Skip for meeting channels (they're virtual, no chat messages)
+  if (channelId.startsWith('meeting_') || !messageId) {
+    console.log('Skipping call system message update for meeting channel:', channelId);
+    return;
+  }
+
   try {
     const messageRef = doc(
       db,

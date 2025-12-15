@@ -454,40 +454,93 @@ export default function TeamChatPanel({
     hasRestoredRef.current = false;
   }, [teamId]);
 
-  // Save selected member to localStorage when it changes
+  // Save selected chat to localStorage when it changes
   useEffect(() => {
-    if (selectedMemberEmail && activeChannelId) {
-      setLocalStorage(getSelectedChatKey(), {
-        memberEmail: selectedMemberEmail,
-        channelId: activeChannelId,
-      });
+    if (activeChannelId) {
+      if (selectedGroupId) {
+        // Save group chat
+        const data = {
+          memberEmail: '',
+          channelId: activeChannelId,
+          groupId: selectedGroupId,
+        };
+        console.log('[ChatPersist] Saving group chat:', data);
+        setLocalStorage(getSelectedChatKey(), data);
+      } else if (selectedMemberEmail) {
+        // Save DM chat
+        const data = {
+          memberEmail: selectedMemberEmail,
+          channelId: activeChannelId,
+        };
+        console.log('[ChatPersist] Saving DM chat:', data);
+        setLocalStorage(getSelectedChatKey(), data);
+      }
     }
-  }, [selectedMemberEmail, activeChannelId, teamId]);
+  }, [selectedMemberEmail, selectedGroupId, activeChannelId, teamId]);
 
   // Restore selected chat on mount (only once after access is confirmed)
   useEffect(() => {
     const restoreChat = async () => {
+      console.log('[ChatPersist] Restore check:', {
+        hasRestored: hasRestoredRef.current,
+        hasAccess,
+        loading,
+        membersCount: Object.keys(members).length
+      });
+
       // Only restore once per mount
       if (hasRestoredRef.current) return;
       if (!hasAccess || loading || Object.keys(members).length === 0) return;
 
       hasRestoredRef.current = true;
 
-      const savedChat = getLocalStorage<{ memberEmail: string; channelId: string } | null>(getSelectedChatKey(), null);
+      const savedChat = getLocalStorage<{ memberEmail: string; channelId: string; groupId?: string } | null>(getSelectedChatKey(), null);
+      console.log('[ChatPersist] Saved chat from localStorage:', savedChat);
+
       if (savedChat) {
         try {
-          const { memberEmail } = savedChat;
-          // Only restore if the member is still in the team
-          if (members[memberEmail] && memberEmail !== currentUserEmail) {
-            setRestoringChat(true);
-            setSelectedMemberEmail(memberEmail);
-            // Re-fetch or verify the channel exists
-            const verifiedChannelId = await getOrCreateDMChannel(teamId, currentUserEmail, memberEmail);
-            setActiveChannelId(verifiedChannelId);
-            setRestoringChat(false);
+          const { memberEmail, groupId } = savedChat;
+
+          // Restore group chat if saved
+          if (groupId) {
+            const group = groupChats.find(g => g.id === groupId);
+            if (group) {
+              console.log('[ChatPersist] Restoring group chat:', groupId);
+              setRestoringChat(true);
+              setSelectedGroupId(groupId);
+              setActiveChannelId(groupId);
+              setSelectedMemberEmail(null);
+              setRestoringChat(false);
+              return;
+            }
+          }
+
+          // Restore DM chat - use case-insensitive member lookup with decoded email keys
+          // Members object has encoded keys (e.g., "user_AT_gmail_DOT_com")
+          // The saved memberEmail is decoded (e.g., "user@gmail.com")
+          if (memberEmail) {
+            const memberKey = Object.keys(members).find(
+              encodedEmail => decodeEmailKey(encodedEmail) === memberEmail.toLowerCase()
+            );
+            console.log('[ChatPersist] Looking for member:', memberEmail, '-> found:', memberKey);
+
+            // Only restore if the member is still in the team (compare decoded emails)
+            const decodedMemberKey = memberKey ? decodeEmailKey(memberKey) : '';
+            if (memberKey && decodedMemberKey !== currentUserEmail.toLowerCase()) {
+              console.log('[ChatPersist] Restoring DM chat with:', decodedMemberKey);
+              setRestoringChat(true);
+              // Use decoded email for consistency with handleSelectMember
+              setSelectedMemberEmail(decodedMemberKey);
+              setSelectedGroupId(null);
+              // Re-fetch or verify the channel exists (use decoded email)
+              const verifiedChannelId = await getOrCreateDMChannel(teamId, currentUserEmail, decodedMemberKey);
+              setActiveChannelId(verifiedChannelId);
+              setRestoringChat(false);
+              console.log('[ChatPersist] DM chat restored, channelId:', verifiedChannelId);
+            }
           }
         } catch (err) {
-          console.error('Error restoring chat:', err);
+          console.error('[ChatPersist] Error restoring chat:', err);
           removeLocalStorage(getSelectedChatKey());
           setRestoringChat(false);
         }
@@ -495,7 +548,7 @@ export default function TeamChatPanel({
     };
 
     restoreChat();
-  }, [hasAccess, loading, teamId, members, currentUserEmail]);
+  }, [hasAccess, loading, teamId, members, currentUserEmail, groupChats]);
 
   // Check if team has access to chat
   useEffect(() => {
@@ -1691,7 +1744,7 @@ export default function TeamChatPanel({
                           {group.lastMessagePreview.replace('📅 ', '').replace('[Meeting]: ', 'Meeting: ')}
                         </>
                       ) : (
-                        group.lastMessagePreview || `${group.participants?.length || 0} members`
+                        group.lastMessagePreview || `${Math.max(0, (group.participants?.length || 1) - 1)} others`
                       )}
                     </span>
                   </div>
@@ -1721,7 +1774,7 @@ export default function TeamChatPanel({
                     </div>
                     <div className="header-title-info">
                       <h2 className="channel-title">{selectedGroup.name}</h2>
-                      <span className="channel-subtitle">{selectedGroup.participants?.length || 0} members</span>
+                      <span className="channel-subtitle">{Math.max(0, (selectedGroup.participants?.length || 1) - 1)} others</span>
                     </div>
                   </>
                 ) : (
@@ -2114,6 +2167,7 @@ export default function TeamChatPanel({
             );
             return otherEmail ? (members[otherEmail]?.displayName || otherEmail) : 'Call';
           })()}
+          members={members}
         />
       )}
     </div>

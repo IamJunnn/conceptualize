@@ -51,6 +51,34 @@ import './CallOverlay.css';
 // Layout modes
 type LayoutMode = 'speaker' | 'gallery' | 'screenshare';
 
+// Helper: Get initials from name (e.g., "junseop son" -> "JS", "john" -> "JO")
+function getInitialsFromName(name: string): string {
+  if (!name) return '??';
+
+  // Remove any email-like content
+  const cleanName = name.includes('@') ? name.split('@')[0] : name;
+
+  // Split by spaces and get first letter of each word
+  const parts = cleanName.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length >= 2) {
+    // First letter of first name + first letter of last name
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  } else if (parts.length === 1 && parts[0].length >= 2) {
+    // Single word - take first 2 characters
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  return cleanName.substring(0, 2).toUpperCase();
+}
+
+// TeamMember type for member lookup
+interface TeamMemberInfo {
+  displayName?: string;
+  photoURL?: string;
+  customAvatar?: string;
+}
+
 interface CallOverlayProps {
   call: Call;
   participants: CallParticipant[];
@@ -61,6 +89,8 @@ interface CallOverlayProps {
   currentUserEmail: string;
   currentUserName: string;
   channelName: string;
+  // Team members for looking up display names and photos
+  members?: { [email: string]: TeamMemberInfo };
 }
 
 export default function CallOverlay({
@@ -73,6 +103,7 @@ export default function CallOverlay({
   currentUserEmail,
   currentUserName,
   channelName,
+  members,
 }: CallOverlayProps) {
   const [duration, setDuration] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -523,6 +554,7 @@ export default function CallOverlay({
                 onDoubleClick={() => handlePinParticipant(mainSpeaker.email)}
                 isMirrored={isMirrored}
                 backgroundMode={backgroundMode}
+                members={members}
               />
             )}
           </div>
@@ -540,6 +572,7 @@ export default function CallOverlay({
                   onDoubleClick={() => handlePinParticipant(participant.email)}
                   isMirrored={isMirrored}
                   backgroundMode={backgroundMode}
+                  members={members}
                 />
               ))}
             </div>
@@ -560,6 +593,7 @@ export default function CallOverlay({
               onDoubleClick={() => handlePinParticipant(participant.email)}
               isMirrored={isMirrored}
               backgroundMode={backgroundMode}
+              members={members}
             />
           ))}
         </div>
@@ -589,6 +623,7 @@ export default function CallOverlay({
                 onDoubleClick={() => handlePinParticipant(participant.email)}
                 isMirrored={isMirrored}
                 backgroundMode={backgroundMode}
+                members={members}
               />
             ))}
           </div>
@@ -785,6 +820,8 @@ interface ParticipantTileProps {
   onDoubleClick?: () => void;
   isMirrored?: boolean;
   backgroundMode?: BackgroundMode;
+  // Team members for looking up display names and photos
+  members?: { [email: string]: TeamMemberInfo };
 }
 
 function ParticipantTile({
@@ -797,6 +834,7 @@ function ParticipantTile({
   onDoubleClick,
   isMirrored = true,
   backgroundMode = 'none',
+  members,
 }: ParticipantTileProps) {
   void _isVideoCall; // Reserved for conditional video-specific UI
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -879,6 +917,20 @@ function ParticipantTile({
   // Show video whenever camera is on (even in voice calls that upgrade to video)
   const showVideo = !participant.isVideoOff;
 
+  // Look up member info for display name and photo
+  // Members keys might be encoded (user_AT_gmail_DOT_com) or normal
+  const memberKey = members ? Object.keys(members).find(
+    key => key.toLowerCase() === participant.email.toLowerCase() ||
+           key.replace(/_AT_/g, '@').replace(/_DOT_/g, '.').toLowerCase() === participant.email.toLowerCase()
+  ) : undefined;
+  const memberInfo = memberKey ? members?.[memberKey] : undefined;
+
+  // Get display name: member's displayName > participant.name > email prefix
+  const displayName = memberInfo?.displayName || participant.name || participant.email.split('@')[0];
+
+  // Get photo URL: member's customAvatar > member's photoURL > participant's photoURL
+  const photoURL = memberInfo?.customAvatar || memberInfo?.photoURL || participant.photoURL;
+
   const tileClasses = [
     'participant-tile',
     participant.isSpeaking && 'speaking',
@@ -901,10 +953,10 @@ function ParticipantTile({
         />
       ) : (
         <div className="participant-avatar">
-          {participant.photoURL ? (
-            <img src={participant.photoURL} alt={participant.name} />
+          {photoURL ? (
+            <img src={photoURL} alt={displayName} />
           ) : (
-            <span>{participant.name.substring(0, 2).toUpperCase()}</span>
+            <span>{getInitialsFromName(displayName)}</span>
           )}
         </div>
       )}
@@ -932,7 +984,7 @@ function ParticipantTile({
 
       <div className="participant-info">
         <span className="participant-name">
-          {participant.name}
+          {displayName}
           {isLocal && ' (You)'}
         </span>
         <div className="participant-status">

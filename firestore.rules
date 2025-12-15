@@ -315,5 +315,26 @@ service cloud.firestore {
         request.resource.data.userEmail == request.auth.token.email;
       allow update, delete: if false; // No modifications allowed
     }
+
+    // Token requests collection - for LiveKit token generation via Firestore trigger
+    // This bypasses IAM/CORS issues with callable functions
+    match /tokenRequests/{requestId} {
+      // Users can read their own token requests (to get the generated token)
+      allow read: if isAuthenticated() &&
+        resource.data.requestedBy == request.auth.token.email;
+
+      // Any authenticated user can create token requests
+      allow create: if isAuthenticated() &&
+        request.resource.data.requestedBy == request.auth.token.email;
+
+      // Allow updates (for server to write back the token) - Admin SDK bypasses rules
+      // Also allow user to update their own requests as fallback
+      allow update: if isAuthenticated() &&
+        resource.data.requestedBy == request.auth.token.email;
+
+      // Users can delete their own requests (cleanup)
+      allow delete: if isAuthenticated() &&
+        resource.data.requestedBy == request.auth.token.email;
+    }
   }
 }

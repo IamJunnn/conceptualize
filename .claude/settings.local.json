@@ -156,7 +156,8 @@
       "Bash(firebase functions:secrets:access:*)",
       "Bash(timeout 90 echo:*)",
       "Bash(gcloud projects get-iam-policy:*)",
-      "Bash(timeout 25 echo:*)"
+      "Bash(timeout 25 echo:*)",
+      "Bash(gcloud functions add-invoker-policy-binding:*)"
     ],
     "deny": [],
     "ask": []

@@ -347,8 +347,8 @@
 }
 
 .recording-icon.voice {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
 }
 
 /* Recording Info */
@@ -394,8 +394,8 @@
 }
 
 .recording-icon.voice + .recording-info .recording-type-badge {
-  background: rgba(168, 85, 247, 0.1);
-  color: #a855f7;
+  background: rgba(100, 200, 202, 0.1);
+  color: #64c8ca;
 }
 
 .recording-participants {
@@ -445,6 +445,10 @@
   color: #888;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.recording-action-btn.delete {
+  color: #ef4444;
 }
 
 .recording-action-btn:hover {
