@@ -42,6 +42,11 @@
   color: #b0b0b0;
   font-size: 14px;
   font-weight: 500;
+  text-transform: uppercase;
+}
+
+.form-group label.members-label {
+  text-transform: none;
 }
 
 .form-group input,
@@ -99,6 +104,25 @@
 
 .info-box li {
   margin-bottom: 4px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  color: #b0b0b0;
+  font-size: 13px;
+}
+
+.features-grid span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.features-grid svg {
+  color: #64c8ca;
+  flex-shrink: 0;
 }
 
 /* Invite Codes Modal */
@@ -262,11 +286,19 @@
   background: #5d5d5d;
 }
 
-/* Members List */
+/* Members List - NO scroll, just stack */
 .members-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: visible !important;
+  max-height: none !important;
+}
+
+/* Parent also no scroll */
+.form-group:has(.members-list) {
+  overflow: visible !important;
+  max-height: none !important;
 }
 
 .member-row {
@@ -320,17 +352,18 @@
   background: #3d3d3d;
   border: 1px solid #4d4d4d;
   border-radius: 4px;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ff6b6b;
-  font-size: 18px;
+  font-size: 20px;
   cursor: pointer;
   transition: all 0.2s;
   padding: 0;
-  line-height: 1;
+  padding-bottom: 2px;
+  line-height: 0;
   flex-shrink: 0;
 }
 

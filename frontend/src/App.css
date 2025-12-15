@@ -1,6 +1,41 @@
+/* Global minimal scrollbar - just the thumb, no track or arrows */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 200, 202, 0.4) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 200, 202, 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 200, 202, 0.6);
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .app {
   width: 100%;
   height: 100%;
+  min-width: 935px;
   display: flex;
   align-items: center;
   justify-content: center;

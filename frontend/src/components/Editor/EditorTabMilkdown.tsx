@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import MilkdownEditor, { clearFileListCache } from './MilkdownEditor'
 import { TeamDriveStorage } from '../../services/teamDriveStorage'
 import './EditorTab.css'
+
+const isDev = import.meta.env.DEV
 
 interface EditorTabProps {
   filePath: string
@@ -16,6 +18,7 @@ interface EditorTabProps {
   onPaneActivate?: () => void // Callback to activate the pane when editor is clicked
   isActive?: boolean // Whether this pane is currently active
   storageBackend?: TeamDriveStorage // For team mode
+  currentUserEmail?: string // For tracking who edited the file
 }
 
 interface SaveResult {
@@ -23,7 +26,7 @@ interface SaveResult {
   error?: string
 }
 
-function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive, storageBackend }: EditorTabProps) {
+function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed, onOpenFile, onFileCreated, editorId, onPaneActivate, isActive, storageBackend, currentUserEmail }: EditorTabProps) {
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -37,7 +40,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
 
   // Sync currentFileName when fileName prop changes
   useEffect(() => {
-    console.log('[EditorTab] fileName prop changed:', { oldFileName: currentFileName, newFileName: fileName, filePath, fileId })
+    if (isDev) console.log('[EditorTab] fileName prop changed:', { oldFileName: currentFileName, newFileName: fileName, filePath, fileId })
     setCurrentFileName(fileName)
   }, [fileName])
 
@@ -156,7 +159,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
 
         // Create the file in Google Drive
         try {
-          await storageBackend.saveFile(searchFileName, '', parentFolderId, true)
+          await storageBackend.saveFile(searchFileName, '', parentFolderId, true, currentUserEmail)
 
           // Clear file list cache so autocomplete picks up new file immediately
           clearFileListCache(rootPath)
@@ -181,7 +184,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
       // LOCAL MODE (Filesystem)
       // ========================================
       // If a folder is specified, check directly for the file in that specific folder
-      if (expectedFolder) {
+      if (expectedFolder && rootPath) {
         // Build the exact path where the file should be
         const normalizedRoot = rootPath.replace(/\//g, '\\')
         const expectedFilePath = `${normalizedRoot}\\${expectedFolder.replace(/\//g, '\\')}\\${searchFileName}`
@@ -196,7 +199,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
           return // Exit early since we found and opened the file
         } catch (e) {
           // File doesn't exist at the expected location, we'll create it below
-          console.log(`File ${searchFileName} not found at expected path: ${expectedFilePath}`)
+          if (isDev) console.log(`File ${searchFileName} not found at expected path: ${expectedFilePath}`)
         }
       } else {
         // No folder specified, search for the file in the root path
@@ -218,14 +221,14 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
       // Only create markdown files, not other types
       if (hasExtension && !searchFileName.endsWith('.md')) {
         console.error(`File not found: ${searchFileName}`)
-        // TODO: Show proper notification or open file viewer for non-markdown files
+        alert(`File "${searchFileName}" not found. Only markdown (.md) files can be created automatically.`)
         return
       }
 
       // File doesn't exist, determine where to create it
       let createPath = ''
 
-      if (expectedFolder) {
+      if (expectedFolder && rootPath) {
         // If a folder was specified, create the file in that folder (relative to root)
         // Normalize the path separators
         const normalizedRoot = rootPath.replace(/\//g, '\\')
@@ -345,12 +348,12 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
       setSaveError(null)
 
       if (isTeamMode && storageBackend) {
-        console.log('[EditorTab] Auto-save triggered:', { currentFileName, parentFolderId, contentLength: newContent.length })
+        if (isDev) console.log('[EditorTab] Auto-save triggered:', { currentFileName, parentFolderId, contentLength: newContent.length })
 
         // Team mode: save to Google Drive with the correct parent folder ID
-        await storageBackend.saveFile(currentFileName, newContent, parentFolderId)
+        await storageBackend.saveFile(currentFileName, newContent, parentFolderId, false, currentUserEmail)
 
-        console.log('[EditorTab] Auto-save completed successfully')
+        if (isDev) console.log('[EditorTab] Auto-save completed successfully')
       } else {
         // Local mode: save to filesystem
         const result = await invoke<SaveResult>('write_file', {
@@ -368,7 +371,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
     } finally {
       setIsSaving(false)
     }
-  }, [filePath, currentFileName, isTeamMode, storageBackend, parentFolderId])
+  }, [filePath, currentFileName, isTeamMode, storageBackend, parentFolderId, currentUserEmail])
 
   const handleChange = useCallback((value: string) => {
     setContent(value)
@@ -395,7 +398,7 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
 
   // Handle title rename
   const handleTitleRename = async (newName: string) => {
-    console.log('[EditorTab] handleTitleRename called:', { newName, currentFileName, fileName, filePath, fileId })
+    if (isDev) console.log('[EditorTab] handleTitleRename called:', { newName, currentFileName, fileName, filePath, fileId })
 
     if (!newName || newName.trim() === '') {
       setIsEditingTitle(false)
@@ -406,11 +409,11 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
     const nameWithoutExt = newName.replace(/\.md$/, '')
     const finalName = `${nameWithoutExt}.md`
 
-    console.log('[EditorTab] Rename details:', { nameWithoutExt, finalName, currentFileName, willRename: finalName !== currentFileName })
+    if (isDev) console.log('[EditorTab] Rename details:', { nameWithoutExt, finalName, currentFileName, willRename: finalName !== currentFileName })
 
     // Don't rename if name hasn't changed
     if (finalName === currentFileName) {
-      console.log('[EditorTab] Name unchanged, skipping rename')
+      if (isDev) console.log('[EditorTab] Name unchanged, skipping rename')
       setIsEditingTitle(false)
       return
     }
@@ -419,17 +422,17 @@ function EditorTabMilkdown({ filePath, fileName, rootPath, fileId, onFileRenamed
       setRenameError(null)
 
       if (isTeamMode && storageBackend) {
-        console.log('[EditorTab] Starting team mode rename:', { oldName: currentFileName, newName: finalName, fileId })
+        if (isDev) console.log('[EditorTab] Starting team mode rename:', { oldName: currentFileName, newName: finalName, fileId })
 
         // Team mode: rename in Google Drive
         await storageBackend.renameFile(currentFileName, finalName, fileId)
 
-        console.log('[EditorTab] Rename successful, updating state')
+        if (isDev) console.log('[EditorTab] Rename successful, updating state')
 
         // Update current filename immediately
         setCurrentFileName(finalName)
 
-        console.log('[EditorTab] Calling onFileRenamed callback:', { oldPath: filePath, newPath: finalName, newName: finalName })
+        if (isDev) console.log('[EditorTab] Calling onFileRenamed callback:', { oldPath: filePath, newPath: finalName, newName: finalName })
 
         // Notify parent component to update
         if (onFileRenamed) {

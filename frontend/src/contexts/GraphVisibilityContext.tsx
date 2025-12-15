@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { getLocalStorage, setLocalStorage } from '../hooks/useLocalStorage';
 
 interface GraphVisibilityContextType {
   hiddenPaths: Set<string>;
@@ -15,27 +16,13 @@ const STORAGE_KEY = 'graph-hidden-items';
 
 export const GraphVisibilityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hiddenPaths, setHiddenPaths] = useState<Set<string>>(() => {
-    // Load from localStorage on init
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as string[];
-        return new Set(parsed);
-      }
-    } catch (error) {
-      console.error('Error loading hidden paths:', error);
-    }
-    return new Set();
+    const stored = getLocalStorage<string[]>(STORAGE_KEY, []);
+    return new Set(stored);
   });
 
   // Save to localStorage whenever hiddenPaths changes
   useEffect(() => {
-    try {
-      const array = Array.from(hiddenPaths);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(array));
-    } catch (error) {
-      console.error('Error saving hidden paths:', error);
-    }
+    setLocalStorage(STORAGE_KEY, Array.from(hiddenPaths));
   }, [hiddenPaths]);
 
   // Get all child paths for a folder

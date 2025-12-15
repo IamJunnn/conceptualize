@@ -1,11 +1,25 @@
-import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { isImportantNote } from '../../utils/importantNotes';
+import { getLocalStorage, setLocalStorage } from '../../hooks/useLocalStorage';
 import React from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import './UnifiedSidebar.css';
 
 // Development mode flag
 const isDev = import.meta.env.DEV;
+
+// Whiteboard metadata type (matching whiteboardTypes.ts)
+interface WhiteboardMeta {
+  id: string;
+  teamId: string;
+  name: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: Date;
+  updatedAt: Date;
+  thumbnail?: string;
+}
 
 // Define the UnifiedSidebarProps interface
 interface UnifiedSidebarProps {
@@ -18,9 +32,22 @@ interface UnifiedSidebarProps {
   refreshFileTree: () => Promise<void>;
   onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string, itemId?: string) => void;
   onMoveItem?: (sourcePath: string, destinationPath: string) => Promise<void>;
+  onDropExternalFiles?: (files: File[], destinationPath: string) => Promise<void>;  // Drop files from OS
+  onDropExternalDirectory?: (sourcePath: string, destinationPath: string) => Promise<void>;  // Drop folders from OS
   onChangeFolderPath?: () => void;
   filesWithIncomingLinks?: Set<string>;
   teamName?: string;  // Optional team name to display at the top
+  // Whiteboard props (for team mode)
+  whiteboards?: WhiteboardMeta[];
+  activeWhiteboardId?: string | null;
+  onSelectWhiteboard?: (whiteboardId: string) => void;
+  onCreateWhiteboard?: () => void;
+  onWhiteboardContextMenu?: (e: React.MouseEvent, whiteboard: WhiteboardMeta) => void;
+  showWhiteboardSection?: boolean;
+  // Whiteboard inline rename props
+  renamingWhiteboardId?: string | null;
+  onWhiteboardRenameSubmit?: (id: string, newName: string) => void;
+  onWhiteboardRenameCancel?: () => void;
 }
 
 // Ensure TreeNodeProps is defined
@@ -32,6 +59,7 @@ interface TreeNodeProps {
   onFinishEditing: (newName?: string) => void;
   onContextMenu: (e: React.MouseEvent, itemPath: string, itemType: 'file' | 'folder', itemName: string, itemId?: string) => void;
   onMoveItem?: (sourcePath: string, destinationPath: string) => Promise<void>;
+  onDropExternalFiles?: (files: File[], destinationPath: string) => Promise<void>;
   dragState: {
     isDragging: boolean;
     draggedPath: string | null;
@@ -94,20 +122,12 @@ const sortFileTreeNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
   });
 };
 
-const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, dragState, setDragState, hoveredFolderRef, highlightedPath, filesWithIncomingLinks }) => {
+const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, level, editing, onFinishEditing, onContextMenu, onMoveItem, onDropExternalFiles, dragState, setDragState, hoveredFolderRef, highlightedPath, filesWithIncomingLinks }) => {
   // Load saved folder state from localStorage, default to true (open) for first time
   const getSavedFolderState = () => {
     if (node.type !== 'folder') return true;
-    const savedStates = localStorage.getItem('folderStates');
-    if (savedStates) {
-      try {
-        const states = JSON.parse(savedStates);
-        return states[node.path] !== undefined ? states[node.path] : true;
-      } catch (e) {
-        return true;
-      }
-    }
-    return true;
+    const states = getLocalStorage<Record<string, boolean>>('folderStates', {});
+    return states[node.path] !== undefined ? states[node.path] : true;
   };
 
   const [isOpen, setIsOpen] = React.useState(getSavedFolderState());
@@ -149,17 +169,9 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
 
   // Save folder state to localStorage when it changes
   const saveFolderState = (path: string, state: boolean) => {
-    const savedStates = localStorage.getItem('folderStates');
-    let states: Record<string, boolean> = {};
-    if (savedStates) {
-      try {
-        states = JSON.parse(savedStates);
-      } catch (e) {
-        states = {};
-      }
-    }
+    const states = getLocalStorage<Record<string, boolean>>('folderStates', {});
     states[path] = state;
-    localStorage.setItem('folderStates', JSON.stringify(states));
+    setLocalStorage('folderStates', states);
   };
 
   const handleContextMenu = React.useCallback((e: React.MouseEvent) => {
@@ -176,7 +188,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
     }
 
     if (node.type === 'folder') {
-      setIsOpen(prev => {
+      setIsOpen((prev: boolean) => {
         const newState = !prev;
         saveFolderState(node.path, newState);
         return newState;
@@ -188,7 +200,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
 
   const handleChevronClick = React.useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(prev => {
+    setIsOpen((prev: boolean) => {
       const newState = !prev;
       saveFolderState(node.path, newState);
       return newState;
@@ -249,6 +261,67 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
     }
   }, [node.path, hoveredFolderRef]);
 
+  // Helper to get parent folder path from a file path
+  const getParentFolderPath = React.useCallback((filePath: string): string => {
+    // Handle both Windows (\) and Unix (/) path separators
+    const lastBackslash = filePath.lastIndexOf('\\');
+    const lastSlash = filePath.lastIndexOf('/');
+    const lastSeparator = Math.max(lastBackslash, lastSlash);
+
+    if (lastSeparator === -1) {
+      return ''; // Root level
+    }
+    return filePath.substring(0, lastSeparator);
+  }, []);
+
+  // HTML5 drag event handlers for external file drops (works on both files and folders)
+  const handleDragOver = React.useCallback((e: React.DragEvent) => {
+    // Check if this is an external file drag (has files in dataTransfer)
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+
+      // Show drag-over styling
+      if (nodeRef.current) {
+        nodeRef.current.classList.add('drag-over');
+      }
+    }
+  }, []);
+
+  const handleDragLeaveExternal = React.useCallback((_e: React.DragEvent) => {
+    // Remove drag-over styling
+    if (nodeRef.current) {
+      nodeRef.current.classList.remove('drag-over');
+    }
+  }, []);
+
+  const handleDropExternal = React.useCallback(async (e: React.DragEvent) => {
+    // Check for external files
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0 && onDropExternalFiles) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Remove drag-over styling
+      if (nodeRef.current) {
+        nodeRef.current.classList.remove('drag-over');
+      }
+
+      // Determine destination folder:
+      // - If dropped on a folder, use that folder
+      // - If dropped on a file, use the file's parent folder
+      const destinationPath = node.type === 'folder'
+        ? node.path
+        : getParentFolderPath(node.path);
+
+      if (isDev) console.log('📂 External files dropped on', node.type, ':', node.path, '→ saving to:', destinationPath, files.map(f => f.name));
+
+      // Call the handler to save files to the destination folder
+      await onDropExternalFiles(files, destinationPath);
+    }
+  }, [node.type, node.path, onDropExternalFiles, getParentFolderPath]);
+
   const isHighlighted = highlightedPath === node.path;
 
   return (
@@ -256,13 +329,16 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
       <div
         ref={nodeRef}
         className={`tree-node ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''} ${isHighlighted ? 'highlighted' : ''}`}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        style={{ paddingLeft: `${level * 12 + 4}px` }}
         data-file-path={node.path}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         onMouseDown={handleMouseDown}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeaveExternal}
+        onDrop={handleDropExternal}
       >
         {/* Chevron for folders */}
         {node.type === 'folder' && (
@@ -364,6 +440,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
               onFinishEditing={onFinishEditing}
               onContextMenu={onContextMenu}
               onMoveItem={onMoveItem}
+              onDropExternalFiles={onDropExternalFiles}
               dragState={dragState}
               setDragState={setDragState}
               hoveredFolderRef={hoveredFolderRef}
@@ -374,7 +451,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
           {isAddingChild && (
             <div
               className="tree-node new-item"
-              style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+              style={{ paddingLeft: `${(level + 1) * 12 + 4}px` }}
             >
               <div className="chevron-spacer" />
               <div className="node-icon">
@@ -420,11 +497,74 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
 });
 
 const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void }, UnifiedSidebarProps>((props, ref) => {
-  const { fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing, onContextMenu, onMoveItem, onChangeFolderPath, filesWithIncomingLinks, teamName } = props;
+  const {
+    fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing,
+    onContextMenu, onMoveItem, onDropExternalFiles, onDropExternalDirectory,
+    onChangeFolderPath, filesWithIncomingLinks, teamName,
+    // Whiteboard props
+    whiteboards = [], activeWhiteboardId, onSelectWhiteboard, onCreateWhiteboard,
+    onWhiteboardContextMenu, showWhiteboardSection = false,
+    // Whiteboard inline rename props
+    renamingWhiteboardId, onWhiteboardRenameSubmit, onWhiteboardRenameCancel
+  } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
   const [treeKey, setTreeKey] = React.useState(0); // Key to force re-render when revealing files
   const sidebarContentRef = React.useRef<HTMLDivElement>(null);
+
+  // Section collapse state (only used when whiteboard section is shown)
+  const [filesCollapsed, setFilesCollapsed] = React.useState(() => {
+    return getLocalStorage<boolean>('sidebar-files-collapsed', true);
+  });
+  const [whiteboardsCollapsed, setWhiteboardsCollapsed] = React.useState(() => {
+    return getLocalStorage<boolean>('sidebar-whiteboards-collapsed', false);
+  });
+
+  // Section height state for draggable divider (percentage for files section)
+  const [filesSectionHeight, setFilesSectionHeight] = React.useState(() => {
+    return getLocalStorage<number>('sidebar-files-height', 30); // Default 30% for files, 70% for whiteboards
+  });
+  const [isDraggingDivider, setIsDraggingDivider] = React.useState(false);
+  const sidebarSectionsRef = React.useRef<HTMLDivElement>(null);
+
+  // Save section states to localStorage
+  React.useEffect(() => {
+    setLocalStorage('sidebar-files-collapsed', filesCollapsed);
+  }, [filesCollapsed]);
+
+  React.useEffect(() => {
+    setLocalStorage('sidebar-whiteboards-collapsed', whiteboardsCollapsed);
+  }, [whiteboardsCollapsed]);
+
+  React.useEffect(() => {
+    setLocalStorage('sidebar-files-height', filesSectionHeight);
+  }, [filesSectionHeight]);
+
+  // Draggable divider handlers
+  React.useEffect(() => {
+    if (!isDraggingDivider) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!sidebarSectionsRef.current) return;
+
+      const rect = sidebarSectionsRef.current.getBoundingClientRect();
+      const relativeY = e.clientY - rect.top;
+      const percentage = Math.min(80, Math.max(20, (relativeY / rect.height) * 100));
+      setFilesSectionHeight(percentage);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingDivider(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingDivider]);
 
   // Shared drag state for all tree nodes - minimal state to reduce re-renders
   const [dragState, setDragState] = React.useState<{
@@ -448,11 +588,196 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   const cursorPosRef = React.useRef<{ x: number; y: number } | null>(null);
   const dragPreviewRef = React.useRef<HTMLDivElement>(null);
 
+  // Ref to track currently highlighted external drag folder element
+  const externalDragHighlightRef = React.useRef<HTMLElement | null>(null);
+
+  // Listen for external drag events from Tauri (team mode)
+  React.useEffect(() => {
+    const handleExternalDrag = (event: Event) => {
+      const customEvent = event as CustomEvent<{ isDragging: boolean; position?: { x: number; y: number } }>;
+      const { isDragging, position } = customEvent.detail;
+
+      if (!isDragging) {
+        // Clear any highlighted node when drag ends
+        if (externalDragHighlightRef.current) {
+          externalDragHighlightRef.current.classList.remove('drag-over');
+          externalDragHighlightRef.current = null;
+        }
+        setIsRootDragOver(false);
+        return;
+      }
+
+      // Find which node is under the cursor
+      if (position) {
+        // Get element at cursor position
+        const elementAtPoint = document.elementFromPoint(position.x, position.y);
+
+        // Find the closest tree-node (folder or file)
+        const treeNode = elementAtPoint?.closest('.tree-node') as HTMLElement | null;
+
+        // Check if it's a folder
+        const isFolder = treeNode?.querySelector('.folder-icon') !== null;
+
+        // If over a file, try to find its parent folder (tree-node-container > tree-node)
+        let targetNode = treeNode;
+        if (treeNode && !isFolder) {
+          // It's a file - find the parent folder's tree-node
+          const parentContainer = treeNode.closest('.tree-node-children');
+          if (parentContainer) {
+            const parentNode = parentContainer.previousElementSibling as HTMLElement | null;
+            if (parentNode?.classList.contains('tree-node')) {
+              targetNode = parentNode;
+            }
+          }
+        }
+
+        // Remove highlight from previous element if different
+        if (externalDragHighlightRef.current && externalDragHighlightRef.current !== targetNode) {
+          externalDragHighlightRef.current.classList.remove('drag-over');
+        }
+
+        // Add highlight to target node (folder)
+        if (targetNode && targetNode.querySelector('.folder-icon')) {
+          targetNode.classList.add('drag-over');
+          externalDragHighlightRef.current = targetNode;
+          setIsRootDragOver(false); // Don't show full sidebar overlay
+        } else if (elementAtPoint?.closest('.sidebar-content')) {
+          // Over sidebar but not on any node - show root overlay
+          if (externalDragHighlightRef.current) {
+            externalDragHighlightRef.current.classList.remove('drag-over');
+            externalDragHighlightRef.current = null;
+          }
+          setIsRootDragOver(true);
+        } else {
+          // Not over sidebar at all
+          if (externalDragHighlightRef.current) {
+            externalDragHighlightRef.current.classList.remove('drag-over');
+            externalDragHighlightRef.current = null;
+          }
+          setIsRootDragOver(false);
+        }
+      }
+    };
+
+    window.addEventListener('sidebar-external-drag', handleExternalDrag);
+    return () => {
+      window.removeEventListener('sidebar-external-drag', handleExternalDrag);
+    };
+  }, []);
+
+  // Listen for external drop events from Tauri (team mode)
+  React.useEffect(() => {
+    const handleExternalDrop = async (event: Event) => {
+      const customEvent = event as CustomEvent<{ paths: string[]; position: { x: number; y: number } }>;
+      const { paths, position } = customEvent.detail;
+
+      if (!paths || paths.length === 0) {
+        return;
+      }
+
+      if (isDev) console.log('[SIDEBAR] External drop event:', paths, position);
+
+      // Clear any highlight
+      if (externalDragHighlightRef.current) {
+        externalDragHighlightRef.current.classList.remove('drag-over');
+        externalDragHighlightRef.current = null;
+      }
+
+      // Find which folder the drop is over
+      let destinationPath = getRootPath(); // Default to root
+
+      if (position) {
+        const elementAtPoint = document.elementFromPoint(position.x, position.y);
+        const treeNode = elementAtPoint?.closest('.tree-node') as HTMLElement | null;
+
+        if (treeNode) {
+          // Get path from data-file-path attribute
+          const nodePath = treeNode.getAttribute('data-file-path');
+          const isFolder = treeNode.querySelector('.folder-icon') !== null;
+
+          if (nodePath) {
+            if (isFolder) {
+              // Drop directly into this folder
+              destinationPath = nodePath;
+            } else {
+              // It's a file - get its parent folder
+              const lastSeparator = Math.max(nodePath.lastIndexOf('\\'), nodePath.lastIndexOf('/'));
+              if (lastSeparator > 0) {
+                destinationPath = nodePath.substring(0, lastSeparator);
+              }
+            }
+            if (isDev) console.log('[SIDEBAR] Drop destination folder:', destinationPath);
+          }
+        }
+      }
+
+      // Process each dropped path - check if it's a file or directory
+      try {
+        const files: File[] = [];
+        const mimeTypes: Record<string, string> = {
+          'png': 'image/png',
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'gif': 'image/gif',
+          'webp': 'image/webp',
+          'svg': 'image/svg+xml',
+          'pdf': 'application/pdf',
+          'txt': 'text/plain',
+          'md': 'text/markdown',
+        };
+
+        for (const filePath of paths) {
+          // Check if this path is a directory
+          const isDir = await invoke<boolean>('is_path_directory', { path: filePath });
+
+          if (isDir) {
+            // Handle directory drop
+            if (onDropExternalDirectory) {
+              if (isDev) console.log('[SIDEBAR] Dropping directory:', filePath, 'to:', destinationPath);
+              await onDropExternalDirectory(filePath, destinationPath);
+            } else {
+              console.warn('[SIDEBAR] Directory dropped but no handler available:', filePath);
+            }
+          } else {
+            // Handle file drop
+            const fileName = filePath.split(/[/\\]/).pop() || 'file';
+            const ext = fileName.split('.').pop()?.toLowerCase() || '';
+            const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
+            // Read file as binary using Tauri command
+            const bytes = await invoke<number[]>('read_binary_file', { filePath });
+            const uint8Array = new Uint8Array(bytes);
+            const file = new File([uint8Array], fileName, { type: mimeType });
+            if (isDev) console.log('[SIDEBAR] Read file:', fileName, 'size:', file.size, 'bytes');
+            files.push(file);
+          }
+        }
+
+        if (files.length > 0 && onDropExternalFiles) {
+          if (isDev) console.log('[SIDEBAR] Calling onDropExternalFiles with', files.length, 'files to:', destinationPath);
+          await onDropExternalFiles(files, destinationPath);
+        }
+      } catch (err) {
+        console.error('[SIDEBAR] Failed to process dropped files:', err);
+      }
+    };
+
+    window.addEventListener('sidebar-external-drop', handleExternalDrop);
+    return () => {
+      window.removeEventListener('sidebar-external-drop', handleExternalDrop);
+    };
+  }, [onDropExternalFiles, onDropExternalDirectory, getRootPath]);
+
   const rootPath = getRootPath();
-  const folderName = rootPath.split(/\\/g).pop(); // Extract folder name from path
+  const rawFolderName = rootPath.split(/\\/g).pop(); // Extract folder name from path
+
+  // Strip "Conceptualize - " prefix if present to show just the workspace name
+  const folderName = rawFolderName?.startsWith('Conceptualize - ')
+    ? rawFolderName.slice('Conceptualize - '.length)
+    : rawFolderName;
 
   // Check if this is a Google Drive folder ID (long alphanumeric string)
-  const isGoogleDriveFolderId = folderName && folderName.length > 20 && /^[A-Za-z0-9_-]+$/.test(folderName);
+  const isGoogleDriveFolderId = rawFolderName && rawFolderName.length > 20 && /^[A-Za-z0-9_-]+$/.test(rawFolderName);
 
   // Helper function to find all parent paths of a file
   const getParentPaths = (filePath: string, tree: FileTreeNode[]): string[] => {
@@ -488,21 +813,13 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       if (isDev) console.log('📁 Parent paths:', parentPaths);
 
       // Open all parent folders
-      const savedStates = localStorage.getItem('folderStates');
-      let states: Record<string, boolean> = {};
-      if (savedStates) {
-        try {
-          states = JSON.parse(savedStates);
-        } catch (e) {
-          states = {};
-        }
-      }
+      const states = getLocalStorage<Record<string, boolean>>('folderStates', {});
 
       // Set all parents to open
       parentPaths.forEach(path => {
         states[path] = true;
       });
-      localStorage.setItem('folderStates', JSON.stringify(states));
+      setLocalStorage('folderStates', states);
 
       // Force re-render to expand folders
       setTreeKey(prev => prev + 1);
@@ -651,7 +968,13 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   const handleRootDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
+
+    // Check if this is an external file drag (from OS/Windows Explorer)
+    if (e.dataTransfer.types.includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+    } else {
+      e.dataTransfer.dropEffect = 'move';
+    }
 
     // Only update state if it's not already true
     if (!isRootDragOver) {
@@ -672,6 +995,15 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     e.stopPropagation();
     setIsRootDragOver(false);
 
+    // Check for external files first
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0 && onDropExternalFiles) {
+      if (isDev) console.log('📂 External files dropped on ROOT:', rootPath, files.map(f => f.name));
+      await onDropExternalFiles(files, rootPath);
+      return;
+    }
+
+    // Otherwise, handle internal move
     if (onMoveItem) {
       const sourcePath = e.dataTransfer.getData('text/plain');
       if (isDev) {
@@ -687,6 +1019,244 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     }
   };
 
+  // Render file tree content (reused in both layouts)
+  const renderFileTree = () => (
+    <>
+      {isCreatingAtRoot && (
+        <div className="tree-node new-item" style={{ paddingLeft: '4px' }}>
+          <div className="chevron-spacer" />
+          <div className="node-icon">
+            {editing.type === 'new-note' ? (
+              <DocumentIcon className="file-icon md-file" />
+            ) : (
+              <FolderIcon className="folder-icon folder-closed" />
+            )}
+          </div>
+          <EditInput
+            initialValue=""
+            onSave={onFinishEditing}
+            onCancel={() => onFinishEditing()}
+            isFile={editing.type === 'new-note'}
+          />
+        </div>
+      )}
+      {sortedFileTree.map((node: FileTreeNode) => (
+        <TreeNode
+          key={node.id ? `${node.id}-${treeKey}` : `${node.path}-${treeKey}`}
+          node={node}
+          onSelectFile={onSelectFile}
+          level={0}
+          editing={editing}
+          onFinishEditing={onFinishEditing}
+          onContextMenu={onContextMenu}
+          onMoveItem={onMoveItem}
+          onDropExternalFiles={onDropExternalFiles}
+          dragState={dragState}
+          setDragState={setDragState}
+          hoveredFolderRef={hoveredFolderRef}
+          highlightedPath={highlightedPath}
+          filesWithIncomingLinks={filesWithIncomingLinks}
+        />
+      ))}
+    </>
+  );
+
+  // Render whiteboard list items (simple style like file tree - no icons)
+  const renderWhiteboardList = () => (
+    <>
+      {whiteboards.map((wb) => {
+        const isRenaming = renamingWhiteboardId === wb.id;
+        return (
+          <div
+            key={wb.id}
+            className={`whiteboard-item ${activeWhiteboardId === wb.id ? 'active' : ''}`}
+            onClick={() => {
+              if (!isRenaming) {
+                onSelectWhiteboard?.(wb.id);
+              }
+            }}
+            onContextMenu={(e) => {
+              if (!isRenaming) {
+                onWhiteboardContextMenu?.(e, wb);
+              }
+            }}
+            title={isRenaming ? undefined : `Created by ${wb.createdByName}\nLast updated: ${wb.updatedAt.toLocaleDateString()}`}
+          >
+            {isRenaming ? (
+              <EditInput
+                initialValue={wb.name}
+                onSave={(newName) => onWhiteboardRenameSubmit?.(wb.id, newName)}
+                onCancel={() => onWhiteboardRenameCancel?.()}
+                isFile={false}
+              />
+            ) : (
+              <span className="whiteboard-item-name">{wb.name}</span>
+            )}
+          </div>
+        );
+      })}
+      {/* Empty space when no whiteboards - just show nothing */}
+    </>
+  );
+
+  // Sectioned layout (when whiteboard section is shown)
+  if (showWhiteboardSection) {
+    return (
+      <div className="unified-sidebar">
+        {/* Team Header */}
+        {teamName && (
+          <div className="sidebar-header">
+            <div className="team-header-info">
+              <h2 className="sidebar-title team-name">{teamName}</h2>
+            </div>
+          </div>
+        )}
+
+        {/* Sectioned Content */}
+        <div className="sidebar-sections" ref={sidebarSectionsRef}>
+          {/* FILES Section */}
+          {/* FILES Section - collapsed bar style */}
+          <div
+            className="section-collapsed-bar"
+            onClick={() => setFilesCollapsed(!filesCollapsed)}
+            title={filesCollapsed ? "Expand Files" : "Collapse Files"}
+          >
+            <FolderIcon className="collapsed-bar-icon" />
+            <span className="collapsed-bar-label">Files</span>
+            <div className="section-actions" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => {
+                  if (filesCollapsed) setFilesCollapsed(false);
+                  onStartEditing(getRootPath(), 'new-note');
+                }}
+                className="section-action-btn"
+                title="New Note"
+              >
+                <DocumentPlusIcon className="action-icon" />
+              </button>
+              <button
+                onClick={() => {
+                  if (filesCollapsed) setFilesCollapsed(false);
+                  onStartEditing(getRootPath(), 'new-folder');
+                }}
+                className="section-action-btn"
+                title="New Folder"
+              >
+                <FolderPlusIcon className="action-icon" />
+              </button>
+            </div>
+            {filesCollapsed ? (
+              <ChevronRightIcon className="collapsed-bar-chevron" />
+            ) : (
+              <ChevronDownIcon className="collapsed-bar-chevron" />
+            )}
+          </div>
+          {!filesCollapsed && (
+            <div
+              className={`sidebar-section files-section`}
+              style={{ height: whiteboardsCollapsed ? 'calc(100% - 64px)' : `calc(${filesSectionHeight}% - 36px)` }}
+            >
+              <div
+                ref={sidebarContentRef}
+                className={`section-content ${isRootDragOver ? 'root-drag-over' : ''}`}
+                onDragOver={handleRootDragOver}
+                onDragLeave={handleRootDragLeave}
+                onDrop={handleRootDrop}
+              >
+                {renderFileTree()}
+              </div>
+            </div>
+          )}
+
+          {/* Draggable Divider */}
+          {!filesCollapsed && !whiteboardsCollapsed && (
+            <div
+              className={`section-divider ${isDraggingDivider ? 'dragging' : ''}`}
+              onMouseDown={() => setIsDraggingDivider(true)}
+            >
+              <div className="divider-handle" />
+            </div>
+          )}
+
+          {/* WHITEBOARDS Section - collapsed bar style */}
+          <div
+            className="section-collapsed-bar"
+            onClick={() => setWhiteboardsCollapsed(!whiteboardsCollapsed)}
+            title={whiteboardsCollapsed ? "Expand Whiteboards" : "Collapse Whiteboards"}
+          >
+            <svg className="collapsed-bar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19l7-7 3 3-7 7-3-3z" />
+              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+              <path d="M2 2l7.586 7.586" />
+              <circle cx="11" cy="11" r="2" />
+            </svg>
+            <span className="collapsed-bar-label">Whiteboards</span>
+            <div className="section-actions" onClick={(e) => e.stopPropagation()}>
+              {onCreateWhiteboard && (
+                <button
+                  onClick={onCreateWhiteboard}
+                  className="section-action-btn"
+                  title="New Whiteboard"
+                >
+                  <PlusIcon className="action-icon" />
+                </button>
+              )}
+            </div>
+            {whiteboardsCollapsed ? (
+              <ChevronRightIcon className="collapsed-bar-chevron" />
+            ) : (
+              <ChevronDownIcon className="collapsed-bar-chevron" />
+            )}
+          </div>
+          {!whiteboardsCollapsed && (
+            <div
+              className={`sidebar-section whiteboards-section`}
+              style={{ height: filesCollapsed ? 'calc(100% - 64px)' : `calc(${100 - filesSectionHeight}% - 36px)` }}
+            >
+              <div className="section-content whiteboard-list">
+                {renderWhiteboardList()}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Drag Preview - follows cursor */}
+        {dragState.isDragging && dragState.draggedNode && (
+          <div
+            ref={dragPreviewRef}
+            className="drag-preview"
+            style={{
+              position: 'fixed',
+              left: 0,
+              top: 0,
+              pointerEvents: 'none',
+              zIndex: 10000,
+              willChange: 'transform',
+            }}
+          >
+            <div className="drag-preview-content">
+              {dragState.draggedNode.type === 'folder' ? (
+                <FolderIcon className="drag-preview-icon folder-icon" />
+              ) : (
+                <DocumentIcon
+                  className={`drag-preview-icon ${
+                    dragState.draggedNode.name.endsWith('.md') ? 'md-file' : ''
+                  }`}
+                />
+              )}
+              <span className="drag-preview-name">
+                {dragState.draggedNode.type === 'file' && dragState.draggedNode.name.endsWith('.md')
+                  ? dragState.draggedNode.name.slice(0, -3)
+                  : dragState.draggedNode.name}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Original layout (no whiteboard section)
   return (
     <div className="unified-sidebar">
       {/* Header */}
@@ -742,41 +1312,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
         onDragLeave={handleRootDragLeave}
         onDrop={handleRootDrop}
       >
-        {isCreatingAtRoot && (
-          <div className="tree-node new-item" style={{ paddingLeft: '8px' }}>
-            <div className="chevron-spacer" />
-            <div className="node-icon">
-              {editing.type === 'new-note' ? (
-                <DocumentIcon className="file-icon md-file" />
-              ) : (
-                <FolderIcon className="folder-icon folder-closed" />
-              )}
-            </div>
-            <EditInput
-              initialValue=""
-              onSave={onFinishEditing}
-              onCancel={() => onFinishEditing()}
-              isFile={editing.type === 'new-note'}
-            />
-          </div>
-        )}
-        {sortedFileTree.map((node: FileTreeNode) => (
-          <TreeNode
-            key={node.id ? `${node.id}-${treeKey}` : `${node.path}-${treeKey}`}
-            node={node}
-            onSelectFile={onSelectFile}
-            level={0}
-            editing={editing}
-            onFinishEditing={onFinishEditing}
-            onContextMenu={onContextMenu}
-            onMoveItem={onMoveItem}
-            dragState={dragState}
-            setDragState={setDragState}
-            hoveredFolderRef={hoveredFolderRef}
-            highlightedPath={highlightedPath}
-            filesWithIncomingLinks={filesWithIncomingLinks}
-          />
-        ))}
+        {renderFileTree()}
       </div>
 
       {/* Drag Preview - follows cursor */}

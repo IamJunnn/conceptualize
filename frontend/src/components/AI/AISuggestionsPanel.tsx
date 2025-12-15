@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { Link2, Loader2, Check, ThumbsUp, AlertTriangle } from 'lucide-react';
 
 interface SmartSuggestion {
   source_file: string;
@@ -193,7 +194,7 @@ export default function AISuggestionsPanel({ rootPath, onOpenFile }: AISuggestio
         }}
         title="AI Smart Suggestions"
       >
-        🔗
+        <Link2 size={20} />
       </button>
     );
   }
@@ -227,15 +228,15 @@ export default function AISuggestionsPanel({ rootPath, onOpenFile }: AISuggestio
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '20px' }}>🔗</span>
+          <Link2 size={20} />
           <div>
             <h3 style={{ margin: 0, fontSize: '16px' }}>AI Smart Suggestions</h3>
             {indexStatus && (
-              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.9)', marginTop: '2px' }}>
+              <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.9)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {isIndexing ? (
-                  <>⏳ Indexing {indexProgress?.current || 0}/{indexProgress?.total || 0}...</>
+                  <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Indexing {indexProgress?.current || 0}/{indexProgress?.total || 0}...</>
                 ) : (
-                  <>✓ {indexStatus.indexed_files} notes indexed</>
+                  <><Check size={12} /> {indexStatus.indexed_files} notes indexed</>
                 )}
               </div>
             )}
@@ -352,7 +353,9 @@ export default function AISuggestionsPanel({ rootPath, onOpenFile }: AISuggestio
           <>
             {isIndexing && (
               <div style={{ textAlign: 'center', marginTop: '40px' }}>
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>⏳</div>
+                <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
+                  <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+                </div>
                 <p style={{ color: '#888' }}>
                   Indexing notes... {indexProgress?.current || 0}/{indexProgress?.total || 0}
                 </p>
@@ -541,8 +544,8 @@ export default function AISuggestionsPanel({ rootPath, onOpenFile }: AISuggestio
 
                 {analysis.advantages.length > 0 && (
                   <div style={{ marginBottom: '16px' }}>
-                    <h4 style={{ margin: '0 0 8px 0', color: '#10b981', fontSize: '14px' }}>
-                      ✓ Advantages
+                    <h4 style={{ margin: '0 0 8px 0', color: '#10b981', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ThumbsUp size={14} /> Advantages
                     </h4>
                     <ul style={{ margin: 0, paddingLeft: '20px' }}>
                       {analysis.advantages.map((adv, idx) => (
@@ -556,8 +559,8 @@ export default function AISuggestionsPanel({ rootPath, onOpenFile }: AISuggestio
 
                 {analysis.disadvantages.length > 0 && (
                   <div style={{ marginBottom: '16px' }}>
-                    <h4 style={{ margin: '0 0 8px 0', color: '#ef4444', fontSize: '14px' }}>
-                      ⚠ Disadvantages & Challenges
+                    <h4 style={{ margin: '0 0 8px 0', color: '#ef4444', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AlertTriangle size={14} /> Disadvantages & Challenges
                     </h4>
                     <ul style={{ margin: 0, paddingLeft: '20px' }}>
                       {analysis.disadvantages.map((dis, idx) => (

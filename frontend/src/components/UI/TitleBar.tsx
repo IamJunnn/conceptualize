@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { FileText } from 'lucide-react'
 import './TitleBar.css'
 
 interface SearchResult {
@@ -7,7 +8,6 @@ interface SearchResult {
   fileName: string
   line?: number
   lineContent?: string
-  matchType: 'filename' | 'content'
 }
 
 interface TitleBarProps {
@@ -43,11 +43,6 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
 
   const handleClose = () => {
     appWindow.close()
-  }
-
-  // Handle dragging
-  const handleDragStart = () => {
-    appWindow.startDragging()
   }
 
   // Check initial maximized state and listen for changes
@@ -104,7 +99,6 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
           fileName: r.file_name,
           line: r.line,
           lineContent: r.line_content,
-          matchType: r.match_type
         }))
 
         setSearchResults(results)
@@ -183,8 +177,12 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
         <img src="/logo.svg" alt="Conceptualize" />
       </div>
 
-      {/* Drag Region (left) */}
-      <div className="titlebar-drag-region" data-tauri-drag-region onMouseDown={handleDragStart}></div>
+      {/* Drag Region (left) - uses native Tauri drag for 1:1 performance */}
+      <div
+        className="titlebar-drag-region"
+        data-tauri-drag-region
+        onDoubleClick={handleMaximize}
+      ></div>
 
       {/* Search Bar */}
       <div className="titlebar-search-container">
@@ -207,14 +205,14 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
                   className="quick-action-item"
                   onClick={() => handleGuideClick('shortcuts')}
                 >
-                  <span className="file-icon">📄</span>
+                  <FileText size={14} className="file-icon" />
                   <span className="file-name">Shortcuts.md</span>
                 </div>
                 <div
                   className="quick-action-item"
                   onClick={() => handleGuideClick('markdown')}
                 >
-                  <span className="file-icon">📝</span>
+                  <FileText size={14} className="file-icon" />
                   <span className="file-name">Note Syntax.md</span>
                 </div>
               </div>
@@ -253,8 +251,12 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
         )}
       </div>
 
-      {/* Drag Region (right) */}
-      <div className="titlebar-drag-region-right" data-tauri-drag-region onMouseDown={handleDragStart}></div>
+      {/* Drag Region (right) - uses native Tauri drag for 1:1 performance */}
+      <div
+        className="titlebar-drag-region-right"
+        data-tauri-drag-region
+        onDoubleClick={handleMaximize}
+      ></div>
 
       {/* Window Controls */}
       <div className="titlebar-controls">
@@ -265,11 +267,11 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
         </button>
         <button className="titlebar-button maximize" onClick={handleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
           {isMaximized ? (
-            // Restore icon - two overlapping squares
+            // Restore icon - two separate windows
             <svg width="14" height="14" viewBox="0 0 14 14">
               <g fill="none" stroke="currentColor" strokeWidth="1.2">
-                <rect x="3" y="3" width="6" height="6" />
-                <polyline points="4,4 4,2 12,2 12,10 10,10" />
+                <rect x="1.5" y="3.5" width="5" height="5" />
+                <rect x="7.5" y="5.5" width="5" height="5" />
               </g>
             </svg>
           ) : (
@@ -279,6 +281,7 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
             </svg>
           )}
         </button>
+
         <button className="titlebar-button close" onClick={handleClose} title="Close">
           <svg width="14" height="14" viewBox="0 0 14 14">
             <path d="M2 2 L12 12 M12 2 L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

@@ -9,6 +9,11 @@ export default defineConfig({
     port: 5173
   },
   build: {
-    outDir: '../dist'
-  }
+    outDir: '../dist',
+    minify: 'esbuild',
+  },
+  esbuild: {
+    // Remove console.log in production builds
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+  },
 })

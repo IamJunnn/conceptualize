@@ -1,4 +1,4 @@
-import { $prose, $view } from '@milkdown/utils'
+import { $view } from '@milkdown/utils'
 import { imageSchema } from '@milkdown/preset-commonmark'
 
 interface ResizeState {
@@ -18,8 +18,6 @@ class ImageNodeView {
   resizeState: ResizeState
 
   constructor(node: any, view: any, getPos: () => number) {
-    console.log('Creating ImageNodeView for:', node.attrs.src)
-
     this.resizeState = {
       isResizing: false,
       startWidth: 0,
@@ -79,7 +77,6 @@ class ImageNodeView {
     // Show/hide handle on selection
     this.dom.addEventListener('click', () => {
       this.handle.style.display = 'block'
-      console.log('Image selected, showing resize handle')
     })
 
     // Hide handle when clicking outside
@@ -92,8 +89,6 @@ class ImageNodeView {
     // Assemble DOM
     this.dom.appendChild(this.img)
     this.dom.appendChild(this.handle)
-
-    console.log('ImageNodeView created successfully')
   }
 
   handleMouseDown(view: any, getPos: () => number, e: MouseEvent) {
@@ -111,12 +106,6 @@ class ImageNodeView {
     this.resizeState.startHeight = this.img.clientHeight || this.img.naturalHeight
     this.resizeState.aspectRatio = this.resizeState.startWidth / this.resizeState.startHeight
 
-    console.log('Resize started:', {
-      startWidth: this.resizeState.startWidth,
-      startHeight: this.resizeState.startHeight,
-      aspectRatio: this.resizeState.aspectRatio
-    })
-
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!this.resizeState.isResizing) return
 
@@ -132,8 +121,6 @@ class ImageNodeView {
       if (this.resizeState.isResizing) {
         const finalWidth = this.img.clientWidth
         const finalHeight = this.img.clientHeight
-
-        console.log('Resize ended, updating node attributes:', { finalWidth, finalHeight })
 
         // Update the ProseMirror node with new dimensions
         const { state, dispatch } = view
@@ -196,14 +183,12 @@ class ImageNodeView {
   selectNode() {
     this.dom.classList.add('ProseMirror-selectednode')
     this.handle.style.display = 'block'
-    console.log('Image selected - showing resize handle')
   }
 
   // Hide handle when image is deselected
   deselectNode() {
     this.dom.classList.remove('ProseMirror-selectednode')
     this.handle.style.display = 'none'
-    console.log('Image deselected - hiding resize handle')
   }
 }
 

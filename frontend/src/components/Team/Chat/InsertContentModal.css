@@ -1,0 +1,335 @@
+/* InsertContentModal - Modal for inserting app content into chat */
+
+.insert-content-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: insertContentFadeIn 0.15s ease-out;
+}
+
+@keyframes insertContentFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.insert-content-modal {
+  background: #313338;
+  border-radius: 8px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: insertContentSlideIn 0.2s ease-out;
+  overflow: hidden;
+}
+
+@keyframes insertContentSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Header */
+.insert-content-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.insert-content-header-text h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #f2f3f5;
+}
+
+.insert-content-header-text p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #b5bac1;
+}
+
+.insert-content-modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #b5bac1;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.insert-content-modal-close:hover {
+  color: #f2f3f5;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Search */
+.insert-content-search {
+  position: relative;
+  margin: 0 16px 12px;
+}
+
+.insert-content-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #949ba4;
+  pointer-events: none;
+}
+
+.insert-content-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 38px;
+  background: #1e1f22;
+  border: none;
+  border-radius: 4px;
+  color: #f2f3f5;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.insert-content-search-input::placeholder {
+  color: #949ba4;
+}
+
+.insert-content-search-input:focus {
+  box-shadow: 0 0 0 2px #64c8ca;
+}
+
+/* Items list */
+.insert-content-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+  max-height: 350px;
+  min-height: 180px;
+}
+
+/* Custom scrollbar - Conceptualize theme */
+.insert-content-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.insert-content-list::-webkit-scrollbar-track {
+  background: #1e1f22;
+  border-radius: 4px;
+}
+
+.insert-content-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #64c8ca 0%, #52b6b8 100%);
+  border-radius: 4px;
+}
+
+.insert-content-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #7ad4d6 0%, #64c8ca 100%);
+}
+
+.insert-content-empty {
+  text-align: center;
+  color: #949ba4;
+  font-size: 14px;
+  padding: 40px 20px;
+}
+
+/* Item */
+.insert-content-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+  margin-bottom: 4px;
+}
+
+.insert-content-item:hover {
+  background: #3f4147;
+}
+
+.insert-content-item.selected {
+  background: rgba(100, 200, 202, 0.15);
+}
+
+/* Icon */
+.insert-content-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.insert-content-icon.file {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.insert-content-icon.folder {
+  background: rgba(196, 79, 196, 0.2);
+  color: #c44fc4;
+}
+
+.insert-content-icon.task {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.insert-content-icon.meeting {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.insert-content-icon.video {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.insert-content-icon.audio {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+
+.insert-content-icon.whiteboard {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+/* Info */
+.insert-content-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.insert-content-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f2f3f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.insert-content-subtitle {
+  font-size: 12px;
+  color: #949ba4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Radio indicator (single select) */
+.insert-content-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #4e5058;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.insert-content-radio.checked {
+  border-color: #64c8ca;
+}
+
+.insert-content-radio.checked::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #64c8ca;
+}
+
+/* Footer */
+.insert-content-footer {
+  padding: 14px 16px;
+  background: #2b2d31;
+  border-top: 1px solid #3f4147;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.insert-content-footer-info {
+  flex: 1;
+  color: #949ba4;
+  font-size: 13px;
+}
+
+.insert-content-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  border: none;
+  border-radius: 8px;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.insert-content-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7ad4d6, #64c8ca);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(100, 200, 202, 0.3);
+}
+
+.insert-content-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .insert-content-modal {
+    width: 95vw;
+    max-height: 90vh;
+  }
+
+  .insert-content-list {
+    max-height: 280px;
+  }
+
+  .insert-content-btn {
+    padding: 10px 14px;
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { invoke } from '@tauri-apps/api/core';
+import { TeamDriveStorage } from '../../services/teamDriveStorage';
 import './ExcelViewer.css';
 import '../UI/CustomScrollbar.css';
 
@@ -8,9 +9,11 @@ interface ExcelViewerProps {
   filePath: string;
   fileName: string;
   rootPath?: string;
+  fileId?: string;
+  storageBackend?: TeamDriveStorage;
 }
 
-const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath, fileName }) => {
+const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath, fileName, fileId, storageBackend }) => {
   const [sheets, setSheets] = useState<Array<{ name: string; data: any[][] }>>([]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -22,11 +25,18 @@ const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath, fileName }) => {
         setLoading(true);
         setError(null);
 
-        // Read the file using Tauri's read_binary_file command
-        const fileContent = await invoke<number[]>('read_binary_file', { filePath });
+        let arrayBuffer: ArrayBuffer;
 
-        // Convert to Uint8Array for xlsx
-        const arrayBuffer = new Uint8Array(fileContent);
+        // Team mode: load from Firebase Storage
+        if (storageBackend && fileId) {
+          const blob = await storageBackend.downloadFileAsBlob(fileId);
+          arrayBuffer = await blob.arrayBuffer();
+        } else {
+          // Local mode: Read the file using Tauri's read_binary_file command
+          const fileContent = await invoke<number[]>('read_binary_file', { filePath });
+          // Convert to Uint8Array for xlsx
+          arrayBuffer = new Uint8Array(fileContent).buffer;
+        }
 
         // Parse Excel file
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
@@ -48,7 +58,7 @@ const ExcelViewer: React.FC<ExcelViewerProps> = ({ filePath, fileName }) => {
     };
 
     loadExcelFile();
-  }, [filePath]);
+  }, [filePath, fileId, storageBackend]);
 
   if (loading) {
     return (

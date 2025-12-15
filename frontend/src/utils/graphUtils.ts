@@ -200,8 +200,29 @@ export function buildGraphFromFiles(
   }
 
   // Create folder nodes for all subfolders
+  // Filter out internal folders like chat-attachments and dm_* folders
+  const internalFolders = ['chat-attachments'];
+  const isInternalPath = (path: string) => {
+    const normalizedPath = normalizePath(path);
+    const folderName = getFolderName(normalizedPath);
+
+    // Check for exact internal folder names
+    const isInternalFolder = internalFolders.some(folder =>
+      normalizedPath.includes(`/${folder}/`) ||
+      normalizedPath.endsWith(`/${folder}`) ||
+      folderName === folder
+    );
+
+    // Check for DM attachment folders (dm_user1_user2 pattern)
+    const isDmFolder = folderName.startsWith('dm_') ||
+      normalizedPath.includes('/dm_');
+
+    return isInternalFolder || isDmFolder;
+  };
+
   folders.forEach(folderPath => {
     if (folderPath === rootPath) return; // Skip root, already added
+    if (isInternalPath(folderPath)) return; // Skip internal folders like chat-attachments
 
     const folderNode: GraphNode = {
       id: folderPath,
@@ -214,8 +235,10 @@ export function buildGraphFromFiles(
     nodeMap.set(folderPath, folderNode);
   });
 
-  // Create structural edges for folder hierarchy
+  // Create structural edges for folder hierarchy (skip internal folders)
   folders.forEach(folderPath => {
+    if (isInternalPath(folderPath)) return; // Skip internal folders
+
     const parentPath = getParentFolder(folderPath);
     if (parentPath && nodeMap.has(parentPath)) {
       links.push({
@@ -227,8 +250,10 @@ export function buildGraphFromFiles(
     }
   });
 
-  // Create file nodes
+  // Create file nodes (skip files in internal folders like chat-attachments)
   files.forEach(file => {
+    if (isInternalPath(file.path)) return; // Skip files in internal folders
+
     const nodeName = pathToNodeName(file.path);
     const isMarkdown = file.path.toLowerCase().endsWith('.md');
     const fileNode: GraphNode = {
@@ -386,17 +411,20 @@ export function getNodeColor(nodeType: NodeType, fileType?: FileType): string {
 
 /**
  * Calculates node size based on node type and connections
+ * Uses logarithmic scale to prevent heavily-connected nodes from dominating
  */
 export function getNodeSize(nodeType: NodeType, connectionCount: number): number {
   // Root folder is larger
   if (nodeType === 'root') {
-    return 24;
+    return 16;
   }
 
-  // Subfolders and files have normal sizing
-  const baseSize = 8;
-  const maxSize = 20;
-  return Math.min(baseSize + connectionCount * 2, maxSize);
+  // Subfolders and files use logarithmic scaling with a max cap
+  const baseSize = 7;
+  const maxSize = 14;
+  // Log scale: grows quickly at first, then tapers off
+  const scaledSize = baseSize + Math.log2(connectionCount + 1) * 3;
+  return Math.min(scaledSize, maxSize);
 }
 
 /**

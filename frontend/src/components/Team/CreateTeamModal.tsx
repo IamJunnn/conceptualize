@@ -1,13 +1,14 @@
 import { useState } from 'react';
+import { MessageCircle, FileText, ListTodo, Share2, CalendarDays, Cloud } from 'lucide-react';
 import { User } from '../../services/authServiceTauri';
-import { createTeam, inviteTeamMember, sendInvitationEmails } from '../../services/teamService';
+import { createTeam, inviteTeamMember, sendInvitationEmails, Team } from '../../services/teamService';
 import { useAuth } from '../../contexts/AuthContext';
 import './CreateTeamModal.css';
 
 interface CreateTeamModalProps {
   user: User;
   onClose: () => void;
-  onTeamCreated: () => void;
+  onTeamCreated: (team: Team) => void;
   onSwitchToJoin?: () => void;
 }
 
@@ -56,10 +57,9 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
         '', // No description
         user.email,
         user.displayName || user.email.split('@')[0],
-        user.uid
+        user.uid,
+        user.photoURL
       );
-
-      console.log('✅ Team created successfully!');
 
       // Invite members and send emails
       const validMembers = members.filter(m => m.email.trim() !== '');
@@ -83,13 +83,11 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
             role: m.role
           }))
         );
-
-        console.log(`✅ Sent invitations to ${validMembers.length} members`);
       }
 
       // Refresh user data to show updated role (should be 'admin' now)
       await refreshUser();
-      onTeamCreated();
+      onTeamCreated(team);
       onClose();
     } catch (err: any) {
       console.error('Failed to create team:', err);
@@ -121,7 +119,7 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
           </div>
 
           <div className="form-group">
-            <label>Invite Team Members (optional)</label>
+            <label className="members-label">Invite team members (optional)</label>
             <div className="members-list">
               {members.map((member, index) => (
                 <div key={index} className="member-row">
@@ -170,12 +168,15 @@ export default function CreateTeamModal({ user, onClose, onTeamCreated, onSwitch
           </div>
 
           <div className="info-box">
-            <strong>What happens next?</strong>
-            <ul>
-              <li>A folder will be created in your Google Drive</li>
-              <li>Invited members will get email notifications</li>
-              <li>All team notes will be synced to this folder</li>
-            </ul>
+            <strong>Team Features</strong>
+            <div className="features-grid">
+              <span><MessageCircle size={14} /> Real-time chat</span>
+              <span><FileText size={14} /> Shared notes</span>
+              <span><ListTodo size={14} /> Team todos</span>
+              <span><Share2 size={14} /> File sharing</span>
+              <span><CalendarDays size={14} /> Timeline view</span>
+              <span><Cloud size={14} /> Cloud storage</span>
+            </div>
           </div>
 
           {error && <div className="error-message">{error}</div>}

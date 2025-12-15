@@ -14,16 +14,34 @@ service cloud.firestore {
 
     function isTeamAdmin(teamId) {
       let team = get(/databases/$(database)/documents/teams/$(teamId));
-      if (team == null) { return false; }
       let email = request.auth.token.email;
       let emailKey = email.replace('.', '_DOT_').replace('@', '_AT_');
-      return team.data.members[emailKey].role in ['owner', 'admin'];
+      return team != null && team.data.members[emailKey].role in ['owner', 'admin'];
     }
 
     function isTeamOwner(teamId) {
       let team = get(/databases/$(database)/documents/teams/$(teamId));
-      if (team == null) { return false; }
-      return team.data.createdBy == request.auth.token.email;
+      return team != null && team.data.createdBy == request.auth.token.email;
+    }
+
+    // Check if user has a pending invite to join this team
+    // Handles emails with up to 3 dots (e.g., first.last@sub.company.com)
+    // Checks both lowercase (new format) and original casing (legacy format)
+    function hasPendingInvite(teamId) {
+      // Try lowercase email first (new format)
+      let emailLower = request.auth.token.email.lower();
+      let emailKeyLower = emailLower.replace('@', '_').replace('.', '_').replace('.', '_').replace('.', '_');
+      let inviteIdLower = teamId + '_' + emailKeyLower;
+      let inviteLower = get(/databases/$(database)/documents/team_invites/$(inviteIdLower));
+
+      // Also try original email casing (legacy format)
+      let emailOrig = request.auth.token.email;
+      let emailKeyOrig = emailOrig.replace('@', '_').replace('.', '_').replace('.', '_').replace('.', '_');
+      let inviteIdOrig = teamId + '_' + emailKeyOrig;
+      let inviteOrig = get(/databases/$(database)/documents/team_invites/$(inviteIdOrig));
+
+      return (inviteLower != null && inviteLower.data.status == 'pending') ||
+             (inviteOrig != null && inviteOrig.data.status == 'pending');
     }
 
     // Users collection
@@ -34,10 +52,29 @@ service cloud.firestore {
 
     // Teams collection
     match /teams/{teamId} {
-      allow read: if isAuthenticated() && isTeamMember(teamId);
+      // For reads, check directly against the document's memberEmails array
+      // Also allow reading if user has a pending invite (so they can see team info when accepting)
+      allow read: if isAuthenticated() && (
+        request.auth.token.email in resource.data.memberEmails ||
+        hasPendingInvite(teamId)
+      );
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && isTeamMember(teamId);
-      allow delete: if isAuthenticated() && isTeamOwner(teamId);
+      // Allow update if user is a member OR has a pending invite (to accept the invite)
+      // TEMPORARY: Also allow if user is adding themselves to memberEmails (for invite acceptance)
+      allow update: if isAuthenticated() && (
+        request.auth.token.email in resource.data.memberEmails ||
+        hasPendingInvite(teamId) ||
+        // Fallback: Allow if user is adding their own email to memberEmails
+        (request.auth.token.email in request.resource.data.memberEmails &&
+         request.resource.data.memberEmails.hasAll(resource.data.memberEmails))
+      );
+      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.token.email;
+
+      // Team billing subcollection
+      match /billing/{billingId} {
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+        allow write: if isAuthenticated() && isTeamAdmin(teamId);
+      }
 
       // Team todos subcollection
       match /todos/{todoId} {
@@ -66,6 +103,176 @@ service cloud.firestore {
           isTeamAdmin(teamId)
         );
       }
+
+      // Team chat channels subcollection
+      match /channels/{channelId} {
+        // Any team member can read channels
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Any team member can create channels (DMs or group chats)
+        allow create: if isAuthenticated() && isTeamMember(teamId);
+
+        // Any team member can update channels (for lastMessage updates, etc.)
+        allow update: if isAuthenticated() && isTeamMember(teamId);
+
+        // Only channel creator or team admin can delete
+        allow delete: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.createdBy == request.auth.token.email ||
+          isTeamAdmin(teamId)
+        );
+      }
+
+      // Team chat messages subcollection
+      match /messages/{channelId}/items/{messageId} {
+        // Any team member can read messages
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Any team member can send messages
+        allow create: if isAuthenticated()
+          && isTeamMember(teamId)
+          && request.resource.data.senderEmail == request.auth.token.email;
+
+        // Only message sender can edit their own messages
+        allow update: if isAuthenticated()
+          && isTeamMember(teamId)
+          && resource.data.senderEmail == request.auth.token.email;
+
+        // Only message sender or team admin can delete
+        allow delete: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.senderEmail == request.auth.token.email ||
+          isTeamAdmin(teamId)
+        );
+      }
+
+      // Team notifications subcollection
+      match /notifications/{notificationId} {
+        // Users can only read their own notifications
+        allow read: if isAuthenticated()
+          && isTeamMember(teamId)
+          && resource.data.recipientEmail == request.auth.token.email;
+
+        // Any team member can create notifications for other team members
+        allow create: if isAuthenticated() && isTeamMember(teamId);
+
+        // Users can only update their own notifications (mark as read)
+        allow update: if isAuthenticated()
+          && isTeamMember(teamId)
+          && resource.data.recipientEmail == request.auth.token.email;
+
+        // Users can only delete their own notifications
+        allow delete: if isAuthenticated()
+          && isTeamMember(teamId)
+          && resource.data.recipientEmail == request.auth.token.email;
+      }
+
+      // Team presence subcollection (online status tracking)
+      match /presence/{userEmail} {
+        // Any team member can read presence data
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Users can only write/update their own presence
+        allow create, update: if isAuthenticated()
+          && isTeamMember(teamId)
+          && userEmail == request.auth.token.email;
+
+        // Users can only delete their own presence
+        allow delete: if isAuthenticated()
+          && isTeamMember(teamId)
+          && userEmail == request.auth.token.email;
+      }
+
+      // Voice/Video calls subcollection
+      match /calls/{callId} {
+        // Any team member can read calls (to see incoming calls)
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Any team member can create calls
+        allow create: if isAuthenticated()
+          && isTeamMember(teamId)
+          && request.resource.data.initiatorEmail == request.auth.token.email;
+
+        // Any call participant can update (to join, answer, or end)
+        allow update: if isAuthenticated()
+          && isTeamMember(teamId)
+          && (request.auth.token.email in resource.data.participants ||
+              resource.data.initiatorEmail == request.auth.token.email);
+
+        // Only call initiator or team admin can delete
+        allow delete: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.initiatorEmail == request.auth.token.email ||
+          isTeamAdmin(teamId)
+        );
+
+        // Call signals subcollection (for real-time communication)
+        match /signals/{signalId} {
+          // Any call participant can read/write signals
+          allow read, write: if isAuthenticated() && isTeamMember(teamId);
+        }
+      }
+
+      // Call recordings subcollection
+      match /recordings/{recordingId} {
+        // Any team member can read recordings
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Any team member can create recordings (when starting a recording)
+        allow create: if isAuthenticated()
+          && isTeamMember(teamId)
+          && request.resource.data.startedBy == request.auth.token.email;
+
+        // Recording starter or team admin can update (for stopping, status changes)
+        allow update: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.startedBy == request.auth.token.email ||
+          isTeamAdmin(teamId)
+        );
+
+        // Recording starter or team admin can delete
+        allow delete: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.startedBy == request.auth.token.email ||
+          isTeamAdmin(teamId)
+        );
+      }
+
+      // Team whiteboards subcollection
+      match /whiteboards/{whiteboardId} {
+        // Any team member can read whiteboards
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Any team member can create whiteboards
+        allow create: if isAuthenticated()
+          && isTeamMember(teamId)
+          && request.resource.data.createdBy == request.auth.uid;
+
+        // Any team member can update whiteboards (for collaborative editing)
+        allow update: if isAuthenticated() && isTeamMember(teamId);
+
+        // Whiteboard creator or team admin can delete
+        allow delete: if isAuthenticated() && isTeamMember(teamId) && (
+          resource.data.createdBy == request.auth.uid ||
+          isTeamAdmin(teamId)
+        );
+
+        // Whiteboard presence subcollection (for cursor tracking)
+        match /presence/{presenceId} {
+          allow read, write: if isAuthenticated() && isTeamMember(teamId);
+        }
+      }
+
+      // User backgrounds subcollection (for video call backgrounds)
+      match /userBackgrounds/{userEmailEncoded}/backgrounds/{backgroundId} {
+        // Any team member can read/write backgrounds
+        // Client-side enforces ownership (users can only see/modify their own)
+        allow read, write: if isAuthenticated() && isTeamMember(teamId);
+      }
+
+      // Recording requests subcollection (for triggering recording start/stop)
+      // These are processed by a Firestore trigger function
+      match /recordingRequests/{requestId} {
+        // Any team member can read/create/update recording requests
+        // Note: Admin SDK should bypass rules, but we allow updates as fallback
+        allow read, create, update: if isAuthenticated() && isTeamMember(teamId);
+        allow delete: if false;
+      }
     }
 
     // Team invitations collection
@@ -74,6 +281,39 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAuthenticated();
+    }
+
+    // Promo codes collection
+    // Read: Any authenticated user can read (to validate codes)
+    // Update: Only allow incrementing currentRedemptions (for redemption)
+    match /promoCodes/{codeId} {
+      allow read: if isAuthenticated();
+      // Allow updates only to increment currentRedemptions
+      allow update: if isAuthenticated() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentRedemptions']) &&
+        request.resource.data.currentRedemptions == resource.data.currentRedemptions + 1;
+      allow create, delete: if false; // Admin only
+    }
+
+    // Partner domains collection - read-only for authenticated users
+    // Domains are created/managed in Firebase Console only
+    match /partnerDomains/{domain} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Admin SDK only (Firebase Console)
+    }
+
+    // Promo redemptions collection - tracks who used what codes
+    match /promoRedemptions/{redemptionId} {
+      // Users can read their own redemptions
+      allow read: if isAuthenticated() && (
+        resource.data.userEmail == request.auth.token.email ||
+        resource.data.userId == request.auth.uid
+      );
+      // Allow creating redemptions for their own user
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userEmail == request.auth.token.email;
+      allow update, delete: if false; // No modifications allowed
     }
   }
 }

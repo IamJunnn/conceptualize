@@ -45,7 +45,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath, o
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [showQuickAddModal, setShowQuickAddModal] = useState(false)
-  const [expandedDescriptions, setExpandedDescriptions] = useState<Set<string>>(new Set())
+  const [,] = useState<Set<string>>(new Set())
 
   // Load todos on mount
   useEffect(() => {
@@ -180,15 +180,12 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath, o
 
   // Get sorted date keys (past, today, future)
   const getSortedDateKeys = (todosByDate: Record<string, any[]>) => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
     return Object.keys(todosByDate).sort((a, b) => {
       return new Date(a).getTime() - new Date(b).getTime()
     })
   }
 
-  const handleAddTodoWithDate = async (dueDate: string) => {
+  const _handleAddTodoWithDate = async (dueDate: string) => {
     if (!newTodoText.trim()) return
     if (!activeListId) {
       // If no list selected, create a default "Quick Todos" list
@@ -207,6 +204,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath, o
       await handleAddTodoToList(activeListId, dueDate)
     }
   }
+  void _handleAddTodoWithDate // Reserved for future calendar integration
 
   const handleAddTodoToList = async (listId: string, dueDate?: string) => {
     if (!newTodoText.trim()) return
@@ -260,7 +258,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath, o
   }
 
   const todosByDate = getTodosByDate()
-  const sortedDateKeys = getSortedDateKeys(todosByDate)
+  getSortedDateKeys(todosByDate) // Keep for potential future use
 
   return (
     <div className="todo-panel-container">
@@ -465,7 +463,7 @@ const TodoPanel: React.FC<TodoPanelProps> = ({ initialView = 'list', rootPath, o
             <div className="timeline-view">
               <GanttTimeline
                   lists={todoData.lists}
-                  onTodoClick={(todo) => {
+                  onTodoClick={(_todo) => {
                     // TODO: Open todo edit modal
                   }}
                 />

@@ -25,7 +25,7 @@ export const keyboardShortcuts = () => {
 
               if (inList) {
                 event.preventDefault()
-                const result = sinkListItem(listItemType)(state, dispatch)
+                sinkListItem(listItemType)(state, dispatch)
                 return true
               }
             }
@@ -42,7 +42,7 @@ export const keyboardShortcuts = () => {
 
               if (inList) {
                 event.preventDefault()
-                const result = liftListItem(listItemType)(state, dispatch)
+                liftListItem(listItemType)(state, dispatch)
                 return true
               }
             }

@@ -19,6 +19,9 @@
   flex-wrap: wrap;
   gap: 12px;
   min-height: 48px;
+  cursor: default;
+  position: relative;
+  z-index: 10;
 }
 
 /* Scrollable content area - only the timeline content scrolls */
@@ -48,6 +51,14 @@
 
 .timeline-content-scroll::-webkit-scrollbar-thumb:hover {
   background: #4e4e4e;
+}
+
+/* Calendar Month View - ensure it fills vertical space */
+.calendar-month-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .timeline-filters .filter-tabs {
@@ -379,4 +390,118 @@
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+/* ==================== ZOOM CONTROLS ==================== */
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #252525;
+  border-radius: 6px;
+  padding: 4px;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 100;
+  cursor: default !important;
+  touch-action: none;
+  isolation: isolate;
+}
+
+.zoom-controls * {
+  cursor: pointer !important;
+}
+
+.zoom-controls button:disabled,
+.zoom-controls button:disabled * {
+  cursor: not-allowed !important;
+}
+
+.zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer !important;
+  transition: all 0.2s;
+  pointer-events: auto !important;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.zoom-btn:hover:not(:disabled) {
+  background: #3d3d3d;
+  color: #e0e0e0;
+}
+
+.zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.zoom-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.zoom-level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #64c8ca;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer !important;
+  transition: all 0.2s;
+  pointer-events: auto !important;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.zoom-level:hover {
+  background: rgba(100, 200, 202, 0.1);
+}
+
+.zoom-divider {
+  width: 1px;
+  height: 20px;
+  background: #3d3d3d;
+  margin: 0 4px;
+}
+
+.today-btn {
+  color: #64c8ca;
+}
+
+.today-btn:hover:not(:disabled) {
+  background: rgba(100, 200, 202, 0.15);
+  color: #7dd3d5;
+}
+
+/* SVG cursor for pan mode */
+.gantt-timeline-container svg {
+  cursor: grab;
+}
+
+.gantt-timeline-container svg:active {
+  cursor: grabbing;
+}
+
+/* Responsive zoom controls */
+@media (max-width: 600px) {
+  .zoom-controls {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
 }

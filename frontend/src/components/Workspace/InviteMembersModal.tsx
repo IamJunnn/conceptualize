@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Mail } from 'lucide-react';
 import { WorkspaceRole } from '../../services/workspaceService';
+import { isValidEmail } from '../../utils/validators';
 import './InviteMembersModal.css';
 
 interface InviteMembersModalProps {
@@ -11,7 +12,7 @@ interface InviteMembersModalProps {
 }
 
 const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
-  workspaceId,
+  workspaceId: _workspaceId,
   workspaceName,
   onClose,
   onInvite
@@ -30,9 +31,7 @@ const InviteMembersModal: React.FC<InviteMembersModalProps> = ({
       return;
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidEmail(email)) {
       setError('Please enter a valid email address');
       return;
     }

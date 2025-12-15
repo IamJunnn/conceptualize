@@ -11,7 +11,7 @@ import './StorageLimitBanner.css';
 
 interface StorageLimitBannerProps {
   usage: StorageUsage;
-  onUpgradeClick: () => void;
+  onUpgradeClick?: () => void;
   onDismiss?: () => void;
   dismissable?: boolean;
 }
@@ -56,14 +56,20 @@ const StorageLimitBanner: React.FC<StorageLimitBannerProps> = ({
         </div>
 
         <div className="banner-actions">
-          <button className="upgrade-button" onClick={onUpgradeClick}>
-            <Zap size={14} />
-            {usage.monthlyPrice !== undefined ? (
-              <>Upgrade - {formatPrice(usage.monthlyPrice)}/mo</>
-            ) : (
-              <>Upgrade</>
-            )}
-          </button>
+          {onUpgradeClick ? (
+            <button className="upgrade-button" onClick={onUpgradeClick}>
+              <Zap size={14} />
+              {usage.monthlyPrice !== undefined ? (
+                <>Upgrade - {formatPrice(usage.monthlyPrice)}/mo</>
+              ) : (
+                <>Upgrade</>
+              )}
+            </button>
+          ) : (
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+              Ask your team owner to upgrade
+            </span>
+          )}
 
           {dismissable && onDismiss && isWarning && (
             <button className="dismiss-button" onClick={onDismiss} aria-label="Dismiss">

@@ -1,36 +1,125 @@
 /**
- * Firebase Cloud Functions for Conceptualize Billing
- * Handles Stripe integration for team subscriptions
+ * Firebase Cloud Functions for Conceptualize
+ * Handles Stripe billing and LiveKit recording integration
  */
 
-import * as functions from 'firebase-functions';
+// Firebase Functions V1 for all functions (avoids IAM invoker issues)
+import * as functionsV1 from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
+import {
+  AccessToken,
+  EgressClient,
+  EncodedFileOutput,
+  EncodedFileType,
+  S3Upload,
+} from 'livekit-server-sdk';
 
 // Initialize Firebase Admin
 admin.initializeApp();
 
 // Initialize Stripe with your secret key from environment config
-const stripe = new Stripe(functions.config().stripe?.secret_key || process.env.STRIPE_SECRET_KEY || '', {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2023-10-16',
 });
 
 // Stripe price ID for per-member subscription
-const PRICE_ID = functions.config().stripe?.price_id || process.env.STRIPE_PRICE_ID || '';
+const PRICE_ID = process.env.STRIPE_PRICE_ID || '';
+
+// LiveKit configuration for recording (Egress API)
+const LIVEKIT_URL = process.env.LIVEKIT_URL || 'https://conceptualize-ucbg0je6.livekit.cloud';
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
+
+// AWS S3 configuration for recording storage
+const AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || '';
+const AWS_S3_REGION = process.env.AWS_S3_REGION || 'us-east-2';
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || '';
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY || '';
+
+// Initialize LiveKit Egress client (lazy initialization)
+let egressClient: EgressClient | null = null;
+function getEgressClient(): EgressClient {
+  if (!egressClient) {
+    if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+      throw new Error('LiveKit API credentials not configured');
+    }
+    egressClient = new EgressClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+  }
+  return egressClient;
+}
+
+/**
+ * Generate a LiveKit access token for video calls
+ * This securely generates tokens server-side instead of exposing secrets in the frontend
+ */
+export const generateLiveKitToken = functionsV1
+  .runWith({
+    secrets: ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET'],
+  })
+  .https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { roomName, participantName, participantIdentity } = data;
+
+  if (!roomName || !participantName || !participantIdentity) {
+    throw new functionsV1.https.HttpsError(
+      'invalid-argument',
+      'roomName, participantName, and participantIdentity are required'
+    );
+  }
+
+  if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+    throw new functionsV1.https.HttpsError(
+      'failed-precondition',
+      'LiveKit API credentials not configured'
+    );
+  }
+
+  try {
+    // Create access token with video grant
+    const token = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      identity: participantIdentity,
+      name: participantName,
+      ttl: 3600, // 1 hour
+    });
+
+    token.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    return {
+      token: await token.toJwt(),
+      url: LIVEKIT_URL.replace('https://', 'wss://'),
+    };
+  } catch (error) {
+    console.error('Error generating LiveKit token:', error);
+    throw new functionsV1.https.HttpsError('internal', 'Failed to generate token');
+  }
+});
 
 /**
  * Create a Stripe Checkout Session for team subscription
+ * Note: CORS is automatically handled by Firebase callable functions
  */
-export const createStripeCheckout = functions.https.onCall(async (data, context) => {
+export const createStripeCheckout = functionsV1.https.onCall(async (data, context) => {
   // Verify authentication
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { teamId, memberCount, successUrl, cancelUrl, customerEmail, metadata } = data;
 
   if (!teamId || !memberCount) {
-    throw new functions.https.HttpsError('invalid-argument', 'teamId and memberCount are required');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'teamId and memberCount are required');
   }
 
   try {
@@ -79,22 +168,22 @@ export const createStripeCheckout = functions.https.onCall(async (data, context)
     return { sessionUrl: session.url };
   } catch (error: any) {
     console.error('Error creating checkout session:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
 /**
  * Create a Stripe Customer Portal session for managing subscription
  */
-export const createStripePortal = functions.https.onCall(async (data, context) => {
+export const createStripePortal = functionsV1.https.onCall(async (data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { customerId, returnUrl } = data;
 
   if (!customerId) {
-    throw new functions.https.HttpsError('invalid-argument', 'customerId is required');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'customerId is required');
   }
 
   try {
@@ -106,22 +195,22 @@ export const createStripePortal = functions.https.onCall(async (data, context) =
     return { portalUrl: session.url };
   } catch (error: any) {
     console.error('Error creating portal session:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
 /**
  * Update subscription quantity when team members change
  */
-export const updateStripeSubscription = functions.https.onCall(async (data, context) => {
+export const updateStripeSubscription = functionsV1.https.onCall(async (data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { subscriptionId, quantity } = data;
 
   if (!subscriptionId || !quantity) {
-    throw new functions.https.HttpsError('invalid-argument', 'subscriptionId and quantity are required');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'subscriptionId and quantity are required');
   }
 
   try {
@@ -141,22 +230,22 @@ export const updateStripeSubscription = functions.https.onCall(async (data, cont
     return { success: true };
   } catch (error: any) {
     console.error('Error updating subscription:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
 /**
  * Cancel a subscription
  */
-export const cancelStripeSubscription = functions.https.onCall(async (data, context) => {
+export const cancelStripeSubscription = functionsV1.https.onCall(async (data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { subscriptionId, immediately } = data;
 
   if (!subscriptionId) {
-    throw new functions.https.HttpsError('invalid-argument', 'subscriptionId is required');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'subscriptionId is required');
   }
 
   try {
@@ -173,7 +262,7 @@ export const cancelStripeSubscription = functions.https.onCall(async (data, cont
     return { success: true };
   } catch (error: any) {
     console.error('Error canceling subscription:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
@@ -181,11 +270,9 @@ export const cancelStripeSubscription = functions.https.onCall(async (data, cont
  * Stripe Webhook Handler
  * Handles all Stripe events for subscription management
  */
-export const stripeWebhook = functions
-  .runWith({ invoker: 'public' })
-  .https.onRequest(async (req, res) => {
+export const stripeWebhook = functionsV1.https.onRequest(async (req, res) => {
   const sig = req.headers['stripe-signature'] as string;
-  const webhookSecret = functions.config().stripe?.webhook_secret || process.env.STRIPE_WEBHOOK_SECRET || '';
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
   let event: Stripe.Event;
 
@@ -280,8 +367,8 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   await admin.firestore().collection('teams').doc(teamId).update({
     'billing.subscription.status': status,
     'billing.subscription.stripeSubscriptionId': subscription.id,
-    'billing.subscription.currentPeriodStart': admin.firestore.Timestamp.fromMillis(subscription.current_period_start * 1000),
-    'billing.subscription.currentPeriodEnd': admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000),
+    'billing.subscription.currentPeriodStart': subscription.current_period_start * 1000,
+    'billing.subscription.currentPeriodEnd': subscription.current_period_end * 1000,
     'billing.subscription.cancelAtPeriodEnd': subscription.cancel_at_period_end,
   });
 }
@@ -319,7 +406,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 
   await admin.firestore().collection('teams').doc(teamId).update({
     'billing.subscription.status': 'active',
-    'billing.lastPaymentDate': admin.firestore.FieldValue.serverTimestamp(),
+    'billing.lastPaymentDate': new Date(),
   });
 }
 
@@ -366,15 +453,15 @@ function mapStripeStatus(stripeStatus: string): string {
  * Sync subscription status from Stripe (polling-based approach)
  * Called when app loads to ensure Firestore is in sync with Stripe
  */
-export const syncSubscriptionStatus = functions.https.onCall(async (data, context) => {
+export const syncSubscriptionStatus = functionsV1.https.onCall(async (data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { teamId } = data;
 
   if (!teamId) {
-    throw new functions.https.HttpsError('invalid-argument', 'teamId is required');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'teamId is required');
   }
 
   try {
@@ -383,7 +470,7 @@ export const syncSubscriptionStatus = functions.https.onCall(async (data, contex
     const teamData = teamDoc.data();
 
     if (!teamData) {
-      throw new functions.https.HttpsError('not-found', 'Team not found');
+      throw new functionsV1.https.HttpsError('not-found', 'Team not found');
     }
 
     const customerId = teamData.billing?.subscription?.stripeCustomerId;
@@ -425,10 +512,10 @@ export const syncSubscriptionStatus = functions.https.onCall(async (data, contex
     await admin.firestore().collection('teams').doc(teamId).update({
       'billing.subscription.status': status,
       'billing.subscription.stripeSubscriptionId': subscription.id,
-      'billing.subscription.currentPeriodStart': admin.firestore.Timestamp.fromMillis(subscription.current_period_start * 1000),
-      'billing.subscription.currentPeriodEnd': admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000),
+      'billing.subscription.currentPeriodStart': subscription.current_period_start * 1000,
+      'billing.subscription.currentPeriodEnd': subscription.current_period_end * 1000,
       'billing.subscription.cancelAtPeriodEnd': subscription.cancel_at_period_end,
-      'billing.lastSyncedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'billing.lastSyncedAt': new Date(),
     });
 
     return {
@@ -440,7 +527,7 @@ export const syncSubscriptionStatus = functions.https.onCall(async (data, contex
     };
   } catch (error: any) {
     console.error('Error syncing subscription:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
@@ -448,15 +535,15 @@ export const syncSubscriptionStatus = functions.https.onCall(async (data, contex
  * Verify checkout session completion (called after redirect from Stripe)
  * This replaces the webhook for checkout.session.completed
  */
-export const verifyCheckoutSession = functions.https.onCall(async (data, context) => {
+export const verifyCheckoutSession = functionsV1.https.onCall(async (data, context) => {
   if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated');
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const { sessionId, teamId } = data;
 
   if (!sessionId || !teamId) {
-    throw new functions.https.HttpsError('invalid-argument', 'sessionId and teamId are required');
+    throw new functionsV1.https.HttpsError('invalid-argument', 'sessionId and teamId are required');
   }
 
   try {
@@ -484,14 +571,15 @@ export const verifyCheckoutSession = functions.https.onCall(async (data, context
     }
 
     // Update team billing info in Firestore
+    // Store timestamps as milliseconds for easier frontend handling
     await admin.firestore().collection('teams').doc(teamId).update({
       'billing.subscription.status': 'active',
       'billing.subscription.stripeCustomerId': session.customer,
       'billing.subscription.stripeSubscriptionId': subscription.id,
-      'billing.subscription.currentPeriodStart': admin.firestore.Timestamp.fromMillis(subscription.current_period_start * 1000),
-      'billing.subscription.currentPeriodEnd': admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000),
+      'billing.subscription.currentPeriodStart': subscription.current_period_start * 1000,
+      'billing.subscription.currentPeriodEnd': subscription.current_period_end * 1000,
       'billing.subscription.cancelAtPeriodEnd': false,
-      'billing.lastSyncedAt': admin.firestore.FieldValue.serverTimestamp(),
+      'billing.lastSyncedAt': new Date(),
     });
 
     return {
@@ -501,7 +589,125 @@ export const verifyCheckoutSession = functions.https.onCall(async (data, context
     };
   } catch (error: any) {
     console.error('Error verifying checkout session:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Accept a team invite using admin privileges
+ * This bypasses Firestore rules to allow invited users to join teams
+ */
+export const acceptTeamInvite = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { teamId, memberEmail, memberDisplayName, memberPhotoURL } = data;
+
+  if (!teamId || !memberEmail) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'teamId and memberEmail are required');
+  }
+
+  // Verify the caller's email matches the invite email (case-insensitive)
+  const callerEmail = context.auth.token.email?.toLowerCase();
+  const normalizedEmail = memberEmail.toLowerCase();
+
+  if (callerEmail !== normalizedEmail) {
+    throw new functionsV1.https.HttpsError('permission-denied', 'You can only accept invites for your own email');
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // 1. Find the invite - try lowercase ID first, then search by teamId
+    let inviteId = `${teamId}_${normalizedEmail.replace(/[.@]/g, '_')}`;
+    let inviteDoc = await db.collection('team_invites').doc(inviteId).get();
+
+    // If not found with lowercase, search for it
+    if (!inviteDoc.exists) {
+      console.log(`Invite not found with ID ${inviteId}, searching...`);
+      const invitesSnapshot = await db.collection('team_invites')
+        .where('teamId', '==', teamId)
+        .where('status', '==', 'pending')
+        .get();
+
+      const matchingInvite = invitesSnapshot.docs.find(doc =>
+        doc.data().memberEmail?.toLowerCase() === normalizedEmail
+      );
+
+      if (matchingInvite) {
+        inviteId = matchingInvite.id;
+        inviteDoc = matchingInvite;
+        console.log(`Found invite with ID: ${inviteId}`);
+      }
+    }
+
+    if (!inviteDoc.exists) {
+      throw new functionsV1.https.HttpsError('not-found', 'No pending invite found for this team');
+    }
+
+    const inviteData = inviteDoc.data();
+    if (inviteData?.status !== 'pending') {
+      throw new functionsV1.https.HttpsError('failed-precondition', 'Invite is not pending');
+    }
+
+    const role = inviteData?.role || 'member';
+
+    // 2. Get the team
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      throw new functionsV1.https.HttpsError('not-found', 'Team not found');
+    }
+
+    // 3. Update team with new member
+    const memberEmailKey = normalizedEmail.replace('.', '_DOT_').replace('@', '_AT_');
+    const now = FieldValue.serverTimestamp();
+    await db.collection('teams').doc(teamId).update({
+      [`members.${memberEmailKey}`]: {
+        email: normalizedEmail,
+        role: role,
+        joinedAt: now,
+        displayName: memberDisplayName || normalizedEmail,
+        photoURL: memberPhotoURL || null,
+      },
+      memberEmails: FieldValue.arrayUnion(normalizedEmail),
+    });
+
+    // 4. Update invite status
+    await db.collection('team_invites').doc(inviteId).update({
+      status: 'accepted',
+      acceptedAt: now,
+    });
+
+    // 5. Create notification for team owner
+    const teamData = teamDoc.data();
+    if (teamData?.createdBy) {
+      await db.collection('teams').doc(teamId).collection('notifications').add({
+        type: 'member_joined',
+        title: 'New Team Member',
+        message: `${memberDisplayName || normalizedEmail} has joined your team as ${role}`,
+        recipientEmail: teamData.createdBy,
+        senderEmail: normalizedEmail,
+        senderName: memberDisplayName || normalizedEmail,
+        createdAt: now,
+        read: false,
+      });
+    }
+
+    console.log(`✅ ${normalizedEmail} accepted invite to team ${teamId} as ${role}`);
+
+    return {
+      success: true,
+      teamId,
+      role,
+      teamName: teamData?.name,
+    };
+  } catch (error: any) {
+    console.error('Error accepting team invite:', error);
+    if (error instanceof functionsV1.https.HttpsError) {
+      throw error;
+    }
+    throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
 
@@ -509,7 +715,7 @@ export const verifyCheckoutSession = functions.https.onCall(async (data, context
  * Automatically update subscription when team members change
  * Triggered by Firestore document changes
  */
-export const onTeamMemberChange = functions.firestore
+export const onTeamMemberChange = functionsV1.firestore
   .document('teams/{teamId}')
   .onUpdate(async (change, context) => {
     const before = change.before.data();
@@ -547,5 +753,1230 @@ export const onTeamMemberChange = functions.firestore
       } catch (error) {
         console.error('Error updating Stripe subscription:', error);
       }
+    }
+  });
+
+/**
+ * Scheduled function to check and block members whose grace period has expired
+ * Runs daily at midnight UTC
+ */
+export const checkGracePeriodExpiry = functionsV1.pubsub
+  .schedule('0 0 * * *')  // Run daily at midnight UTC
+  .timeZone('UTC')
+  .onRun(async () => {
+    console.log('🔄 Running grace period expiry check...');
+
+    const db = admin.firestore();
+    const now = admin.firestore.Timestamp.now();
+
+    try {
+      // Get all teams
+      const teamsSnapshot = await db.collection('teams').get();
+      let blockedCount = 0;
+
+      for (const teamDoc of teamsSnapshot.docs) {
+        const teamData = teamDoc.data();
+        const members = teamData.members || {};
+        let teamUpdated = false;
+        const updates: { [key: string]: any } = {};
+
+        // Check each member's grace period
+        for (const [memberKey, member] of Object.entries(members)) {
+          const memberData = member as any;
+
+          if (memberData.billingStatus === 'grace_period' && memberData.gracePeriodEnd) {
+            const gracePeriodEnd = memberData.gracePeriodEnd.toDate ?
+              memberData.gracePeriodEnd.toDate() : new Date(memberData.gracePeriodEnd);
+
+            if (gracePeriodEnd <= now.toDate()) {
+              // Grace period has expired - block the member
+              console.log(`⏰ Grace period expired for ${memberData.email} in team ${teamDoc.id}`);
+              updates[`members.${memberKey}.billingStatus`] = 'blocked';
+              teamUpdated = true;
+              blockedCount++;
+
+              // Create notification for the team owner
+              const ownerEmail = teamData.createdBy;
+              if (ownerEmail) {
+                await db.collection('teams').doc(teamDoc.id).collection('notifications').add({
+                  type: 'billing_warning',
+                  title: 'Member Access Blocked',
+                  message: `${memberData.displayName || memberData.email}'s grace period has expired. They can no longer access team features until payment is resolved.`,
+                  recipientEmail: ownerEmail,
+                  senderEmail: 'system',
+                  senderName: 'System',
+                  createdAt: now,
+                  read: false,
+                });
+              }
+            }
+          }
+        }
+
+        // Apply updates if any members were blocked
+        if (teamUpdated) {
+          await teamDoc.ref.update(updates);
+        }
+      }
+
+      console.log(`✅ Grace period check complete. Blocked ${blockedCount} member(s).`);
+      return null;
+    } catch (error) {
+      console.error('Error checking grace period expiry:', error);
+      throw error;
+    }
+  });
+
+/**
+ * Retry failed billing charges for members in grace period
+ * Runs daily at 2 AM UTC
+ */
+export const retryFailedCharges = functionsV1.pubsub
+  .schedule('0 2 * * *')  // Run daily at 2 AM UTC
+  .timeZone('UTC')
+  .onRun(async () => {
+    console.log('🔄 Running retry for failed charges...');
+
+    const db = admin.firestore();
+    const now = admin.firestore.Timestamp.now();
+
+    try {
+      // Get all teams with active subscriptions
+      const teamsSnapshot = await db.collection('teams')
+        .where('billing.subscription.status', '==', 'active')
+        .get();
+
+      let retryCount = 0;
+      let successCount = 0;
+
+      for (const teamDoc of teamsSnapshot.docs) {
+        const teamData = teamDoc.data();
+        const members = teamData.members || {};
+        const subscriptionId = teamData.billing?.subscription?.stripeSubscriptionId;
+
+        if (!subscriptionId) continue;
+
+        // Check for members in grace period
+        for (const [memberKey, member] of Object.entries(members)) {
+          const memberData = member as any;
+
+          if (memberData.billingStatus === 'grace_period') {
+            retryCount++;
+            console.log(`💳 Retrying charge for ${memberData.email} in team ${teamDoc.id}`);
+
+            try {
+              // Try to update subscription quantity (this will trigger a charge)
+              const memberCount = teamData.memberEmails?.length || 1;
+              const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+              const subscriptionItemId = subscription.items.data[0]?.id;
+
+              if (subscriptionItemId) {
+                await stripe.subscriptionItems.update(subscriptionItemId, {
+                  quantity: memberCount,
+                  proration_behavior: 'create_prorations',
+                });
+
+                // If successful, update member status to active
+                await teamDoc.ref.update({
+                  [`members.${memberKey}.billingStatus`]: 'active',
+                  [`members.${memberKey}.gracePeriodEnd`]: admin.firestore.FieldValue.delete(),
+                  [`members.${memberKey}.chargeFailureReason`]: admin.firestore.FieldValue.delete(),
+                  [`members.${memberKey}.lastChargeAttempt`]: now,
+                });
+
+                successCount++;
+                console.log(`✅ Charge successful for ${memberData.email}`);
+
+                // Notify owner of successful charge
+                const ownerEmail = teamData.createdBy;
+                if (ownerEmail) {
+                  await db.collection('teams').doc(teamDoc.id).collection('notifications').add({
+                    type: 'billing_updated',
+                    title: 'Payment Successful',
+                    message: `Payment for ${memberData.displayName || memberData.email} has been processed successfully.`,
+                    recipientEmail: ownerEmail,
+                    senderEmail: 'system',
+                    senderName: 'System',
+                    createdAt: now,
+                    read: false,
+                  });
+                }
+              }
+            } catch (chargeError: any) {
+              console.warn(`⚠️ Charge retry failed for ${memberData.email}:`, chargeError.message);
+              // Update last charge attempt
+              await teamDoc.ref.update({
+                [`members.${memberKey}.lastChargeAttempt`]: now,
+                [`members.${memberKey}.chargeFailureReason`]: chargeError.message || 'Payment failed',
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`✅ Retry complete. Attempted ${retryCount}, succeeded ${successCount}.`);
+      return null;
+    } catch (error) {
+      console.error('Error retrying failed charges:', error);
+      throw error;
+    }
+  });
+
+// ============================================================================
+// LIVEKIT RECORDING FUNCTIONS (Firestore Trigger based - no CORS/IAM issues)
+// ============================================================================
+
+/**
+ * Get active egress for a room (callable function)
+ * This allows the client to retrieve the egressId when the Firestore trigger
+ * can't write it back due to IAM permission issues
+ */
+export const getActiveEgress = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { roomName, recordingId, teamId } = data;
+
+  if (!roomName) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'roomName is required');
+  }
+
+  try {
+    const client = getEgressClient();
+
+    // List all active egress for this room
+    const egressList = await client.listEgress({ roomName });
+
+    console.log(`Found ${egressList.length} egress for room ${roomName}`);
+
+    // Find active egress (status EGRESS_STARTING or EGRESS_ACTIVE)
+    const activeEgress = egressList.find(e =>
+      e.status === 0 || // EGRESS_STARTING
+      e.status === 1    // EGRESS_ACTIVE
+    );
+
+    if (activeEgress) {
+      console.log(`Found active egress: ${activeEgress.egressId}, status: ${activeEgress.status}`);
+
+      // Also try to update the recording document with the egressId
+      if (recordingId && teamId) {
+        try {
+          const db = admin.firestore();
+          await db.collection('teams').doc(teamId).collection('recordings').doc(recordingId).update({
+            egressId: activeEgress.egressId,
+          });
+          console.log(`Updated recording ${recordingId} with egressId`);
+        } catch (updateError) {
+          console.warn('Could not update recording document:', updateError);
+        }
+      }
+
+      return {
+        success: true,
+        egressId: activeEgress.egressId,
+        status: activeEgress.status,
+      };
+    }
+
+    return {
+      success: false,
+      error: 'No active egress found for this room',
+    };
+  } catch (error: any) {
+    console.error('Error getting active egress:', error);
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+// Import 2nd gen functions for public access support
+import { onRequest } from 'firebase-functions/v2/https';
+
+/**
+ * HTTP endpoint to get active egress (2nd Gen with public access)
+ * Uses Firebase ID token for authentication
+ * Named V2 to avoid conflict with existing 1st gen function
+ */
+export const getActiveEgressV2 = onRequest(
+  {
+    cors: true, // Enable CORS for all origins
+    invoker: 'public', // Allow public access (bypasses IAM invoker requirement)
+  },
+  async (req, res) => {
+    try {
+      // Verify Firebase ID token
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ success: false, error: 'Missing or invalid authorization header' });
+        return;
+      }
+
+      const idToken = authHeader.split('Bearer ')[1];
+      try {
+        await admin.auth().verifyIdToken(idToken);
+      } catch (authError) {
+        console.error('Token verification failed:', authError);
+        res.status(401).json({ success: false, error: 'Invalid token' });
+        return;
+      }
+
+      const { roomName, recordingId, teamId } = req.body;
+
+      if (!roomName) {
+        res.status(400).json({ success: false, error: 'roomName is required' });
+        return;
+      }
+
+      console.log(`[getActiveEgressHttp] Looking for egress in room: ${roomName}`);
+
+      const client = getEgressClient();
+      const egressList = await client.listEgress({ roomName });
+
+      console.log(`[getActiveEgressHttp] Found ${egressList.length} egress for room ${roomName}`);
+
+      // Find active egress
+      const activeEgress = egressList.find(e =>
+        e.status === 0 || // EGRESS_STARTING
+        e.status === 1    // EGRESS_ACTIVE
+      );
+
+      if (activeEgress) {
+        console.log(`[getActiveEgressHttp] ✅ Found active egress: ${activeEgress.egressId}`);
+
+        // Try to update recording document
+        if (recordingId && teamId) {
+          try {
+            const db = admin.firestore();
+            await db.collection('teams').doc(teamId).collection('recordings').doc(recordingId).update({
+              egressId: activeEgress.egressId,
+            });
+            console.log(`[getActiveEgressHttp] Updated recording ${recordingId}`);
+          } catch (updateError) {
+            console.warn('[getActiveEgressHttp] Could not update recording:', updateError);
+          }
+        }
+
+        res.json({
+          success: true,
+          egressId: activeEgress.egressId,
+          status: activeEgress.status,
+        });
+      } else {
+        console.log('[getActiveEgressHttp] No active egress found');
+        res.json({
+          success: false,
+          error: 'No active egress found for this room',
+        });
+      }
+    } catch (error: any) {
+      console.error('[getActiveEgressHttp] Error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * Process recording requests via Firestore trigger
+ * Client writes to 'teams/{teamId}/recordingRequests/{requestId}'
+ * This trigger processes the request and updates the document with results
+ *
+ * This approach bypasses CORS and IAM invoker issues because:
+ * - Firestore writes use the Firebase SDK (no CORS)
+ * - Firestore triggers run server-side (no public access needed)
+ */
+export const processRecordingRequest = functionsV1.firestore
+  .document('teams/{teamId}/recordingRequests/{requestId}')
+  .onCreate(async (snapshot, context) => {
+    const { teamId, requestId } = context.params;
+    const requestData = snapshot.data();
+    const db = admin.firestore();
+    const requestRef = db.collection('teams').doc(teamId).collection('recordingRequests').doc(requestId);
+
+    console.log(`Processing recording request ${requestId} for team ${teamId}:`, requestData);
+
+    // Helper to safely update Firestore (handles permission issues gracefully)
+    const safeUpdate = async (ref: FirebaseFirestore.DocumentReference, data: Record<string, unknown>) => {
+      try {
+        await ref.update(data);
+        return true;
+      } catch (updateError: any) {
+        console.warn(`Failed to update document (permission issue): ${updateError.message}`);
+        return false;
+      }
+    };
+
+    try {
+      const { action, recordingId, roomName, type, egressId } = requestData;
+
+      if (action === 'start') {
+        // Start recording
+        if (!recordingId || !roomName) {
+          await safeUpdate(requestRef, {
+            status: 'error',
+            error: 'recordingId and roomName are required',
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+
+        const client = getEgressClient();
+
+        // Validate S3 credentials
+        if (!AWS_S3_BUCKET || !AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+          await safeUpdate(requestRef, {
+            status: 'error',
+            error: 'AWS S3 credentials not configured',
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+
+        // Configure S3 output - always use MP4 for better codec compatibility
+        const filePath = `recordings/${teamId}/${recordingId}`;
+        const fileExtension = 'mp4';
+
+        const fileOutput = new EncodedFileOutput({
+          filepath: `${filePath}.${fileExtension}`,
+          fileType: EncodedFileType.MP4,
+          output: {
+            case: 's3',
+            value: new S3Upload({
+              bucket: AWS_S3_BUCKET,
+              region: AWS_S3_REGION,
+              accessKey: AWS_ACCESS_KEY_ID,
+              secret: AWS_SECRET_ACCESS_KEY,
+            }),
+          },
+        });
+
+        // Start the egress with audio-only option if not video type
+        const egressOptions = type === 'video'
+          ? { file: fileOutput }
+          : { file: fileOutput, audioOnly: true };
+
+        const egressInfo = await client.startRoomCompositeEgress(
+          roomName,
+          egressOptions
+        );
+
+        console.log(`✅ Started recording for room ${roomName}, egressId: ${egressInfo.egressId}`);
+
+        // Try to update both documents - but don't fail if we can't
+        const recordingRef = db.collection('teams').doc(teamId).collection('recordings').doc(recordingId);
+
+        // Update recording document with egress ID
+        await safeUpdate(recordingRef, {
+          egressId: egressInfo.egressId,
+        });
+
+        // Update request with success
+        await safeUpdate(requestRef, {
+          status: 'completed',
+          result: {
+            success: true,
+            egressId: egressInfo.egressId,
+          },
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+      } else if (action === 'stop') {
+        // Stop recording
+        if (!recordingId) {
+          await safeUpdate(requestRef, {
+            status: 'error',
+            error: 'recordingId is required',
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+
+        const client = getEgressClient();
+
+        // If egressId provided, use it directly. Otherwise, find active egress for the room.
+        let targetEgressId = egressId;
+
+        if (!targetEgressId && roomName) {
+          // Query LiveKit for active egress in this room
+          console.log(`No egressId provided, querying LiveKit for active egress in room: ${roomName}`);
+          const egressList = await client.listEgress({ roomName });
+          const activeEgress = egressList.find(e =>
+            e.status === 0 || // EGRESS_STARTING
+            e.status === 1    // EGRESS_ACTIVE
+          );
+          if (activeEgress) {
+            targetEgressId = activeEgress.egressId;
+            console.log(`Found active egress: ${targetEgressId}`);
+          }
+        }
+
+        if (!targetEgressId) {
+          // No active egress found - might have already stopped
+          console.log('No active egress found, treating as already stopped');
+          await safeUpdate(requestRef, {
+            status: 'completed',
+            result: {
+              success: true,
+              message: 'No active recording found (may have already stopped)',
+            },
+            processedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+
+        // Stop the egress
+        await client.stopEgress(targetEgressId);
+
+        // Construct S3 URL
+        const filePath = `recordings/${teamId}/${recordingId}.mp4`;
+        const fileUrl = `https://${AWS_S3_BUCKET}.s3.${AWS_S3_REGION}.amazonaws.com/${filePath}`;
+
+        console.log(`✅ Stopped recording ${recordingId}, egressId: ${targetEgressId}`);
+
+        // Try to update recording document to 'processing' status
+        // The file is being uploaded to S3 asynchronously by LiveKit
+        // LiveKit webhook will update to 'completed' when upload finishes
+        // Or client will poll and mark as completed after timeout
+        const recordingRef = db.collection('teams').doc(teamId).collection('recordings').doc(recordingId);
+        await safeUpdate(recordingRef, {
+          status: 'processing',
+          expectedFileUrl: fileUrl,
+          endedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Update request with success
+        await safeUpdate(requestRef, {
+          status: 'completed',
+          result: {
+            success: true,
+            fileUrl,
+          },
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+      } else {
+        await safeUpdate(requestRef, {
+          status: 'error',
+          error: `Unknown action: ${action}`,
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (error: any) {
+      console.error('Error processing recording request:', error);
+      // Try to update with error, but don't fail if we can't
+      await safeUpdate(requestRef, {
+        status: 'error',
+        error: error.message || 'Unknown error',
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+
+/**
+ * LiveKit Webhook Handler
+ * Receives notifications when:
+ * - Egress (recording) status changes
+ * - Room closes (all participants left) - auto-stops any active recordings
+ */
+export const livekitEgressWebhook = functionsV1.https.onRequest(async (req, res) => {
+    // Verify webhook signature (LiveKit uses JWT for webhooks)
+    // For production, you should verify the webhook signature
+    // const token = req.headers['authorization']?.replace('Bearer ', '');
+
+    try {
+      const event = req.body;
+      console.log('Received LiveKit webhook:', JSON.stringify(event));
+
+      // Handle room closed - auto-stop any active recordings
+      if (event.event === 'room_finished') {
+        const roomName = event.room?.name;
+        console.log(`🚪 Room finished: ${roomName}`);
+
+        if (roomName) {
+          const db = admin.firestore();
+
+          // Find any active recordings for this room
+          const recordingsSnapshot = await db.collectionGroup('recordings')
+            .where('liveKitRoomName', '==', roomName)
+            .where('status', '==', 'recording')
+            .get();
+
+          console.log(`Found ${recordingsSnapshot.size} active recordings for room ${roomName}`);
+
+          for (const recordingDoc of recordingsSnapshot.docs) {
+            const recordingData = recordingDoc.data();
+            const recordingId = recordingDoc.id;
+            const teamId = recordingData.teamId;
+            const egressId = recordingData.egressId;
+
+            console.log(`🛑 Auto-stopping recording ${recordingId} (egressId: ${egressId || 'unknown'})`);
+
+            try {
+              // Try to stop the egress if we have an ID
+              if (egressId) {
+                const client = getEgressClient();
+                try {
+                  await client.stopEgress(egressId);
+                  console.log(`✅ Stopped egress ${egressId}`);
+                } catch (egressError: any) {
+                  // Egress might already be stopped
+                  console.warn(`Could not stop egress ${egressId}: ${egressError.message}`);
+                }
+              } else {
+                // No egressId, try to find and stop any active egress for this room
+                try {
+                  const client = getEgressClient();
+                  const egressList = await client.listEgress({ roomName });
+                  const activeEgress = egressList.find(e => e.status === 0 || e.status === 1);
+                  if (activeEgress) {
+                    await client.stopEgress(activeEgress.egressId);
+                    console.log(`✅ Stopped discovered egress ${activeEgress.egressId}`);
+                  }
+                } catch (listError: any) {
+                  console.warn(`Could not list/stop egress for room ${roomName}: ${listError.message}`);
+                }
+              }
+
+              // Construct expected S3 URL
+              const filePath = `recordings/${teamId}/${recordingId}.mp4`;
+              const fileUrl = `https://${AWS_S3_BUCKET}.s3.${AWS_S3_REGION}.amazonaws.com/${filePath}`;
+
+              // Update recording to processing status
+              await recordingDoc.ref.update({
+                status: 'processing',
+                expectedFileUrl: fileUrl,
+                endedAt: admin.firestore.FieldValue.serverTimestamp(),
+                autoStoppedReason: 'room_closed',
+              });
+
+              console.log(`📝 Recording ${recordingId} marked as processing (auto-stopped)`);
+            } catch (stopError: any) {
+              console.error(`Failed to auto-stop recording ${recordingId}:`, stopError);
+
+              // Mark as failed if we couldn't handle it
+              await recordingDoc.ref.update({
+                status: 'failed',
+                error: `Room closed but failed to stop recording: ${stopError.message}`,
+                endedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+          }
+        }
+      }
+
+      // Handle egress ended - update recording with file info
+      if (event.event === 'egress_ended') {
+        const egressId = event.egressInfo?.egressId;
+        const status = event.egressInfo?.status;
+        const fileResults = event.egressInfo?.fileResults || [];
+
+        if (egressId) {
+          const db = admin.firestore();
+
+          // Find the recording by egressId
+          const recordingsSnapshot = await db.collectionGroup('recordings')
+            .where('egressId', '==', egressId)
+            .limit(1)
+            .get();
+
+          if (!recordingsSnapshot.empty) {
+            const recordingDoc = recordingsSnapshot.docs[0];
+            const recordingRef = recordingDoc.ref;
+
+            // Get file info from results
+            const fileResult = fileResults[0];
+            const fileSize = fileResult?.size || 0;
+            const duration = fileResult?.duration ? Math.floor(fileResult.duration / 1000000000) : 0; // Convert nanoseconds to seconds
+
+            // Construct proper S3 URL for the recording file
+            let fileUrl = null;
+            if (status === 'EGRESS_COMPLETE' && fileResult?.filename) {
+              // S3 URL format: https://{bucket}.s3.{region}.amazonaws.com/{filepath}
+              const filepath = fileResult.filename;
+              fileUrl = `https://${AWS_S3_BUCKET}.s3.${AWS_S3_REGION}.amazonaws.com/${filepath}`;
+              console.log(`📁 Recording file URL: ${fileUrl}`);
+            }
+
+            // Update recording with file info
+            await recordingRef.update({
+              status: status === 'EGRESS_COMPLETE' ? 'completed' : 'failed',
+              fileUrl,
+              fileSize,
+              duration,
+              processedAt: admin.firestore.FieldValue.serverTimestamp(),
+              error: status !== 'EGRESS_COMPLETE' ? `Egress failed with status: ${status}` : null,
+            });
+
+            console.log(`✅ Updated recording ${recordingDoc.id} with egress results`);
+          }
+        }
+      }
+
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error('Error processing LiveKit webhook:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+// ============================================================================
+// PROMO CODE FUNCTIONS
+// ============================================================================
+
+/**
+ * Validate a promo code without redeeming it
+ * Returns code details if valid
+ */
+export const validatePromoCode = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { code } = data;
+
+  if (!code) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'code is required');
+  }
+
+  try {
+    const db = admin.firestore();
+    const normalizedCode = code.toUpperCase().trim();
+
+    // Look up the promo code
+    const codeDoc = await db.collection('promoCodes').doc(normalizedCode).get();
+
+    if (!codeDoc.exists) {
+      return {
+        valid: false,
+        error: 'Invalid promo code',
+      };
+    }
+
+    const codeData = codeDoc.data();
+
+    // Check if code is active
+    if (!codeData?.isActive) {
+      return {
+        valid: false,
+        error: 'This promo code is no longer active',
+      };
+    }
+
+    // Check if code has expired
+    if (codeData.expiresAt && codeData.expiresAt.toDate() < new Date()) {
+      return {
+        valid: false,
+        error: 'This promo code has expired',
+      };
+    }
+
+    // Check redemption limit
+    const remainingRedemptions = codeData.maxRedemptions - (codeData.currentRedemptions || 0);
+    if (remainingRedemptions <= 0) {
+      return {
+        valid: false,
+        error: 'This promo code has reached its usage limit',
+      };
+    }
+
+    return {
+      valid: true,
+      code: normalizedCode,
+      type: codeData.type,
+      durationMonths: codeData.durationMonths,
+      remainingRedemptions,
+    };
+  } catch (error: any) {
+    console.error('Error validating promo code:', error);
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Redeem a promo code for a team
+ * Creates a promoRedemption record and updates team billing
+ */
+export const redeemPromoCode = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { teamId, code } = data;
+
+  if (!teamId || !code) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'teamId and code are required');
+  }
+
+  try {
+    const db = admin.firestore();
+    const normalizedCode = code.toUpperCase().trim();
+    const callerEmail = context.auth.token.email?.toLowerCase() || '';
+    const userId = context.auth.uid;
+
+    // Get the team
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      throw new functionsV1.https.HttpsError('not-found', 'Team not found');
+    }
+
+    const teamData = teamDoc.data();
+
+    // Verify caller is the team owner
+    if (teamData?.createdBy?.toLowerCase() !== callerEmail) {
+      throw new functionsV1.https.HttpsError('permission-denied', 'Only the team owner can redeem promo codes');
+    }
+
+    // Check if team already has an active promo
+    const existingPromo = await db.collection('promoRedemptions')
+      .where('teamId', '==', teamId)
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
+
+    if (!existingPromo.empty) {
+      return {
+        success: false,
+        error: 'This team already has an active promo. You cannot stack promo codes.',
+      };
+    }
+
+    // Validate the promo code
+    const codeDoc = await db.collection('promoCodes').doc(normalizedCode).get();
+
+    if (!codeDoc.exists) {
+      return {
+        success: false,
+        error: 'Invalid promo code',
+      };
+    }
+
+    const codeData = codeDoc.data();
+
+    // Check if code is active
+    if (!codeData?.isActive) {
+      return {
+        success: false,
+        error: 'This promo code is no longer active',
+      };
+    }
+
+    // Check if code has expired
+    if (codeData.expiresAt && codeData.expiresAt.toDate() < new Date()) {
+      return {
+        success: false,
+        error: 'This promo code has expired',
+      };
+    }
+
+    // Check redemption limit
+    if ((codeData.currentRedemptions || 0) >= codeData.maxRedemptions) {
+      return {
+        success: false,
+        error: 'This promo code has reached its usage limit',
+      };
+    }
+
+    // Calculate promo period
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setMonth(expiresAt.getMonth() + codeData.durationMonths);
+
+    // Create redemption record
+    const redemptionId = `${teamId}_${normalizedCode}_${Date.now()}`;
+    const redemption = {
+      id: redemptionId,
+      type: 'welcome',
+      code: normalizedCode,
+      domain: null,
+      userId,
+      userEmail: callerEmail,
+      teamId,
+      teamName: teamData?.name || 'Unknown Team',
+      redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+      durationMonths: codeData.durationMonths,
+      promoStartDate: admin.firestore.Timestamp.fromDate(now),
+      promoExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      status: 'active',
+    };
+
+    // Use a batch to update atomically
+    const batch = db.batch();
+
+    // Create redemption
+    batch.set(db.collection('promoRedemptions').doc(redemptionId), redemption);
+
+    // Increment code redemption count
+    batch.update(codeDoc.ref, {
+      currentRedemptions: FieldValue.increment(1),
+    });
+
+    // Update team billing to reflect promo status
+    batch.update(teamDoc.ref, {
+      'billing.promoActive': true,
+      'billing.promoExpiresAt': admin.firestore.Timestamp.fromDate(expiresAt),
+      'billing.promoType': 'welcome',
+      'billing.promoCode': normalizedCode,
+    });
+
+    await batch.commit();
+
+    console.log(`✅ Promo code ${normalizedCode} redeemed by ${callerEmail} for team ${teamId}`);
+
+    return {
+      success: true,
+      redemption: {
+        ...redemption,
+        redeemedAt: now,
+        promoStartDate: now,
+        promoExpiresAt: expiresAt,
+      },
+    };
+  } catch (error: any) {
+    console.error('Error redeeming promo code:', error);
+    if (error instanceof functionsV1.https.HttpsError) {
+      throw error;
+    }
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Check if an email domain is a partner domain
+ * Called on login to auto-detect partnerships
+ */
+export const checkPartnerDomain = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const email = context.auth.token.email?.toLowerCase() || '';
+
+  if (!email) {
+    return {
+      isPartner: false,
+      error: 'No email found',
+    };
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // Extract domain from email
+    const domain = email.split('@')[1];
+
+    if (!domain) {
+      return {
+        isPartner: false,
+        error: 'Invalid email format',
+      };
+    }
+
+    // Look up the domain
+    const domainDoc = await db.collection('partnerDomains').doc(domain).get();
+
+    if (!domainDoc.exists) {
+      return {
+        isPartner: false,
+      };
+    }
+
+    const domainData = domainDoc.data();
+
+    // Check if partnership is active
+    if (!domainData?.isActive) {
+      return {
+        isPartner: false,
+      };
+    }
+
+    return {
+      isPartner: true,
+      domain,
+      partnerName: domainData.partnerName,
+      durationMonths: domainData.durationMonths,
+    };
+  } catch (error: any) {
+    console.error('Error checking partner domain:', error);
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Redeem a partner domain promo for a team
+ * Called automatically when team owner has a partner domain email
+ */
+export const redeemPartnerPromo = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { teamId } = data;
+
+  if (!teamId) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'teamId is required');
+  }
+
+  try {
+    const db = admin.firestore();
+    const callerEmail = context.auth.token.email?.toLowerCase() || '';
+    const userId = context.auth.uid;
+
+    // Extract domain from email
+    const domain = callerEmail.split('@')[1];
+
+    if (!domain) {
+      return {
+        success: false,
+        error: 'Invalid email format',
+      };
+    }
+
+    // Check if domain is a partner
+    const domainDoc = await db.collection('partnerDomains').doc(domain).get();
+
+    if (!domainDoc.exists || !domainDoc.data()?.isActive) {
+      return {
+        success: false,
+        error: 'Your email domain is not a partner',
+      };
+    }
+
+    const domainData = domainDoc.data();
+
+    // Get the team
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      throw new functionsV1.https.HttpsError('not-found', 'Team not found');
+    }
+
+    const teamData = teamDoc.data();
+
+    // Verify caller is the team owner
+    if (teamData?.createdBy?.toLowerCase() !== callerEmail) {
+      return {
+        success: false,
+        error: 'Only the team owner can redeem partner promos',
+      };
+    }
+
+    // Check if team already has an active promo
+    const existingPromo = await db.collection('promoRedemptions')
+      .where('teamId', '==', teamId)
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
+
+    if (!existingPromo.empty) {
+      return {
+        success: false,
+        error: 'This team already has an active promo',
+      };
+    }
+
+    // Calculate promo period
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setMonth(expiresAt.getMonth() + (domainData?.durationMonths || 12));
+
+    // Create redemption record
+    const redemptionId = `${teamId}_partner_${domain}_${Date.now()}`;
+    const redemption = {
+      id: redemptionId,
+      type: 'partnership',
+      code: null,
+      domain,
+      userId,
+      userEmail: callerEmail,
+      teamId,
+      teamName: teamData?.name || 'Unknown Team',
+      redeemedAt: admin.firestore.FieldValue.serverTimestamp(),
+      durationMonths: domainData?.durationMonths || 12,
+      promoStartDate: admin.firestore.Timestamp.fromDate(now),
+      promoExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      status: 'active',
+    };
+
+    // Use a batch to update atomically
+    const batch = db.batch();
+
+    // Create redemption
+    batch.set(db.collection('promoRedemptions').doc(redemptionId), redemption);
+
+    // Update team billing to reflect promo status
+    batch.update(teamDoc.ref, {
+      'billing.promoActive': true,
+      'billing.promoExpiresAt': admin.firestore.Timestamp.fromDate(expiresAt),
+      'billing.promoType': 'partnership',
+      'billing.promoPartnerDomain': domain,
+      'billing.promoPartnerName': domainData?.partnerName,
+    });
+
+    await batch.commit();
+
+    console.log(`✅ Partner promo for ${domain} redeemed by ${callerEmail} for team ${teamId}`);
+
+    return {
+      success: true,
+      redemption: {
+        ...redemption,
+        redeemedAt: now,
+        promoStartDate: now,
+        promoExpiresAt: expiresAt,
+      },
+      partnerName: domainData?.partnerName,
+    };
+  } catch (error: any) {
+    console.error('Error redeeming partner promo:', error);
+    if (error instanceof functionsV1.https.HttpsError) {
+      throw error;
+    }
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Get active promo for a team
+ * Returns promo details if one is active
+ */
+export const getActivePromo = functionsV1.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { teamId } = data;
+
+  if (!teamId) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'teamId is required');
+  }
+
+  try {
+    const db = admin.firestore();
+
+    // Find active promo for this team
+    const promoSnapshot = await db.collection('promoRedemptions')
+      .where('teamId', '==', teamId)
+      .where('status', '==', 'active')
+      .limit(1)
+      .get();
+
+    if (promoSnapshot.empty) {
+      return {
+        hasActivePromo: false,
+      };
+    }
+
+    const promoDoc = promoSnapshot.docs[0];
+    const promoData = promoDoc.data();
+
+    // Check if promo has actually expired
+    const expiresAt = promoData.promoExpiresAt?.toDate?.() || promoData.promoExpiresAt;
+    const now = new Date();
+
+    if (expiresAt && new Date(expiresAt) < now) {
+      // Promo has expired, update status
+      await promoDoc.ref.update({ status: 'expired' });
+
+      // Also update team billing
+      const teamRef = db.collection('teams').doc(teamId);
+      await teamRef.update({
+        'billing.promoActive': false,
+      });
+
+      return {
+        hasActivePromo: false,
+        expired: true,
+      };
+    }
+
+    // Calculate days remaining
+    const daysRemaining = expiresAt
+      ? Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    return {
+      hasActivePromo: true,
+      promo: {
+        type: promoData.type,
+        code: promoData.code,
+        domain: promoData.domain,
+        partnerName: promoData.partnerName,
+        durationMonths: promoData.durationMonths,
+        promoStartDate: promoData.promoStartDate?.toDate?.() || promoData.promoStartDate,
+        promoExpiresAt: expiresAt,
+        daysRemaining,
+        isExpiringSoon: daysRemaining <= 7,
+      },
+    };
+  } catch (error: any) {
+    console.error('Error getting active promo:', error);
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Scheduled function to check and expire promos
+ * Runs daily at midnight UTC
+ */
+export const checkPromoExpiration = functionsV1.pubsub
+  .schedule('0 0 * * *')  // Run daily at midnight UTC
+  .timeZone('UTC')
+  .onRun(async () => {
+    console.log('🔄 Running promo expiration check...');
+
+    const db = admin.firestore();
+    const now = admin.firestore.Timestamp.now();
+
+    try {
+      // Find all active promos that have expired
+      const expiredPromos = await db.collection('promoRedemptions')
+        .where('status', '==', 'active')
+        .where('promoExpiresAt', '<=', now)
+        .get();
+
+      let expiredCount = 0;
+
+      for (const promoDoc of expiredPromos.docs) {
+        const promoData = promoDoc.data();
+
+        // Update promo status to expired
+        await promoDoc.ref.update({ status: 'expired' });
+
+        // Update team billing
+        const teamId = promoData.teamId;
+        if (teamId) {
+          const teamRef = db.collection('teams').doc(teamId);
+          await teamRef.update({
+            'billing.promoActive': false,
+          });
+
+          // Create notification for team owner
+          const teamDoc = await teamRef.get();
+          const teamData = teamDoc.data();
+          const ownerEmail = teamData?.createdBy;
+
+          if (ownerEmail) {
+            await db.collection('teams').doc(teamId).collection('notifications').add({
+              type: 'promo_expired',
+              title: 'Promo Period Ended',
+              message: promoData.type === 'partnership'
+                ? `Your ${promoData.partnerName || 'partner'} promo has expired. Upgrade to Pro to continue using premium features.`
+                : 'Your promo code has expired. Upgrade to Pro to continue using premium features.',
+              recipientEmail: ownerEmail,
+              senderEmail: 'system',
+              senderName: 'System',
+              createdAt: now,
+              read: false,
+            });
+          }
+        }
+
+        expiredCount++;
+        console.log(`⏰ Promo expired for team ${promoData.teamId}`);
+      }
+
+      console.log(`✅ Promo expiration check complete. Expired ${expiredCount} promo(s).`);
+      return null;
+    } catch (error) {
+      console.error('Error checking promo expiration:', error);
+      throw error;
     }
   });

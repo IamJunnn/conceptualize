@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { TeamDriveStorage } from '../../services/teamDriveStorage'
 import './ImageViewer.css'
 
 interface ImageViewerProps {
   filePath: string
   fileName: string
   rootPath?: string
+  fileId?: string
+  storageBackend?: TeamDriveStorage
 }
 
-function ImageViewer({ filePath, fileName, rootPath }: ImageViewerProps) {
+function ImageViewer({ filePath, fileName, rootPath, fileId, storageBackend }: ImageViewerProps) {
   const [imageSrc, setImageSrc] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -35,17 +38,40 @@ function ImageViewer({ filePath, fileName, rootPath }: ImageViewerProps) {
   }
 
   useEffect(() => {
-    try {
-      // Convert file path to secure URL that Tauri can load
-      const secureUrl = convertFileSrc(filePath)
-      setImageSrc(secureUrl)
-      setIsLoading(false)
-    } catch (err) {
-      console.error('Failed to load image:', err)
-      setError(`Failed to load image: ${err}`)
-      setIsLoading(false)
+    const loadImage = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        // Team mode: load from Google Drive
+        if (storageBackend && fileId) {
+          const blob = await storageBackend.downloadFileAsBlob(fileId)
+          const blobUrl = URL.createObjectURL(blob)
+          setImageSrc(blobUrl)
+          setIsLoading(false)
+          return
+        }
+
+        // Local mode: use Tauri's convertFileSrc
+        const secureUrl = convertFileSrc(filePath)
+        setImageSrc(secureUrl)
+        setIsLoading(false)
+      } catch (err) {
+        console.error('Failed to load image:', err)
+        setError(`Failed to load image: ${err}`)
+        setIsLoading(false)
+      }
     }
-  }, [filePath])
+
+    loadImage()
+
+    // Cleanup blob URL when component unmounts or fileId changes
+    return () => {
+      if (imageSrc && imageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(imageSrc)
+      }
+    }
+  }, [filePath, fileId, storageBackend])
 
   const handleZoomIn = () => {
     setZoom(prev => Math.min(prev + 25, 500))

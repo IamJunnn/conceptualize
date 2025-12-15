@@ -62,7 +62,7 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  background: linear-gradient(135deg, #64c8ca, #b298dc);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -71,10 +71,20 @@
   color: #1e1e1e;
   border: 2px solid #2d2d2d;
   margin-left: -8px;
+  overflow: hidden;
+  padding: 2px;
+  box-sizing: border-box;
 }
 
 .mini-avatar:first-child {
   margin-left: 0;
+}
+
+.mini-avatar .avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .more-count {
@@ -192,7 +202,7 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  background: linear-gradient(135deg, #64c8ca, #b298dc);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -200,6 +210,16 @@
   font-weight: 600;
   color: #1e1e1e;
   flex-shrink: 0;
+  overflow: hidden;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.assignee-avatar .avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 /* Info */

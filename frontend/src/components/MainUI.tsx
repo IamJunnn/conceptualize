@@ -1,17 +1,28 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { writeFile } from '@tauri-apps/plugin-fs'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
 import TitleBar from './UI/TitleBar'
 import IconRail from './UI/IconRail'
 import GraphView from './Graph/GraphView'
 import ContextMenu from './UI/ContextMenu'
 import HelpModal from './UI/HelpModal'
+import ConfirmModal from './UI/ConfirmModal'
 import { TabBar, OpenFile } from './UI/TabBar'
 import { DropZoneOverlay } from './UI/DropZoneOverlay'
 import { useDragDrop, EditorPane } from '../contexts/DragDropContext'
 import { getFilesWithIncomingLinks } from '../utils/graphUtils'
 import { useAuth } from '../contexts/AuthContext'
 import { getUserWorkspace, Workspace, getMemberRole, WorkspaceRole } from '../services/workspaceService'
+import {
+  LocalWhiteboard,
+  getLocalWhiteboards,
+  createUntitledLocalWhiteboard,
+  renameLocalWhiteboard,
+  deleteLocalWhiteboard,
+} from '../services/localWhiteboardService'
+import { WhiteboardMeta } from '../services/whiteboardTypes'
 import './MainUI.css'
 
 // Lazy load heavy components for better initial load performance
@@ -22,6 +33,7 @@ const SettingsPanel = lazy(() => import('./Settings/SettingsPanel'))
 const DashboardPanel = lazy(() => import('./Dashboard/DashboardPanel'))
 const AdminDashboard = lazy(() => import('./Workspace/AdminDashboard'))
 const LeaderDashboard = lazy(() => import('./Workspace/LeaderDashboard'))
+const LocalWhiteboardPanel = lazy(() => import('./Whiteboard/LocalWhiteboardPanel'))
 
 // Development mode flag
 const isDev = import.meta.env.DEV
@@ -95,6 +107,16 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [userRole, setUserRole] = useState<WorkspaceRole | null>(null)
   const { user } = useAuth()
 
+  // Whiteboard state for local mode
+  const [localWhiteboards, setLocalWhiteboards] = useState<LocalWhiteboard[]>([])
+  const [activeWhiteboardId, setActiveWhiteboardId] = useState<string | null>(null)
+  const [renamingWhiteboardId, setRenamingWhiteboardId] = useState<string | null>(null)
+  const [whiteboardContextMenu, setWhiteboardContextMenu] = useState<{
+    x: number;
+    y: number;
+    whiteboard: LocalWhiteboard;
+  } | null>(null)
+
   // Helper function to extract all paths from file tree
   // Memoize getAllPaths to avoid recomputing on every render
   const allPaths = useMemo(() => {
@@ -131,6 +153,85 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     isDraggingRef.current = isDragging;
     dropZoneRef.current = dropZone;
   }, [isDragging, dropZone]);
+
+  // Tauri native file drop handling - register at MainUI level so drag visual works
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupTauriDragDrop = async () => {
+      try {
+        const appWindow = getCurrentWindow();
+        unlisten = await appWindow.onDragDropEvent((event) => {
+          if (isDev) console.log('[TAURI DRAG MainUI] Event:', event.payload.type);
+
+          // Check if position is over a specific element
+          const checkIsOverElement = (position: { x: number; y: number } | undefined, selector: string): boolean => {
+            if (!position) return false;
+            const element = document.querySelector(selector);
+            if (!element) return false;
+            const rect = element.getBoundingClientRect();
+            return (
+              position.x >= rect.left &&
+              position.x <= rect.right &&
+              position.y >= rect.top &&
+              position.y <= rect.bottom
+            );
+          };
+
+          if (event.payload.type === 'enter' || event.payload.type === 'over') {
+            const position = event.payload.position;
+            const isOverSidebar = checkIsOverElement(position, '.sidebar-content');
+
+            // Emit custom event for sidebar drag indicator
+            window.dispatchEvent(new CustomEvent('sidebar-external-drag', {
+              detail: { isDragging: isOverSidebar, position }
+            }));
+          } else if (event.payload.type === 'leave') {
+            // User left the window - hide all overlays
+            window.dispatchEvent(new CustomEvent('sidebar-external-drag', { detail: { isDragging: false } }));
+          } else if (event.payload.type === 'drop') {
+            // Files were dropped - hide sidebar indicator
+            window.dispatchEvent(new CustomEvent('sidebar-external-drag', { detail: { isDragging: false } }));
+
+            const dropPosition = event.payload.position;
+            const filePaths = event.payload.paths;
+
+            // Check if drop is over the sidebar - if so, dispatch to sidebar handler
+            if (dropPosition) {
+              const sidebarElement = document.querySelector('.sidebar-content');
+              if (sidebarElement) {
+                const sidebarRect = sidebarElement.getBoundingClientRect();
+                const isOverSidebar = (
+                  dropPosition.x >= sidebarRect.left &&
+                  dropPosition.x <= sidebarRect.right &&
+                  dropPosition.y >= sidebarRect.top &&
+                  dropPosition.y <= sidebarRect.bottom
+                );
+                if (isOverSidebar) {
+                  if (isDev) console.log('[TAURI DRAG MainUI] Drop is over sidebar, dispatching to sidebar handler');
+                  window.dispatchEvent(new CustomEvent('sidebar-external-drop', {
+                    detail: { paths: filePaths, position: dropPosition }
+                  }));
+                  return;
+                }
+              }
+            }
+          }
+        });
+        if (isDev) console.log('[TAURI DRAG MainUI] Event listener registered');
+      } catch (err) {
+        console.error('[TAURI DRAG MainUI] Failed to setup drag/drop:', err);
+      }
+    };
+
+    setupTauriDragDrop();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
 
   // Load workspace for team mode
   useEffect(() => {
@@ -250,6 +351,94 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     loadFileTree()
     updateFilesWithIncomingLinks()
   }, [loadFileTree, updateFilesWithIncomingLinks])
+
+  // Load whiteboards for local mode
+  const loadWhiteboards = useCallback(async () => {
+    try {
+      const wbs = await getLocalWhiteboards(rootPath)
+      setLocalWhiteboards(wbs)
+      // Auto-select first whiteboard if none selected
+      if (!activeWhiteboardId && wbs.length > 0) {
+        setActiveWhiteboardId(wbs[0].id)
+      }
+    } catch (error) {
+      console.error('Failed to load whiteboards:', error)
+    }
+  }, [rootPath, activeWhiteboardId])
+
+  useEffect(() => {
+    loadWhiteboards()
+  }, [loadWhiteboards])
+
+  // Whiteboard handlers for local mode
+  const handleCreateWhiteboard = useCallback(async () => {
+    try {
+      const newWb = await createUntitledLocalWhiteboard(rootPath)
+      setLocalWhiteboards(prev => [newWb, ...prev])
+      setActiveWhiteboardId(newWb.id)
+      // Navigate to whiteboard tab
+      handleSelectFile('special://whiteboard', newWb.name)
+    } catch (error) {
+      console.error('Failed to create whiteboard:', error)
+    }
+  }, [rootPath])
+
+  const handleSelectWhiteboard = useCallback((whiteboardId: string) => {
+    setActiveWhiteboardId(whiteboardId)
+    const wb = localWhiteboards.find(w => w.id === whiteboardId)
+    if (wb) {
+      handleSelectFile('special://whiteboard', wb.name)
+    }
+  }, [localWhiteboards])
+
+  const handleWhiteboardContextMenu = useCallback((e: React.MouseEvent, whiteboard: LocalWhiteboard) => {
+    e.preventDefault()
+    setWhiteboardContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      whiteboard,
+    })
+  }, [])
+
+  const handleWhiteboardRename = useCallback(async (id: string, newName: string) => {
+    try {
+      await renameLocalWhiteboard(rootPath, id, newName.trim())
+      setLocalWhiteboards(prev =>
+        prev.map(wb => wb.id === id ? { ...wb, name: newName.trim() } : wb)
+      )
+      setRenamingWhiteboardId(null)
+    } catch (error) {
+      console.error('Failed to rename whiteboard:', error)
+    }
+  }, [rootPath])
+
+  const handleWhiteboardDelete = useCallback(async (id: string) => {
+    try {
+      await deleteLocalWhiteboard(rootPath, id)
+      setLocalWhiteboards(prev => prev.filter(wb => wb.id !== id))
+      if (activeWhiteboardId === id) {
+        const remaining = localWhiteboards.filter(wb => wb.id !== id)
+        setActiveWhiteboardId(remaining.length > 0 ? remaining[0].id : null)
+      }
+      setWhiteboardContextMenu(null)
+    } catch (error) {
+      console.error('Failed to delete whiteboard:', error)
+    }
+  }, [rootPath, activeWhiteboardId, localWhiteboards])
+
+  // Convert LocalWhiteboard to WhiteboardMeta for UnifiedSidebar
+  const whiteboardsForSidebar: WhiteboardMeta[] = useMemo(() => {
+    return localWhiteboards.map(wb => ({
+      id: wb.id,
+      teamId: 'local', // Dummy value for local mode
+      name: wb.name,
+      createdBy: 'local',
+      createdByName: 'You',
+      createdAt: new Date(wb.createdAt),
+      updatedAt: new Date(wb.updatedAt),
+      thumbnail: wb.thumbnail,
+    }))
+  }, [localWhiteboards])
 
   // Refs for keyboard shortcuts to avoid re-registering event listener
   const activeTabRef = useRef(activeTab)
@@ -574,7 +763,6 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           await loadFileTree()
           await updateFilesWithIncomingLinks()
           if (isDev) console.log('Created file:', result.path)
-          // TODO: Open the new file in editor
         } else {
           console.error('Failed to create file:', result.error)
           alert(`Failed to create file: ${result.error}`)
@@ -717,7 +905,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
   }
 
-  const handleChangeFolderPath = async () => {
+  const _handleChangeFolderPath = async () => {
     try {
       const newFolder = await invoke<string | null>('select_folder')
       if (newFolder && onRootPathChange) {
@@ -730,6 +918,13 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       console.error('Error selecting folder:', error)
       alert('Failed to select folder')
     }
+  }
+  void _handleChangeFolderPath // Reserved for future use
+
+  // Wrapper for TitleBar search results that adapts the line parameter
+  const handleSearchResultClick = (filePath: string, fileName: string, _line?: number) => {
+    // Note: line parameter is not currently used but preserved for future content-based search
+    handleSelectFile(filePath, fileName)
   }
 
   const handleGuideOpen = (guideName: 'shortcuts' | 'markdown') => {
@@ -771,6 +966,54 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     }
   }
 
+  // Handle dropping external files (from OS file explorer) onto folders
+  const handleDropExternalFiles = async (files: File[], destinationPath: string) => {
+    try {
+      if (isDev) console.log('📂 Saving external files to:', destinationPath, files.map(f => f.name))
+
+      for (const file of files) {
+        // Read file as ArrayBuffer
+        const arrayBuffer = await file.arrayBuffer()
+        const uint8Array = new Uint8Array(arrayBuffer)
+
+        // Construct destination file path
+        const separator = destinationPath.includes('/') ? '/' : '\\'
+        const destFilePath = `${destinationPath}${separator}${file.name}`
+
+        if (isDev) console.log('   💾 Writing:', file.name, 'to', destFilePath)
+
+        // Write the file
+        await writeFile(destFilePath, uint8Array)
+      }
+
+      // Refresh the file tree to show the new files
+      await loadFileTree()
+
+      if (isDev) console.log('✅ All files saved successfully!')
+    } catch (error) {
+      console.error('❌ Error saving external files:', error)
+      alert(`Failed to save files: ${error}`)
+    }
+  }
+
+  // Handle dropping external directories (from OS file explorer) onto folders
+  const handleDropExternalDirectory = async (sourcePath: string, destinationPath: string) => {
+    try {
+      if (isDev) console.log('📂 Copying directory:', sourcePath, 'to:', destinationPath)
+
+      // Use Tauri command to copy the directory recursively
+      await invoke('copy_directory', { source: sourcePath, destination: destinationPath })
+
+      // Refresh the file tree to show the new folder
+      await loadFileTree()
+
+      if (isDev) console.log('✅ Directory copied successfully!')
+    } catch (error) {
+      console.error('❌ Error copying directory:', error)
+      alert(`Failed to copy folder: ${error}`)
+    }
+  }
+
   const handleOpenInSecondPane = (filePath: string, fileName: string) => {
     if (isDev) {
       console.log('Opening in second pane:', filePath, fileName)
@@ -798,23 +1041,11 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   }
 
   const handleCloseSplitView = (filesToTransfer?: OpenFile[], tabToActivate?: string) => {
-    console.log('[CLOSE SPLIT] 🔄 Closing split view')
-
     // Use provided files or fall back to current state
     const finalFiles = filesToTransfer || leftPaneFiles;
     const finalTab = tabToActivate || leftPaneTab;
 
-    console.log('[CLOSE SPLIT] 📋 Current state:', {
-      leftPaneFiles: leftPaneFiles.map(f => f.name),
-      leftPaneTab,
-      rightPaneFiles: rightPaneFiles.map(f => f.name),
-      rightPaneTab,
-      filesToTransfer: filesToTransfer?.map(f => f.name),
-      tabToActivate
-    });
-
     // Transfer left pane files back to single pane
-    console.log('[CLOSE SPLIT] ➡️ Transferring files to single pane:', finalFiles.map(f => f.name))
     setOpenFiles(finalFiles)
     setActiveTab(finalTab)
 
@@ -825,8 +1056,6 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     setRightPaneFiles([])
     setRightPaneTab('graph')
     setActivePane('left')
-
-    console.log('[CLOSE SPLIT] ✅ Split view closed')
   }
 
   // Handle tab drop
@@ -838,7 +1067,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
     if (isDev) console.log('Handling tab drop:', { draggedTab, dropZone: currentDropZone });
 
-    const { filePath, fileName, sourcePane, id: fileId } = draggedTab;
+    const { filePath, fileName, sourcePane } = draggedTab;
 
     // Only handle if dropping on left or right edge
     if (!currentDropZone || (currentDropZone !== 'left' && currentDropZone !== 'right')) {
@@ -887,24 +1116,14 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           // Drop on LEFT pane
           if (sourcePane === 'right') {
             // Move from right to left
-            console.log('[DRAG] 📦 Moving from RIGHT to LEFT');
-            console.log('[DRAG] 📋 Current state:', {
-              leftPaneFiles: leftPaneFiles.map(f => f.name),
-              rightPaneFiles: rightPaneFiles.map(f => f.name),
-              draggedFile: fileName
-            });
-
             const newRightFiles = rightPaneFiles.filter(f => f.path !== filePath);
-            console.log('[DRAG] ➡️ New right pane files after removal:', newRightFiles.map(f => f.name));
             setRightPaneFiles(newRightFiles);
 
             const existingInLeft = leftPaneFiles.find(f => f.path === filePath);
-            console.log('[DRAG] 🔍 File already exists in left?', !!existingInLeft);
 
             let newLeftFiles = leftPaneFiles;
             if (!existingInLeft) {
               newLeftFiles = [...leftPaneFiles, { path: filePath, name: fileName }];
-              console.log('[DRAG] ⬅️ New left pane files after adding:', newLeftFiles.map(f => f.name));
               setLeftPaneFiles(newLeftFiles);
             }
             setLeftPaneTab(filePath);
@@ -912,8 +1131,6 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
             // Close split if right pane is empty
             if (newRightFiles.length === 0) {
-              console.log('[DRAG] ⚠️ Right pane is now empty - closing split view!');
-              console.log('[DRAG] 📊 Passing updated files to handleCloseSplitView:', newLeftFiles.map(f => f.name));
               // Pass the updated files directly to avoid stale state
               handleCloseSplitView(newLeftFiles, filePath);
             }
@@ -948,7 +1165,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     <div className="main-ui">
       {/* Custom Title Bar */}
       <TitleBar
-        onSearchResultClick={handleSelectFile}
+        onSearchResultClick={handleSearchResultClick}
         onGuideOpen={handleGuideOpen}
         rootPath={rootPath}
       />
@@ -960,12 +1177,23 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           onGraphClick={() => handleSelectFile('special://graph', 'Graph')}
           onTodosClick={() => handleSelectFile('special://todos', 'Todos')}
           onTimelineClick={() => handleSelectFile('special://timeline', 'Timeline')}
+          onWhiteboardClick={async () => {
+            // If no whiteboards exist, auto-create one
+            if (localWhiteboards.length === 0) {
+              await handleCreateWhiteboard()
+            } else {
+              const activeWb = localWhiteboards.find(wb => wb.id === activeWhiteboardId)
+              const wbName = activeWb?.name || localWhiteboards[0]?.name || 'Whiteboard'
+              handleSelectFile('special://whiteboard', wbName)
+            }
+          }}
           onSettingsClick={() => setShowSettings(true)}
           activeItem={
             activeTab === 'special://dashboard' ? 'dashboard' :
             activeTab === 'special://graph' ? 'graph' :
             activeTab === 'special://todos' ? 'todos' :
             activeTab === 'special://timeline' ? 'timeline' :
+            activeTab === 'special://whiteboard' ? 'whiteboard' :
             showSettings ? 'settings' : null
           }
         />
@@ -983,7 +1211,22 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             refreshFileTree={loadFileTree}
             onContextMenu={handleContextMenu}
             onMoveItem={handleMoveItem}
+            onDropExternalFiles={handleDropExternalFiles}
+            onDropExternalDirectory={handleDropExternalDirectory}
             filesWithIncomingLinks={filesWithIncomingLinks}
+            // Whiteboard section props for local mode
+            showWhiteboardSection={activeTab === 'special://whiteboard'}
+            whiteboards={whiteboardsForSidebar}
+            activeWhiteboardId={activeWhiteboardId}
+            onSelectWhiteboard={handleSelectWhiteboard}
+            onCreateWhiteboard={handleCreateWhiteboard}
+            onWhiteboardContextMenu={(e, wb) => {
+              const localWb = localWhiteboards.find(w => w.id === wb.id)
+              if (localWb) handleWhiteboardContextMenu(e, localWb)
+            }}
+            renamingWhiteboardId={renamingWhiteboardId}
+            onWhiteboardRenameSubmit={handleWhiteboardRename}
+            onWhiteboardRenameCancel={() => setRenamingWhiteboardId(null)}
           />
         </div>
 
@@ -1041,6 +1284,11 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               {activeTab === 'special://timeline' && (
                 <Suspense fallback={<LoadingFallback />}>
                   <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />
+                </Suspense>
+              )}
+              {activeTab === 'special://whiteboard' && (
+                <Suspense fallback={<LoadingFallback />}>
+                  <LocalWhiteboardPanel rootPath={rootPath} fileTree={fileTree} selectedWhiteboardId={activeWhiteboardId} onWhiteboardsChange={setLocalWhiteboards} />
                 </Suspense>
               )}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
@@ -1117,6 +1365,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 {leftPaneTab === 'special://graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'left')} onNodeContextMenu={handleGraphNodeContextMenu} onCreateNote={() => handleCreateNote(rootPath)} onCreateFolder={() => handleCreateFolder(rootPath)} />}
                 {leftPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'left')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {leftPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
+                {leftPaneTab === 'special://whiteboard' && <LocalWhiteboardPanel rootPath={rootPath} fileTree={fileTree} selectedWhiteboardId={activeWhiteboardId} onWhiteboardsChange={setLocalWhiteboards} />}
                 {leftPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return leftPaneTab === file.path && (
@@ -1195,6 +1444,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
                 {rightPaneTab === 'special://graph' && <GraphView key={graphKey} rootPath={rootPath} onFileOpen={(path, name) => handleSelectFile(path, name, 'right')} onNodeContextMenu={handleGraphNodeContextMenu} />}
                 {rightPaneTab === 'special://todos' && <NoteTodosView key={todoKey} rootPath={rootPath} onOpenFile={(path, name) => handleSelectFile(path, name, 'right')} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
                 {rightPaneTab === 'special://timeline' && <TodoPanel key={todoKey} initialView="timeline" rootPath={rootPath} onTodoCreated={() => setTodoKey(prev => prev + 1)} />}
+                {rightPaneTab === 'special://whiteboard' && <LocalWhiteboardPanel rootPath={rootPath} fileTree={fileTree} selectedWhiteboardId={activeWhiteboardId} onWhiteboardsChange={setLocalWhiteboards} />}
                 {rightPaneFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                   const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt')
                   return rightPaneTab === file.path && (
@@ -1249,6 +1499,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           itemPath={contextMenu.itemPath}
           itemType={contextMenu.itemType}
           itemName={contextMenu.itemName}
+          mode="local"
           onClose={() => setContextMenu(null)}
           onDelete={handleDeleteItem}
           onRename={handleRenameItem}
@@ -1262,34 +1513,47 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmation && (
-        <div className="delete-modal-overlay">
-          <div className="delete-modal">
-            <div className="delete-modal-header">
-              <h3>Delete {deleteConfirmation.itemName.endsWith('.md') ? 'Note' : 'Item'}</h3>
-            </div>
-            <div className="delete-modal-body">
-              <p>Are you sure you want to delete "{deleteConfirmation.itemName}"?</p>
-              <p className="delete-modal-hint">This action cannot be undone.</p>
-            </div>
-            <div className="delete-modal-footer">
-              <button
-                className="delete-modal-cancel"
-                onClick={() => setDeleteConfirmation(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="delete-modal-confirm"
-                onClick={confirmDeleteItem}
-              >
-                Delete
-              </button>
-            </div>
+      {/* Whiteboard Context Menu */}
+      {whiteboardContextMenu && (
+        <div
+          className="whiteboard-context-menu-overlay"
+          onClick={() => setWhiteboardContextMenu(null)}
+        >
+          <div
+            className="whiteboard-context-menu"
+            style={{ left: whiteboardContextMenu.x, top: whiteboardContextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setRenamingWhiteboardId(whiteboardContextMenu.whiteboard.id)
+                setWhiteboardContextMenu(null)
+              }}
+            >
+              Rename
+            </button>
+            <button
+              className="delete"
+              onClick={() => handleWhiteboardDelete(whiteboardContextMenu.whiteboard.id)}
+            >
+              Delete
+            </button>
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteConfirmation}
+        title={`Delete ${deleteConfirmation?.itemName.endsWith('.md') ? 'Note' : 'Item'}`}
+        message={`Are you sure you want to delete "${deleteConfirmation?.itemName}"?`}
+        hint="This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteItem}
+        onCancel={() => setDeleteConfirmation(null)}
+        isDanger
+      />
 
       {/* Help Modal */}
       {activeGuide && (
@@ -1304,10 +1568,6 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         <Suspense fallback={<LoadingFallback />}>
           <SettingsPanel
             onClose={() => setShowSettings(false)}
-            onOpenUserManagement={() => {
-              setShowSettings(false);
-              setShowAdminDashboard(true);
-            }}
             onModeSwitch={() => {
               setShowSettings(false);
               window.location.reload();

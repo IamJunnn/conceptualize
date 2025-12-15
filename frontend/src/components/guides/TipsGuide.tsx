@@ -1,11 +1,12 @@
 import React from 'react';
+import { Target, Lightbulb, Flame, BarChart3, Link2 } from 'lucide-react';
 
 const TipsGuide: React.FC = () => {
   return (
     <>
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">🎯</span>
+          <Target size={16} className="help-section-icon" />
           Getting Started
         </div>
         <ul className="help-list">
@@ -18,7 +19,7 @@ const TipsGuide: React.FC = () => {
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">💡</span>
+          <Lightbulb size={16} className="help-section-icon" />
           Pro Tips
         </div>
         <ul className="help-list">
@@ -32,12 +33,12 @@ const TipsGuide: React.FC = () => {
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">🔥</span>
+          <Flame size={16} className="help-section-icon" />
           Power Features
         </div>
 
         <div className="help-example">
-          <div className="help-example-title">📊 Graph View Interactions</div>
+          <div className="help-example-title"><BarChart3 size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />Graph View Interactions</div>
           <div className="help-example-content">
             <ul className="help-list">
               <li>Click a node to highlight its connections</li>
@@ -50,7 +51,7 @@ const TipsGuide: React.FC = () => {
         </div>
 
         <div className="help-example">
-          <div className="help-example-title">🔗 Smart Linking</div>
+          <div className="help-example-title"><Link2 size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />Smart Linking</div>
           <div className="help-example-content">
             <ul className="help-list">
               <li>Type [[Note Name]] to link to existing notes</li>
@@ -116,8 +117,8 @@ const TipsGuide: React.FC = () => {
       </div>
 
       <div className="help-tip">
-        <div className="help-tip-title">
-          💡 Remember
+        <div className="help-tip-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Lightbulb size={16} /> Remember
         </div>
         <div className="help-tip-content">
           The power of Conceptualize comes from <strong>linking your thoughts</strong>. Don't just create isolated notes - connect them with [[wiki links]] and watch your knowledge graph grow!

@@ -1,11 +1,12 @@
 import React from 'react';
+import { Heading, Sparkles, Link2, Table, Minus, Lightbulb } from 'lucide-react';
 
 const MarkdownGuide: React.FC = () => {
   return (
     <>
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">📝</span>
+          <Heading size={16} className="help-section-icon" />
           Headings
         </div>
         <div className="help-code">
@@ -20,7 +21,7 @@ const MarkdownGuide: React.FC = () => {
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">✨</span>
+          <Sparkles size={16} className="help-section-icon" />
           Text Formatting
         </div>
         <div className="help-code">
@@ -36,7 +37,7 @@ const MarkdownGuide: React.FC = () => {
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">🔗</span>
+          <Link2 size={16} className="help-section-icon" />
           Links
         </div>
         <div className="help-example">
@@ -108,7 +109,7 @@ function hello() {'{'}
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">📊</span>
+          <Table size={16} className="help-section-icon" />
           Tables
         </div>
         <div className="help-code">
@@ -121,7 +122,7 @@ function hello() {'{'}
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">➖</span>
+          <Minus size={16} className="help-section-icon" />
           Dividers
         </div>
         <div className="help-code">
@@ -133,8 +134,8 @@ or
       </div>
 
       <div className="help-tip">
-        <div className="help-tip-title">
-          💡 Pro Tip
+        <div className="help-tip-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Lightbulb size={16} /> Pro Tip
         </div>
         <div className="help-tip-content">
           Use <strong>[[wiki links]]</strong> to create connections between notes. These connections will appear in your knowledge graph!

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { Check, Sparkles } from 'lucide-react';
 
 interface AiChatResult {
   success: boolean;
@@ -52,7 +53,7 @@ export default function AIChat({ rootPath }: AIChatProps) {
     try {
       const result = await invoke<string>('index_notes', { rootPath });
       setIsIndexed(true);
-      setMessages(prev => [...prev, { role: 'assistant', content: `✅ ${result}` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: result }]);
     } catch (err) {
       setMessages(prev => [...prev, { role: 'error', content: `Failed to index notes: ${err}` }]);
     } finally {
@@ -119,7 +120,7 @@ export default function AIChat({ rootPath }: AIChatProps) {
         }}
         title="Open AI Chat"
       >
-        ✨
+        <Sparkles size={20} />
       </button>
     );
   }
@@ -153,7 +154,7 @@ export default function AIChat({ rootPath }: AIChatProps) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '20px' }}>✨</span>
+          <Sparkles size={20} />
           <h3 style={{ margin: 0, fontSize: '16px' }}>
             {isIndexed ? 'AI Assistant (RAG Enabled)' : 'AI Assistant'}
           </h3>
@@ -182,8 +183,8 @@ export default function AIChat({ rootPath }: AIChatProps) {
             </div>
           )}
           {isIndexed && !isIndexing && (
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.9)' }}>
-              ✅ Indexed
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Check size={12} /> Indexed
             </div>
           )}
           <button

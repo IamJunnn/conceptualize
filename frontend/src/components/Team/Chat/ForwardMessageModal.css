@@ -1,0 +1,64 @@
+/* ForwardMessageModal - Additional styles for message forwarding */
+
+/* Message preview icon and label */
+.forward-preview-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #949ba4;
+  font-size: 13px;
+}
+
+.forward-preview-message svg {
+  color: #64c8ca;
+}
+
+/* Original message content preview */
+.forward-message-preview {
+  background: #1e1f22;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border-left: 3px solid #64c8ca;
+}
+
+.forward-message-preview-content {
+  font-size: 13px;
+  color: #dcddde;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.forward-message-attachments-count {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #949ba4;
+  font-style: italic;
+}
+
+/* Override send button color to match app theme */
+.forward-send-btn {
+  background: #64c8ca !important;
+  color: #1e1e1e !important;
+}
+
+.forward-send-btn:hover:not(:disabled) {
+  background: #52b6b8 !important;
+}
+
+/* Override checkbox color to match app theme */
+.forward-checkbox.checked {
+  background: #64c8ca !important;
+  border-color: #64c8ca !important;
+}
+
+/* Override search focus to match app theme */
+.forward-search-input:focus {
+  box-shadow: 0 0 0 2px rgba(100, 200, 202, 0.5) !important;
+}
+
+/* Override selected item background */
+.forward-item.selected {
+  background: rgba(100, 200, 202, 0.15) !important;
+}

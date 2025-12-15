@@ -8,6 +8,7 @@
   border: 1px solid #3d3d3d;
   border-radius: 8px;
   transition: all 0.2s;
+  position: relative;
 }
 
 .team-todo-item:hover {
@@ -29,7 +30,24 @@
   pointer-events: none;
 }
 
-/* Checkbox */
+.team-todo-item.highlighted {
+  background: rgba(100, 200, 202, 0.15);
+  border-color: #64c8ca;
+  animation: highlight-pulse 1.5s ease-in-out 2;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% {
+    background: rgba(100, 200, 202, 0.15);
+    border-color: #64c8ca;
+  }
+  50% {
+    background: rgba(100, 200, 202, 0.25);
+    border-color: #7dd4d6;
+  }
+}
+
+/* Checkbox - always stays on left at consistent position */
 .todo-checkbox {
   display: flex;
   align-items: center;
@@ -41,12 +59,13 @@
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  margin-top: 2px;
+  align-self: flex-start; /* Align to top of flex container */
+  margin-top: 0; /* Remove margin for consistent positioning */
 }
 
 .todo-checkbox .empty-circle {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border: 2px solid #5a5a5a;
   border-radius: 50%;
   transition: all 0.2s;
@@ -56,7 +75,7 @@
   border-color: #64c8ca;
 }
 
-.todo-checkbox .check-icon {
+.todo-checkbox .todo-check-icon {
   width: 24px;
   height: 24px;
   color: #64c8ca;
@@ -75,6 +94,7 @@
 .todo-content {
   flex: 1;
   min-width: 0;
+  padding-right: 32px;
 }
 
 .todo-title {
@@ -134,10 +154,18 @@
   color: #1e1e1e;
   border: 2px solid #2a2a2a;
   margin-left: -8px;
+  overflow: hidden;
 }
 
 .assignee-badge:first-child {
   margin-left: 0;
+}
+
+.assignee-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .more-assignees {
@@ -154,8 +182,9 @@
 
 /* Menu */
 .todo-menu-container {
-  position: relative;
-  flex-shrink: 0;
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
 
 .todo-menu-btn {

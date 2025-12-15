@@ -16,7 +16,17 @@ import {
 import { sendInvitationEmail } from '../../services/emailService';
 import { useAuth } from '../../contexts/AuthContext';
 import InviteMembersModal from './InviteMembersModal';
+import ConfirmModal, { ModalVariant } from '../UI/ConfirmModal';
 import './AdminDashboard.css';
+
+// Modal state interface
+interface ModalState {
+  isOpen: boolean;
+  variant: ModalVariant;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+}
 
 interface AdminDashboardProps {
   workspace: Workspace;
@@ -33,6 +43,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ workspace, onClose }) =
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
+
+  // Modal state for styled dialogs
+  const [modal, setModal] = useState<ModalState>({
+    isOpen: false,
+    variant: 'confirm',
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const showModal = (variant: ModalVariant, title: string, message: string, onConfirm?: () => void) => {
+    setModal({
+      isOpen: true,
+      variant,
+      title,
+      message,
+      onConfirm: onConfirm || (() => setModal(m => ({ ...m, isOpen: false }))),
+    });
+  };
+
+  const closeModal = () => {
+    setModal(m => ({ ...m, isOpen: false }));
+  };
 
   useEffect(() => {
     loadData();
@@ -93,38 +126,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ workspace, onClose }) =
     }
   };
 
-  const handleRemoveMember = async (member: WorkspaceMember) => {
+  const handleRemoveMember = (member: WorkspaceMember) => {
     if (!user) return;
 
-    const confirmed = confirm(
-      `Are you sure you want to remove ${member.displayName} from the workspace?`
+    showModal(
+      'danger',
+      'Remove Member',
+      `Are you sure you want to remove ${member.displayName} from the workspace?`,
+      async () => {
+        closeModal();
+        try {
+          await removeMemberFromWorkspace(workspace.id, member.uid, user.uid);
+          showModal('success', 'Member Removed', `Successfully removed ${member.displayName} from the workspace`);
+          await loadMembers();
+        } catch (err: any) {
+          showModal('danger', 'Error', `Failed to remove member: ${err.message}`);
+        }
+      }
     );
-
-    if (!confirmed) return;
-
-    try {
-      await removeMemberFromWorkspace(workspace.id, member.uid, user.uid);
-      await loadMembers();
-    } catch (err: any) {
-      setError(err.message);
-    }
   };
 
-  const handleCancelInvitation = async (invitation: Invitation) => {
+  const handleCancelInvitation = (invitation: Invitation) => {
     if (!user) return;
 
-    const confirmed = confirm(
-      `Are you sure you want to cancel the invitation to ${invitation.email}?`
+    showModal(
+      'warning',
+      'Cancel Invitation',
+      `Are you sure you want to cancel the invitation to ${invitation.email}?`,
+      async () => {
+        closeModal();
+        try {
+          await cancelInvitation(invitation.id, user.uid);
+          showModal('success', 'Invitation Cancelled', `The invitation to ${invitation.email} has been cancelled.`);
+          await loadData();
+        } catch (err: any) {
+          showModal('danger', 'Error', `Failed to cancel invitation: ${err.message}`);
+        }
+      }
     );
-
-    if (!confirmed) return;
-
-    try {
-      await cancelInvitation(invitation.id, user.uid);
-      await loadData(); // Reload to update the list
-    } catch (err: any) {
-      setError(err.message);
-    }
   };
 
   const handleResendInvitation = async (invitation: Invitation) => {
@@ -137,11 +176,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ workspace, onClose }) =
 
       // Show success message
       setError(null); // Clear any previous errors
-      alert(`Invitation resent to ${invitation.email}`);
+      showModal('success', 'Invitation Sent', `Invitation resent to ${invitation.email}`);
 
       await loadData(); // Reload to update the list
     } catch (err: any) {
-      setError(err.message);
+      showModal('danger', 'Error', `Failed to resend invitation: ${err.message}`);
     } finally {
       setResendingInvite(null);
     }
@@ -426,6 +465,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ workspace, onClose }) =
             </div>
           </div>
         )}
+
+        {/* Styled confirmation/success modal */}
+        <ConfirmModal
+          isOpen={modal.isOpen}
+          variant={modal.variant}
+          title={modal.title}
+          message={modal.message}
+          onConfirm={modal.onConfirm}
+          onCancel={closeModal}
+        />
       </div>
     </div>
   );

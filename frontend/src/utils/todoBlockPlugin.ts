@@ -73,7 +73,7 @@ export const todoBlockPlugin = $prose(() => {
       init(_, { doc }) {
         return findTodoBlocks(doc)
       },
-      apply(tr, oldState) {
+      apply(tr, _oldState) {
         return findTodoBlocks(tr.doc)
       }
     },

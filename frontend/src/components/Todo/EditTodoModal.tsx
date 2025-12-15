@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { invoke } from '@tauri-apps/api/core'
 import './QuickAddModal.css' // Reuse the same styles
 
 interface NoteTodo {
@@ -25,18 +24,12 @@ interface EditTodoModalProps {
   rootPath: string
 }
 
-interface FileItem {
-  name: string
-  path: string
-  type: 'md' | 'svg' | 'pdf' | 'png' | 'jpg' | 'other'
-}
-
 const EditTodoModal: React.FC<EditTodoModalProps> = ({
   isOpen,
   onClose,
   onSave,
   todo,
-  rootPath
+  rootPath: _rootPath
 }) => {
   const [text, setText] = useState('')
   const [priority, setPriority] = useState<number | null>(null)

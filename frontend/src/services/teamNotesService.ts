@@ -11,6 +11,7 @@ import {
   deleteNote,
   DriveFile
 } from './googleDriveService';
+import { getErrorMessage } from '../utils/errorUtils';
 
 export interface TeamNote {
   id: string; // Drive file ID
@@ -63,9 +64,9 @@ export async function listTeamNotes(folderId: string): Promise<TeamNote[]> {
 
     console.log(`✅ Loaded ${notes.length} notes from folder ${folderId}`);
     return notes;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to list team notes:', error);
-    throw new Error(`Failed to list notes: ${error.message}`);
+    throw new Error(`Failed to list notes: ${getErrorMessage(error)}`);
   }
 }
 
@@ -87,9 +88,9 @@ export async function createTeamNote(
       modifiedTime: new Date(),
       webViewLink: file.webViewLink,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to create team note:', error);
-    throw new Error(`Failed to create note: ${error.message}`);
+    throw new Error(`Failed to create note: ${getErrorMessage(error)}`);
   }
 }
 
@@ -103,9 +104,9 @@ export async function updateTeamNote(
   try {
     await updateNote(fileId, content);
     console.log(`✅ Updated note ${fileId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to update team note:', error);
-    throw new Error(`Failed to update note: ${error.message}`);
+    throw new Error(`Failed to update note: ${getErrorMessage(error)}`);
   }
 }
 
@@ -116,9 +117,9 @@ export async function deleteTeamNote(fileId: string): Promise<void> {
   try {
     await deleteNote(fileId);
     console.log(`✅ Deleted note ${fileId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to delete team note:', error);
-    throw new Error(`Failed to delete note: ${error.message}`);
+    throw new Error(`Failed to delete note: ${getErrorMessage(error)}`);
   }
 }
 
@@ -147,9 +148,9 @@ export async function syncNoteToTeam(
       // Create new note
       return await createTeamNote(folderId, fileName, content);
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to sync note to team:', error);
-    throw new Error(`Failed to sync note: ${error.message}`);
+    throw new Error(`Failed to sync note: ${getErrorMessage(error)}`);
   }
 }
 
@@ -166,8 +167,8 @@ export async function getTeamNotesList(folderId: string): Promise<DriveFile[]> {
     );
 
     return markdownFiles;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get team notes list:', error);
-    throw new Error(`Failed to get notes list: ${error.message}`);
+    throw new Error(`Failed to get notes list: ${getErrorMessage(error)}`);
   }
 }

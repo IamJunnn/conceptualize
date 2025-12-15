@@ -75,6 +75,7 @@
   font-weight: 500;
   color: #ffffff;
   margin-bottom: 8px;
+  text-transform: none;
 }
 
 .create-local-workspace-modal .form-group input {

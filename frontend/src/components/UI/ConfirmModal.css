@@ -29,7 +29,9 @@
   max-width: 500px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.2s ease-out;
+  overflow: hidden;
 }
+
 
 @keyframes slideUp {
   from {
@@ -45,6 +47,30 @@
 .confirm-modal-header {
   padding: 20px 24px;
   border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.confirm-modal-header.danger {
+  border-bottom-color: rgba(229, 57, 53, 0.3);
+}
+
+.confirm-modal-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(229, 57, 53, 0.15);
+  color: #e53935;
+  flex-shrink: 0;
+}
+
+.confirm-modal-icon.warning {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
 }
 
 .confirm-modal-header h3 {
@@ -105,4 +131,84 @@
 
 .confirm-modal-button:active {
   transform: scale(0.98);
+}
+
+.confirm-modal-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #888;
+}
+
+.confirm-modal-button.confirm.danger {
+  background-color: #e53935;
+}
+
+.confirm-modal-button.confirm.danger:hover {
+  background-color: #c62828;
+}
+
+/* Success variant */
+.confirm-modal-header.success {
+  border-bottom-color: rgba(100, 200, 202, 0.3);
+}
+
+.confirm-modal.success .confirm-modal-icon {
+  background-color: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+.confirm-modal-button.confirm.success {
+  background-color: #64c8ca;
+  color: #1a1a1a;
+}
+
+.confirm-modal-button.confirm.success:hover {
+  background-color: #52b6b8;
+}
+
+/* Info variant */
+.confirm-modal-header.info {
+  border-bottom-color: rgba(88, 101, 242, 0.3);
+}
+
+.confirm-modal.info .confirm-modal-icon {
+  background-color: rgba(88, 101, 242, 0.15);
+  color: #5865f2;
+}
+
+.confirm-modal-button.confirm.info {
+  background-color: #5865f2;
+  color: white;
+}
+
+.confirm-modal-button.confirm.info:hover {
+  background-color: #4752c4;
+}
+
+/* Warning variant */
+.confirm-modal-header.warning {
+  border-bottom-color: rgba(251, 191, 36, 0.3);
+}
+
+.confirm-modal.warning .confirm-modal-icon {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.confirm-modal-button.confirm.warning {
+  background-color: #fbbf24;
+  color: #1a1a1a;
+}
+
+.confirm-modal-button.confirm.warning:hover {
+  background-color: #f59e0b;
+}
+
+/* Single button footer (for success/info modals) */
+.confirm-modal-footer.single-button {
+  justify-content: center;
+}
+
+.confirm-modal-footer.single-button .confirm-modal-button {
+  min-width: 100px;
 }

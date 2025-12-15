@@ -40,7 +40,7 @@ function AppContent() {
   const [appMode, setAppModeState] = useState<AppMode>(null)
   const [modeLoading, setModeLoading] = useState(true)
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false)
-  const [hasWorkspace, setHasWorkspace] = useState<boolean | null>(null)
+  const [, setHasWorkspace] = useState<boolean | null>(null)
   const [pendingInvitation, setPendingInvitation] = useState<DeepLinkInvitation | null>(null)
 
   // Check for app mode and saved root folder on mount
@@ -84,7 +84,6 @@ function AppContent() {
 
     // Initialize deep link listener
     initializeDeepLinkListener((invitation) => {
-      console.log('Received invitation via deep link:', invitation)
       setPendingInvitation(invitation)
       // Automatically switch to team mode
       setAppMode('team').then(() => setAppModeState('team'))
@@ -143,14 +142,11 @@ function AppContent() {
   }
 
   const handleModeSelected = async (mode: 'local' | 'team') => {
-    console.log('🎯 Mode selected:', mode)
     try {
       await setAppMode(mode)
-      console.log('✅ App mode set successfully to:', mode)
       setAppModeState(mode)
-      console.log('✅ App mode state updated to:', mode)
     } catch (error) {
-      console.error('❌ Error setting app mode:', error)
+      console.error('Error setting app mode:', error)
     }
   }
 
@@ -187,7 +183,6 @@ function AppContent() {
   // Show loading state while checking mode, auth, and initial setup
   // Also show loading if in team mode and auth is still loading
   if (modeLoading || isLoading || (appMode === 'team' && authLoading)) {
-    console.log('⏳ Loading... modeLoading:', modeLoading, 'isLoading:', isLoading, 'authLoading:', authLoading)
     return (
       <div className="app">
         <div className="welcome-screen">
@@ -196,13 +191,6 @@ function AppContent() {
       </div>
     )
   }
-
-  console.log('🔍 Current state:', {
-    appMode,
-    user: user ? `${user.email} (${user.uid})` : null,
-    authLoading,
-    pendingInvitation
-  })
 
   // Show invite accept screen if there's a pending invitation (before mode selection)
   if (pendingInvitation && !user) {
@@ -229,7 +217,6 @@ function AppContent() {
 
   // Show mode selection if no mode is set and no pending invitation
   if (!appMode) {
-    console.log('📋 Showing mode selection screen (no app mode set)')
     return (
       <ModeSelectionScreen
         onModeSelected={handleModeSelected}
@@ -241,13 +228,11 @@ function AppContent() {
   // Show login screen directly if in team mode and user is not authenticated
   // After sign-in, TeamMainUI will handle routing based on user's team state
   if (appMode === 'team' && !user && !authLoading) {
-    console.log('🔐 Showing login screen (team mode, no user)')
     return <LoginScreen onLoginSuccess={() => {}} onBack={handleBackToModeSelection} />
   }
 
   // TEAM MODE: Show TeamMainUI (Google Drive based)
   if (appMode === 'team' && user) {
-    console.log('👥 Showing TeamMainUI (team mode + authenticated user)')
     return <TeamMainUI user={user} />
   }
 

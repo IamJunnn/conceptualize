@@ -63,10 +63,10 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
         const files = await storageBackend.listFiles();
 
         // Separate folders from files (use fullPath for hierarchical structure)
-        // Include Drive IDs for folders
+        // In team mode, we only need folder paths for graph visualization
         const folders = files
           .filter(f => f.contentType === 'application/vnd.google-apps.folder')
-          .map(f => ({ path: f.fullPath, driveId: f.id }));
+          .map(f => f.fullPath);
 
         // Filter for markdown files and load their content
         const markdownFiles = files.filter(f => f.name.endsWith('.md'));
@@ -126,13 +126,11 @@ function GraphView({ rootPath, onFileOpen, onNodeContextMenu, onCreateNote, onCr
     }
   };
 
-  const handleNodeClick = (node: any) => {
-    console.log('Node clicked:', node);
+  const handleNodeClick = (_node: any) => {
     // TODO: Highlight node or show info panel
   };
 
   const handleNodeDoubleClick = (node: any) => {
-    console.log('Node double-clicked:', node);
     // Open file nodes (not folders or root)
     if (node.type === 'file' && onFileOpen) {
       // Extract file name from path

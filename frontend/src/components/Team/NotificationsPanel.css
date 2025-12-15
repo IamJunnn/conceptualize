@@ -1,0 +1,245 @@
+.notifications-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #e0e0e0;
+}
+
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+  flex-shrink: 0;
+}
+
+.notifications-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notifications-title svg {
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.notifications-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.notifications-title .unread-badge {
+  background: #e53935;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.notifications-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.notifications-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #b0b0b0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.notifications-action-btn:hover {
+  background: #333;
+  color: #e0e0e0;
+  border-color: #555;
+}
+
+.notifications-action-btn.danger:hover:not(:disabled) {
+  background: rgba(229, 57, 53, 0.15);
+  color: #e53935;
+  border-color: #e53935;
+}
+
+.notifications-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.notifications-action-btn:disabled:hover {
+  background: transparent;
+  color: #b0b0b0;
+  border-color: #444;
+}
+
+.notifications-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.notifications-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  text-align: center;
+  padding: 40px;
+}
+
+.notifications-empty svg {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.notifications-empty p {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #888;
+}
+
+.notifications-empty span {
+  font-size: 13px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  position: relative;
+}
+
+.notification-item:hover {
+  background: #2a2a2a;
+}
+
+.notification-item.unread {
+  background: rgba(100, 200, 202, 0.08);
+}
+
+.notification-item.unread::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  background: #64c8ca;
+  border-radius: 50%;
+}
+
+.notification-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.notification-icon.mention {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.notification-icon.reply {
+  background: rgba(130, 177, 255, 0.2);
+  color: #82b1ff;
+}
+
+.notification-icon.todo_reminder,
+.notification-icon.todo_assigned {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.notification-icon.message {
+  background: rgba(130, 177, 255, 0.2);
+  color: #82b1ff;
+}
+
+.notification-icon.group_invite {
+  background: rgba(156, 39, 176, 0.2);
+  color: #ce93d8;
+}
+
+.notification-icon.member_joined {
+  background: rgba(76, 175, 80, 0.2);
+  color: #81c784;
+}
+
+.notification-icon.billing_updated {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+  margin-bottom: 2px;
+}
+
+.notification-message {
+  font-size: 13px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.notification-time {
+  font-size: 11px;
+  color: #666;
+}
+
+.notification-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #666;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.notification-item:hover .notification-delete {
+  opacity: 1;
+}
+
+.notification-delete:hover {
+  background: rgba(229, 57, 53, 0.2);
+  color: #e53935;
+}
