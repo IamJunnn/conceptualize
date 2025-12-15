@@ -8,7 +8,6 @@ import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { storage, db } from './firebase';
 import {
   StorageUsage,
-  StorageStatus,
   STORAGE_LIMITS,
   formatBytes,
   getStorageStatus,
@@ -87,8 +86,20 @@ export async function getTeamMemberCount(teamId: string): Promise<number> {
   }
 }
 
+// Internal domains that get automatic pro access
+const INTERNAL_PRO_DOMAINS = ['ecoblox.build'];
+
 /**
- * Check if team has active paid subscription
+ * Check if an email belongs to an internal domain that gets auto pro access
+ */
+function isInternalProEmail(email: string): boolean {
+  if (!email) return false;
+  const domain = email.toLowerCase().split('@')[1];
+  return INTERNAL_PRO_DOMAINS.includes(domain);
+}
+
+/**
+ * Check if team has active paid subscription or promo/trial
  */
 export async function isTeamPaid(teamId: string): Promise<boolean> {
   try {
@@ -98,9 +109,30 @@ export async function isTeamPaid(teamId: string): Promise<boolean> {
     }
 
     const data = teamDoc.data();
-    const subscriptionStatus = data.billing?.subscription?.status;
 
-    return subscriptionStatus === 'active';
+    // Check if team owner has internal domain (auto-pro)
+    const ownerEmail = data.createdBy;
+    if (isInternalProEmail(ownerEmail)) {
+      return true;
+    }
+
+    // Check for active subscription
+    const subscriptionStatus = data.billing?.subscription?.status;
+    if (subscriptionStatus === 'active') {
+      return true;
+    }
+
+    // Check for active promo/trial
+    const promoActive = data.billing?.promoActive;
+    const promoExpiresAt = data.billing?.promoExpiresAt;
+    if (promoActive && promoExpiresAt) {
+      const expiresAt = promoExpiresAt?.toDate?.() || new Date(promoExpiresAt);
+      if (new Date() < expiresAt) {
+        return true; // Promo/trial is still active
+      }
+    }
+
+    return false;
   } catch (error) {
     console.error('Error checking team subscription:', error);
     return false;

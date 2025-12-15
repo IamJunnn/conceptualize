@@ -184,6 +184,55 @@
   box-shadow: 0 4px 12px rgba(196, 79, 196, 0.3);
 }
 
+/* New Team Button - Stacked Layout */
+.new-team-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 20px;
+  min-width: 80px;
+  background: linear-gradient(135deg, #c44fc4 0%, #9b59b6 100%);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.new-team-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(196, 79, 196, 0.4);
+  background: linear-gradient(135deg, #d45fd4 0%, #a569c6 100%);
+}
+
+.new-team-button:active {
+  transform: translateY(0);
+}
+
+.new-team-icon {
+  flex-shrink: 0;
+}
+
+.new-team-text {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* Responsive: Show only icon on smaller screens */
+@media (max-width: 500px) {
+  .new-team-button {
+    padding: 12px;
+    min-width: 48px;
+  }
+
+  .new-team-text {
+    display: none;
+  }
+}
+
 .secondary-button {
   padding: 8px 16px;
   background: #444;
@@ -235,12 +284,61 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #c44fc4 0%, #64c8ca 100%);
+  background: linear-gradient(135deg, #64c8ca, #b298dc);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
   font-weight: 600;
+  color: #1e1e1e;
+  position: relative;
+  overflow: hidden;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.user-avatar.clickable {
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.user-avatar.clickable:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.user-avatar.clickable:hover .avatar-edit-overlay {
+  opacity: 1;
+}
+
+.user-avatar.updating {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.user-avatar .avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-edit-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  border-radius: 50%;
+}
+
+.avatar-edit-overlay svg {
   color: white;
 }
 
@@ -259,6 +357,112 @@
   font-size: 13px;
   color: #888;
   margin: 0 0 8px 0;
+}
+
+/* Name Display and Edit */
+.name-display-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name-display-container h4 {
+  margin: 0;
+}
+
+.name-edit-trigger {
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  opacity: 0;
+}
+
+.name-display-container:hover .name-edit-trigger {
+  opacity: 1;
+}
+
+.name-edit-trigger:hover {
+  background: #3a3a3a;
+  color: #64c8ca;
+}
+
+.name-edit-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.name-edit-input {
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 6px 10px;
+  width: 180px;
+  transition: border-color 0.2s ease;
+}
+
+.name-edit-input:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.name-edit-input:disabled {
+  opacity: 0.6;
+}
+
+.name-edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.name-edit-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.name-edit-btn.save {
+  color: #4ade80;
+}
+
+.name-edit-btn.save:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.name-edit-btn.save:disabled {
+  color: #555;
+  cursor: not-allowed;
+}
+
+.name-edit-btn.cancel {
+  color: #888;
+}
+
+.name-edit-btn.cancel:hover:not(:disabled) {
+  background: #3a3a3a;
+  color: #e0e0e0;
+}
+
+.name-edit-btn.cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .role-badge {
@@ -632,4 +836,273 @@
 
 .settings-tab-container .no-insights {
   background: #252525;
+}
+
+/* ==========================================
+   Subscription Tab Styles
+   ========================================== */
+
+.subscription-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 20px;
+}
+
+.subscription-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #888;
+}
+
+.subscription-loading .loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #3a3a3a;
+  border-top-color: var(--accent-color, #00d4aa);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.no-subscriptions {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+  background: #252525;
+  border-radius: 8px;
+}
+
+.subscription-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.subscription-card {
+  background: #252525;
+  border: 1px solid #3a3a3a;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+
+.subscription-card:hover {
+  border-color: #4a4a4a;
+}
+
+.subscription-card.promo {
+  border-color: rgba(0, 212, 170, 0.3);
+  background: linear-gradient(135deg, #252525 0%, rgba(0, 212, 170, 0.05) 100%);
+}
+
+.subscription-card.subscribed {
+  border-color: rgba(100, 200, 202, 0.3);
+  background: linear-gradient(135deg, #252525 0%, rgba(100, 200, 202, 0.05) 100%);
+}
+
+.subscription-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.subscription-team-info h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0 0 8px 0;
+}
+
+.subscription-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.subscription-meta .member-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #888;
+}
+
+.subscription-meta .owner-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.subscription-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.subscription-status-badge.promo {
+  background: rgba(100, 200, 202, 0.1);
+  color: #64c8ca;
+}
+
+.subscription-status-badge.subscribed {
+  background: rgba(100, 200, 202, 0.1);
+  color: #64c8ca;
+}
+
+.subscription-status-badge.free {
+  background: rgba(136, 136, 136, 0.1);
+  color: #888;
+}
+
+.subscription-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.subscription-promo-info,
+.subscription-price-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #888;
+}
+
+.subscription-promo-info .expiring-warning {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.subscription-storage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subscription-storage .storage-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #888;
+}
+
+.subscription-storage .storage-bar {
+  height: 6px;
+  background: #3a3a3a;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.subscription-storage .storage-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-color, #00d4aa), #64c8ca);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.subscription-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid #3a3a3a;
+  flex-wrap: wrap;
+}
+
+.subscription-upgrade-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: #64c8ca;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subscription-upgrade-btn:hover {
+  transform: translateY(-1px);
+  background: #72d4d6;
+  box-shadow: 0 4px 12px rgba(100, 200, 202, 0.3);
+}
+
+.subscription-manage-btn {
+  padding: 10px 20px;
+  background: #3a3a3a;
+  color: #e0e0e0;
+  border: 1px solid #4a4a4a;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subscription-manage-btn:hover {
+  background: #4a4a4a;
+  border-color: #5a5a5a;
+}
+
+.subscription-cancel-btn {
+  padding: 10px 20px;
+  background: transparent;
+  color: #888;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subscription-cancel-btn:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Responsive adjustments for subscription tab */
+@media (max-width: 600px) {
+  .subscription-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .subscription-actions {
+    flex-direction: column;
+  }
+
+  .subscription-actions button {
+    width: 100%;
+    justify-content: center;
+  }
 }

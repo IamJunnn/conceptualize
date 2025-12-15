@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import mammoth from 'mammoth';
 import { invoke } from '@tauri-apps/api/core';
+import { TeamDriveStorage } from '../../services/teamDriveStorage';
 import './WordViewer.css';
 import '../UI/CustomScrollbar.css';
 
@@ -8,9 +9,11 @@ interface WordViewerProps {
   filePath: string;
   fileName: string;
   rootPath?: string;
+  fileId?: string;
+  storageBackend?: TeamDriveStorage;
 }
 
-const WordViewer: React.FC<WordViewerProps> = ({ filePath, fileName }) => {
+const WordViewer: React.FC<WordViewerProps> = ({ filePath, fileName, fileId, storageBackend }) => {
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +24,18 @@ const WordViewer: React.FC<WordViewerProps> = ({ filePath, fileName }) => {
         setLoading(true);
         setError(null);
 
-        // Read the file using Tauri's read_binary_file command
-        const fileContent = await invoke<number[]>('read_binary_file', { filePath });
+        let arrayBuffer: ArrayBuffer;
 
-        // Convert to Uint8Array for mammoth
-        const arrayBuffer = new Uint8Array(fileContent).buffer;
+        // Team mode: load from Firebase Storage
+        if (storageBackend && fileId) {
+          const blob = await storageBackend.downloadFileAsBlob(fileId);
+          arrayBuffer = await blob.arrayBuffer();
+        } else {
+          // Local mode: Read the file using Tauri's read_binary_file command
+          const fileContent = await invoke<number[]>('read_binary_file', { filePath });
+          // Convert to Uint8Array for mammoth
+          arrayBuffer = new Uint8Array(fileContent).buffer;
+        }
 
         // Convert to HTML using mammoth
         const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -39,7 +49,7 @@ const WordViewer: React.FC<WordViewerProps> = ({ filePath, fileName }) => {
     };
 
     loadWordFile();
-  }, [filePath]);
+  }, [filePath, fileId, storageBackend]);
 
   if (loading) {
     return (

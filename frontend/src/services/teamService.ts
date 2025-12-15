@@ -20,16 +20,27 @@ import {
   arrayRemove,
 } from 'firebase/firestore';
 import { invoke } from '@tauri-apps/api/core';
-import { db, auth, functions } from './firebase';
+import { db } from './firebase';
 // Google Drive imports kept for legacy teams that still use Drive storage
-import { createTeamFolder, shareFolder, shareFolderRecursively } from './googleDriveService';
-import { httpsCallable } from 'firebase/functions';
+import { shareFolderRecursively } from './googleDriveService';
+import { updateSubscriptionQuantity } from './billingService';
+import { createNotification } from './teamChatService';
+import { getErrorMessage } from '../utils/errorUtils';
+
+export type MemberBillingStatus = 'active' | 'grace_period' | 'blocked';
 
 export interface TeamMember {
   email: string;
   role: 'owner' | 'admin' | 'leader' | 'member';
   joinedAt: Date;
   displayName?: string;
+  photoURL?: string;
+  customAvatar?: string; // DiceBear avatar URL chosen by user
+  // Billing status for paid teams
+  billingStatus?: MemberBillingStatus;
+  gracePeriodEnd?: Date; // When grace period expires (if in grace_period status)
+  lastChargeAttempt?: Date; // Last time we tried to charge for this member
+  chargeFailureReason?: string; // Why the charge failed
 }
 
 
@@ -43,6 +54,15 @@ export interface Team {
   members: { [email: string]: TeamMember };
   memberEmails: string[]; // For querying
   inviteCodes?: { [code: string]: { email: string; role: 'admin' | 'leader' | 'member'; used: boolean; createdAt: Date } };
+  billing?: {
+    subscription?: {
+      status?: string;
+      stripeCustomerId?: string;
+      stripeSubscriptionId?: string;
+    };
+    storageUsedBytes?: number;
+    memberCount?: number;
+  };
 }
 
 export interface TeamInvitation {
@@ -67,15 +87,33 @@ function encodeEmailKey(email: string): string {
 
 /**
  * Decode Firestore field key back to email
- * Also handles legacy keys that weren't encoded (contain @ or .)
+ * Handles:
+ * - Legacy keys that weren't encoded (contain @ or .)
+ * - Old lowercase encoding (_dot_ and _at_)
+ * - New uppercase encoding (_DOT_ and _AT_)
  */
 function decodeEmailKey(key: string): string {
   // If the key already looks like an email (contains @), return as-is (legacy data)
   if (key.includes('@')) {
     return key;
   }
-  // Otherwise decode the encoded version
-  return key.replace(/_DOT_/g, '.').replace(/_AT_/g, '@');
+  // Decode both uppercase and lowercase formats for backwards compatibility
+  return key
+    .replace(/_DOT_/g, '.')
+    .replace(/_AT_/g, '@')
+    .replace(/_dot_/g, '.')
+    .replace(/_at_/g, '@');
+}
+
+// Internal domains that get automatic pro access
+const INTERNAL_PRO_DOMAINS = ['ecoblox.build'];
+
+/**
+ * Check if an email belongs to an internal domain that gets auto pro access
+ */
+export function isInternalProEmail(email: string): boolean {
+  const domain = email.toLowerCase().split('@')[1];
+  return INTERNAL_PRO_DOMAINS.includes(domain);
 }
 
 /**
@@ -87,7 +125,8 @@ export async function createTeam(
   description: string,
   ownerEmail: string,
   ownerDisplayName: string,
-  ownerUid: string
+  ownerUid: string,
+  ownerPhotoURL?: string
 ): Promise<Team> {
   try {
     console.log(`Creating team "${teamName}"...`);
@@ -119,21 +158,39 @@ export async function createTeam(
           role: 'owner',
           joinedAt: new Date(),
           displayName: ownerDisplayName,
+          photoURL: ownerPhotoURL,
         },
       },
       memberEmails: [normalizedOwnerEmail], // Always store lowercase for Firebase Storage rules
     };
 
-    await setDoc(doc(db, 'teams', teamId), {
+    // Check if owner gets automatic pro access
+    const isInternalUser = isInternalProEmail(normalizedOwnerEmail);
+
+    const teamDoc: Record<string, unknown> = {
       ...team,
       createdAt: Timestamp.fromDate(team.createdAt),
       members: {
         [ownerEmailKey]: {
-          ...team.members[ownerEmail],
-          joinedAt: Timestamp.fromDate(team.members[ownerEmail].joinedAt),
+          ...team.members[normalizedOwnerEmail],
+          joinedAt: Timestamp.fromDate(team.members[normalizedOwnerEmail].joinedAt),
         },
       },
-    });
+    };
+
+    // Auto-grant pro access for internal domains
+    if (isInternalUser) {
+      console.log(`🎁 Auto-granting pro access for internal user: ${normalizedOwnerEmail}`);
+      teamDoc.billing = {
+        subscription: {
+          status: 'active',
+          type: 'internal',
+          grantedAt: Timestamp.now(),
+        },
+      };
+    }
+
+    await setDoc(doc(db, 'teams', teamId), teamDoc);
 
     // 4. Upgrade user's app role to 'admin' since they created a team
     console.log(`⬆️ Upgrading ${ownerEmail} to admin role...`);
@@ -144,9 +201,9 @@ export async function createTeam(
 
     console.log(`✅ Team "${teamName}" created successfully (ID: ${teamId})`);
     return team;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to create team:', error);
-    throw new Error(`Failed to create team: ${error.message}`);
+    throw new Error(`Failed to create team: ${getErrorMessage(error)}`);
   }
 }
 
@@ -199,12 +256,15 @@ export async function inviteTeamMember(
     });
 
     // 5. Create pending invite in Firestore
-    const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+    // IMPORTANT: Always use lowercase email for invite ID to ensure consistent matching
+    const normalizedEmail = memberEmail.toLowerCase();
+    const inviteId = `${teamId}_${normalizedEmail.replace(/[.@]/g, '_')}`;
     await setDoc(doc(db, 'team_invites', inviteId), {
       teamId,
       teamName: team.name,
-      memberEmail,
-      invitedBy: inviterDisplayName || inviterEmail,
+      memberEmail: normalizedEmail, // Store lowercase for consistent matching
+      invitedBy: inviterDisplayName || inviterEmail, // Display name for showing in UI
+      inviterEmail: inviterEmail, // Email for sending notifications
       invitedAt: Timestamp.now(),
       status: 'pending',
       role: role,
@@ -212,70 +272,179 @@ export async function inviteTeamMember(
     });
 
     console.log(`✅ Invited ${memberEmail} to team "${team.name}" with code ${inviteCode}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to invite team member:', error);
-    throw new Error(`Failed to invite member: ${error.message}`);
+    throw new Error(`Failed to invite member: ${getErrorMessage(error)}`);
   }
 }
 
 /**
- * Accept a team invite
+ * Accept a team invite directly via Firestore
+ * Uses Firestore rules that allow users with pending invites to update teams
+ * Handles billing: charges immediately, or sets 7-day grace period if charge fails
  */
 export async function acceptTeamInvite(
   teamId: string,
   memberEmail: string,
-  memberDisplayName: string
+  memberDisplayName: string,
+  memberPhotoURL?: string
 ): Promise<void> {
   try {
-    console.log(`Accepting team invite for ${memberEmail}...`);
-
-    // 1. Get the invitation to retrieve the role
-    const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
-    const inviteDoc = await getDoc(doc(db, 'team_invites', inviteId));
-
-    let role: 'admin' | 'leader' | 'member' = 'member';
-    if (inviteDoc.exists()) {
-      const inviteData = inviteDoc.data();
-      role = inviteData.role || 'member';
-    }
-
-    // 2. Get the team to access the drive folder ID
-    const teamDoc = await getDoc(doc(db, 'teams', teamId));
-    if (!teamDoc.exists()) {
-      throw new Error('Team not found');
-    }
-    const team = teamDoc.data() as Team;
-
-    // 3. Note: Google Drive folder sharing happens when the owner invites the member
-    // The invited user's token cannot share folders they don't own
-    // If there are permission issues, the owner needs to re-invite or manually share
-    console.log(`📁 Drive folder access should already be granted by owner during invite (folderId: ${team.driveFolderId})`);
-    console.log(`⚠️ If you see permission errors, ask the team owner to re-invite you or check sharing settings`);
-
-    // 4. Update team members with the correct role from invitation
-    // Normalize email to lowercase for Firebase Storage Security Rules
     const normalizedEmail = memberEmail.toLowerCase();
+    console.log(`Accepting team invite for ${normalizedEmail} via Firestore...`);
+
+    // 1. Find the invite - try lowercase ID first
+    let inviteId = `${teamId}_${normalizedEmail.replace(/[.@]/g, '_')}`;
+    let inviteDocRef = doc(db, 'team_invites', inviteId);
+    let inviteSnapshot = await getDoc(inviteDocRef);
+
+    // If not found with lowercase, search for it
+    if (!inviteSnapshot.exists()) {
+      console.log(`Invite not found with ID ${inviteId}, searching...`);
+      const invitesQuery = query(
+        collection(db, 'team_invites'),
+        where('teamId', '==', teamId),
+        where('status', '==', 'pending')
+      );
+      const invitesSnapshot = await getDocs(invitesQuery);
+
+      const matchingInvite = invitesSnapshot.docs.find(doc =>
+        doc.data().memberEmail?.toLowerCase() === normalizedEmail
+      );
+
+      if (matchingInvite) {
+        inviteId = matchingInvite.id;
+        inviteDocRef = doc(db, 'team_invites', inviteId);
+        inviteSnapshot = matchingInvite;
+        console.log(`Found invite with ID: ${inviteId}`);
+      }
+    }
+
+    if (!inviteSnapshot.exists()) {
+      throw new Error('No pending invite found for this team');
+    }
+
+    const inviteData = inviteSnapshot.data();
+    if (inviteData?.status !== 'pending') {
+      throw new Error('Invite is not pending');
+    }
+
+    const role = inviteData?.role || 'member';
+    const teamName = inviteData?.teamName || 'Unknown Team';
+    // Use inviterEmail (new field) or fall back to trying to parse invitedBy as email
+    let teamOwnerEmail = inviteData?.inviterEmail || null;
+
+    // If inviterEmail wasn't stored (legacy invites), try to get owner from team document
+    if (!teamOwnerEmail) {
+      try {
+        const teamDoc = await getDoc(doc(db, 'teams', teamId));
+        if (teamDoc.exists()) {
+          teamOwnerEmail = teamDoc.data()?.createdBy || null;
+        }
+      } catch (err) {
+        console.warn('Could not fetch team to get owner email:', err);
+      }
+    }
+
+    // Log the invite ID we found for debugging
+    console.log(`Found invite with ID: ${inviteId}, role: ${role}, teamName: ${teamName}, ownerEmail: ${teamOwnerEmail}`);
+
+    // 2. Update team with new member (skip reading team doc first - rules allow update with pending invite)
+    const teamDocRef = doc(db, 'teams', teamId);
+    // Use the email key format expected by Firestore rules
+    // IMPORTANT: Use regex with /g flag to replace ALL occurrences
     const memberEmailKey = encodeEmailKey(normalizedEmail);
-    await updateDoc(doc(db, 'teams', teamId), {
+    const now = Timestamp.now();
+
+    // Add member with initial billing status (will update after charge attempt)
+    await updateDoc(teamDocRef, {
       [`members.${memberEmailKey}`]: {
         email: normalizedEmail,
         role: role,
-        joinedAt: Timestamp.now(),
-        displayName: memberDisplayName,
+        joinedAt: now,
+        displayName: memberDisplayName || normalizedEmail,
+        photoURL: memberPhotoURL || null,
+        billingStatus: 'active', // Will update if charge fails
       },
-      memberEmails: arrayUnion(normalizedEmail), // Always store lowercase for Firebase Storage rules
+      memberEmails: arrayUnion(normalizedEmail),
     });
 
-    // 5. Update invite status
-    await updateDoc(doc(db, 'team_invites', inviteId), {
+    // 3. Update invite status
+    await updateDoc(inviteDocRef, {
       status: 'accepted',
-      acceptedAt: Timestamp.now(),
+      acceptedAt: now,
     });
 
-    console.log(`✅ ${memberEmail} accepted invite to team ${teamId} as ${role}`);
-  } catch (error: any) {
+    console.log(`✅ ${normalizedEmail} accepted invite to team ${teamName} as ${role}`);
+
+    // 4. Try to charge via Stripe (update subscription quantity)
+    let billingSuccess = false;
+    let billingError: string | null = null;
+
+    try {
+      await updateSubscriptionQuantity(teamId);
+      billingSuccess = true;
+      console.log('💳 Subscription quantity updated for new member');
+    } catch (error) {
+      billingSuccess = false;
+      billingError = getErrorMessage(error) || 'Payment failed';
+      console.warn('⚠️ Could not update subscription quantity:', error);
+
+      // Set grace period (7 days from now)
+      const gracePeriodEnd = new Date();
+      gracePeriodEnd.setDate(gracePeriodEnd.getDate() + 7);
+
+      // Update member with grace period status
+      try {
+        await updateDoc(teamDocRef, {
+          [`members.${memberEmailKey}.billingStatus`]: 'grace_period',
+          [`members.${memberEmailKey}.gracePeriodEnd`]: Timestamp.fromDate(gracePeriodEnd),
+          [`members.${memberEmailKey}.lastChargeAttempt`]: now,
+          [`members.${memberEmailKey}.chargeFailureReason`]: billingError,
+        });
+        console.log(`⏳ Set 7-day grace period for ${normalizedEmail} until ${gracePeriodEnd.toLocaleDateString()}`);
+      } catch (updateError) {
+        console.warn('Could not set grace period:', updateError);
+      }
+    }
+
+    // 5. Send notification to team owner
+    if (teamOwnerEmail) {
+      try {
+        console.log(`📬 Sending notification to team owner: ${teamOwnerEmail}`);
+        if (billingSuccess) {
+          // Success notification
+          await createNotification(teamId, {
+            type: 'member_joined',
+            title: 'New Team Member',
+            message: `${memberDisplayName || normalizedEmail} has joined your team as ${role}. Your subscription has been updated.`,
+            recipientEmail: teamOwnerEmail,
+            senderEmail: normalizedEmail,
+            senderName: memberDisplayName || normalizedEmail,
+          });
+          console.log(`✅ Notification sent: member_joined`);
+        } else {
+          // Grace period notification
+          await createNotification(teamId, {
+            type: 'billing_warning',
+            title: 'New Member - Payment Issue',
+            message: `${memberDisplayName || normalizedEmail} has joined your team, but we couldn't process the payment. They have a 7-day grace period. Please update your payment method.`,
+            recipientEmail: teamOwnerEmail,
+            senderEmail: normalizedEmail,
+            senderName: memberDisplayName || normalizedEmail,
+          });
+          console.log(`✅ Notification sent: billing_warning`);
+        }
+      } catch (notifError) {
+        // Don't fail if notification creation fails
+        console.error('❌ Could not create notification:', notifError);
+      }
+    } else {
+      console.warn('⚠️ No team owner email found - notification not sent');
+    }
+  } catch (error) {
     console.error('Failed to accept team invite:', error);
-    throw new Error(`Failed to accept invite: ${error.message}`);
+    throw new Error(`Failed to accept invite: ${getErrorMessage(error)}`);
   }
 }
 
@@ -287,17 +456,74 @@ export async function declineTeamInvite(
   memberEmail: string
 ): Promise<void> {
   try {
-    const inviteId = `${teamId}_${memberEmail.replace(/[.@]/g, '_')}`;
+    // Always use lowercase for consistent matching
+    const normalizedEmail = memberEmail.toLowerCase();
+    const inviteId = `${teamId}_${normalizedEmail.replace(/[.@]/g, '_')}`;
     await updateDoc(doc(db, 'team_invites', inviteId), {
       status: 'declined',
       declinedAt: Timestamp.now(),
     });
 
     console.log(`✅ ${memberEmail} declined invite to team ${teamId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to decline team invite:', error);
-    throw new Error(`Failed to decline invite: ${error.message}`);
+    throw new Error(`Failed to decline invite: ${getErrorMessage(error)}`);
   }
+}
+
+/**
+ * Check member billing status and return access level
+ * Returns: 'full' (active), 'grace' (grace period), 'blocked' (no access except settings)
+ */
+export function getMemberAccessLevel(member: TeamMember | undefined): 'full' | 'grace' | 'blocked' {
+  if (!member) return 'blocked';
+
+  // Owner always has full access
+  if (member.role === 'owner') return 'full';
+
+  // No billing status means active (legacy members or free teams)
+  if (!member.billingStatus || member.billingStatus === 'active') return 'full';
+
+  // Check grace period
+  if (member.billingStatus === 'grace_period') {
+    if (member.gracePeriodEnd) {
+      const gracePeriodEnd = member.gracePeriodEnd instanceof Date
+        ? member.gracePeriodEnd
+        : (member.gracePeriodEnd as any).toDate?.() || new Date(member.gracePeriodEnd);
+
+      // If grace period hasn't expired, allow access
+      if (gracePeriodEnd > new Date()) {
+        return 'grace';
+      }
+      // Grace period expired - should be blocked
+      return 'blocked';
+    }
+    // Has grace_period status but no end date - treat as grace
+    return 'grace';
+  }
+
+  // Explicitly blocked
+  if (member.billingStatus === 'blocked') return 'blocked';
+
+  // Default to full access
+  return 'full';
+}
+
+/**
+ * Get days remaining in grace period
+ */
+export function getGracePeriodDaysRemaining(member: TeamMember | undefined): number {
+  if (!member || !member.gracePeriodEnd) return 0;
+
+  const gracePeriodEnd = member.gracePeriodEnd instanceof Date
+    ? member.gracePeriodEnd
+    : (member.gracePeriodEnd as any).toDate?.() || new Date(member.gracePeriodEnd);
+
+  const now = new Date();
+  const diffTime = gracePeriodEnd.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return Math.max(0, diffDays);
 }
 
 /**
@@ -353,38 +579,63 @@ export async function getUserTeams(userEmail: string): Promise<Team[]> {
 
     console.log(`✅ Found ${teams.length} teams for ${userEmail}`);
     return teams;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get user teams:', error);
-    throw new Error(`Failed to get teams: ${error.message}`);
+    throw new Error(`Failed to get teams: ${getErrorMessage(error)}`);
   }
 }
 
 /**
  * Get pending invites for a user
+ * Handles backwards compatibility with invites created before lowercase normalization
  */
 export async function getPendingInvites(userEmail: string): Promise<TeamInvitation[]> {
   try {
-    const q = query(
+    const normalizedEmail = userEmail.toLowerCase();
+    const invitesMap = new Map<string, TeamInvitation>();
+
+    // Query 1: Try lowercase (new format)
+    const q1 = query(
       collection(db, 'team_invites'),
-      where('memberEmail', '==', userEmail),
+      where('memberEmail', '==', normalizedEmail),
       where('status', '==', 'pending')
     );
-
-    const snapshot = await getDocs(q);
-    const invites = snapshot.docs.map(doc => {
+    const snapshot1 = await getDocs(q1);
+    snapshot1.docs.forEach(doc => {
       const data = doc.data();
-      return {
+      invitesMap.set(doc.id, {
         id: doc.id,
         ...data,
         invitedAt: data.invitedAt?.toDate(),
-      } as TeamInvitation;
+      } as TeamInvitation);
     });
 
+    // Query 2: If original email has different casing, also try that (backwards compat)
+    if (userEmail !== normalizedEmail) {
+      const q2 = query(
+        collection(db, 'team_invites'),
+        where('memberEmail', '==', userEmail),
+        where('status', '==', 'pending')
+      );
+      const snapshot2 = await getDocs(q2);
+      snapshot2.docs.forEach(doc => {
+        if (!invitesMap.has(doc.id)) {
+          const data = doc.data();
+          invitesMap.set(doc.id, {
+            id: doc.id,
+            ...data,
+            invitedAt: data.invitedAt?.toDate(),
+          } as TeamInvitation);
+        }
+      });
+    }
+
+    const invites = Array.from(invitesMap.values());
     console.log(`✅ Found ${invites.length} pending invites for ${userEmail}`);
     return invites;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get pending invites:', error);
-    throw new Error(`Failed to get invites: ${error.message}`);
+    throw new Error(`Failed to get invites: ${getErrorMessage(error)}`);
   }
 }
 
@@ -411,9 +662,9 @@ export async function getTeamPendingInvites(teamId: string): Promise<TeamInvitat
 
     console.log(`✅ Found ${invites.length} pending invites for team ${teamId}`);
     return invites;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get team pending invites:', error);
-    throw new Error(`Failed to get team invites: ${error.message}`);
+    throw new Error(`Failed to get team invites: ${getErrorMessage(error)}`);
   }
 }
 
@@ -451,9 +702,9 @@ export async function getTeamById(teamId: string): Promise<Team | null> {
       createdAt: data.createdAt?.toDate(),
       members,
     } as Team;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get team:', error);
-    throw new Error(`Failed to get team: ${error.message}`);
+    throw new Error(`Failed to get team: ${getErrorMessage(error)}`);
   }
 }
 
@@ -488,9 +739,9 @@ export async function removeTeamMember(
     // Note: Access to Cloud Storage is automatically revoked when user is removed from team
 
     console.log(`✅ Removed ${memberEmail} from team ${teamId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to remove team member:', error);
-    throw new Error(`Failed to remove member: ${error.message}`);
+    throw new Error(`Failed to remove member: ${getErrorMessage(error)}`);
   }
 }
 
@@ -508,9 +759,9 @@ export async function deleteTeam(teamId: string): Promise<void> {
     // Files can be deleted through a separate cleanup process if needed
 
     console.log(`✅ Deleted team ${teamId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to delete team:', error);
-    throw new Error(`Failed to delete team: ${error.message}`);
+    throw new Error(`Failed to delete team: ${getErrorMessage(error)}`);
   }
 }
 
@@ -533,7 +784,7 @@ export async function sendInviteEmail(
       }
     });
     console.log(`✅ ${result}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to send team invite email:', error);
     throw new Error(`Failed to send invite email: ${error}`);
   }
@@ -559,9 +810,9 @@ export async function sendInvitationEmails(
     await Promise.all(emailPromises);
 
     console.log(`✅ Sent invitation emails to ${invites.length} members`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to send invitation emails:', error);
-    throw new Error(`Failed to send invitation emails: ${error.message}`);
+    throw new Error(`Failed to send invitation emails: ${getErrorMessage(error)}`);
   }
 }
 
@@ -578,9 +829,9 @@ export async function cancelInvitation(inviteId: string): Promise<void> {
     });
 
     console.log(`✅ Cancelled invitation ${inviteId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to cancel invitation:', error);
-    throw new Error(`Failed to cancel invitation: ${error.message}`);
+    throw new Error(`Failed to cancel invitation: ${getErrorMessage(error)}`);
   }
 }
 
@@ -588,10 +839,10 @@ export async function cancelInvitation(inviteId: string): Promise<void> {
  * Resend invitation email
  */
 export async function resendInvitation(
-  teamId: string,
+  _teamId: string,
   teamName: string,
   email: string,
-  inviteCode: string,
+  _inviteCode: string,
   role: 'admin' | 'leader' | 'member'
 ): Promise<void> {
   try {
@@ -601,9 +852,9 @@ export async function resendInvitation(
     await sendInviteEmail(email, teamName, role);
 
     console.log(`✅ Resent invitation to ${email}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to resend invitation:', error);
-    throw new Error(`Failed to resend invitation: ${error.message}`);
+    throw new Error(`Failed to resend invitation: ${getErrorMessage(error)}`);
   }
 }
 
@@ -690,11 +941,11 @@ export async function reshareWithMember(
       success: true,
       message: `Successfully shared folder with ${memberEmail}. They may need to refresh their app.`
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to re-share folder:', error);
     return {
       success: false,
-      message: `Failed to share: ${error.message}`
+      message: `Failed to share: ${getErrorMessage(error)}`
     };
   }
 }
@@ -716,9 +967,44 @@ export async function updateMemberRole(
     });
 
     console.log(`✅ Updated ${memberEmail} role to ${newRole} in team ${teamId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to update member role:', error);
-    throw new Error(`Failed to update role: ${error.message}`);
+    throw new Error(`Failed to update role: ${getErrorMessage(error)}`);
+  }
+}
+
+/**
+ * Update team member's profile info (photoURL, displayName, customAvatar)
+ * Call this when a user loads their teams to sync their current profile
+ */
+export async function updateMemberProfile(
+  teamId: string,
+  memberEmail: string,
+  displayName?: string,
+  photoURL?: string,
+  customAvatar?: string
+): Promise<void> {
+  try {
+    const memberEmailKey = encodeEmailKey(memberEmail);
+    const updates: Record<string, any> = {};
+
+    if (displayName) {
+      updates[`members.${memberEmailKey}.displayName`] = displayName;
+    }
+    if (photoURL) {
+      updates[`members.${memberEmailKey}.photoURL`] = photoURL;
+    }
+    if (customAvatar !== undefined) {
+      updates[`members.${memberEmailKey}.customAvatar`] = customAvatar;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await updateDoc(doc(db, 'teams', teamId), updates);
+      console.log(`✅ Updated profile for ${memberEmail} in team ${teamId}`);
+    }
+  } catch (error) {
+    // Silent failure - profile sync is not critical
+    console.warn('Failed to update member profile:', getErrorMessage(error));
   }
 }
 
@@ -737,9 +1023,9 @@ export async function updateInvitationRole(
     });
 
     console.log(`✅ Updated invitation role to ${newRole}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to update invitation role:', error);
-    throw new Error(`Failed to update invitation role: ${error.message}`);
+    throw new Error(`Failed to update invitation role: ${getErrorMessage(error)}`);
   }
 }
 
@@ -812,9 +1098,9 @@ export async function reshareTeamContents(
     await shareFolderRecursively(team.driveFolderId, memberEmail, permission);
 
     console.log(`✅ Re-shared all team contents with ${memberEmail}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to re-share team contents:', error);
-    throw new Error(`Failed to re-share team contents: ${error.message}`);
+    throw new Error(`Failed to re-share team contents: ${getErrorMessage(error)}`);
   }
 }
 
@@ -920,11 +1206,12 @@ export async function autoRepairMemberPermissions(
         };
       }
 
-    } catch (repairError: any) {
+    } catch (repairError) {
       console.error('Repair error:', repairError);
 
+      const repairErrorMsg = getErrorMessage(repairError);
       // Check if this is a permission error (owner action required)
-      if (repairError.message?.includes('403') || repairError.message?.includes('forbidden')) {
+      if (repairErrorMsg.includes('403') || repairErrorMsg.includes('forbidden')) {
         return {
           success: false,
           message: 'Only the team owner can repair permissions. Please contact them.'
@@ -933,15 +1220,15 @@ export async function autoRepairMemberPermissions(
 
       return {
         success: false,
-        message: `Repair failed: ${repairError.message}`
+        message: `Repair failed: ${repairErrorMsg}`
       };
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Auto-repair failed:', error);
     return {
       success: false,
-      message: `Auto-repair failed: ${error.message}`
+      message: `Auto-repair failed: ${getErrorMessage(error)}`
     };
   }
 }

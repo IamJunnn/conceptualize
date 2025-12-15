@@ -87,7 +87,11 @@ export default function AssigneeSelector({
                   className="mini-avatar"
                   title={member?.displayName || email}
                 >
-                  {getInitialsFromEmail(email)}
+                  {(member?.customAvatar || member?.photoURL) ? (
+                    <img src={member.customAvatar || member.photoURL} alt={member.displayName || email} className="avatar-image" />
+                  ) : (
+                    getInitialsFromEmail(email)
+                  )}
                 </div>
               );
             })}
@@ -138,7 +142,11 @@ export default function AssigneeSelector({
                   onClick={() => toggleMember(member.email)}
                 >
                   <div className="assignee-avatar">
-                    {getInitialsFromEmail(member.email)}
+                    {(member.customAvatar || member.photoURL) ? (
+                      <img src={member.customAvatar || member.photoURL} alt={member.displayName || member.email} className="avatar-image" />
+                    ) : (
+                      getInitialsFromEmail(member.email)
+                    )}
                   </div>
                   <div className="assignee-info">
                     <span className="assignee-name">

@@ -1,11 +1,12 @@
 import React from 'react';
+import { Keyboard, Lightbulb, Pencil, Mouse } from 'lucide-react';
 
 const ShortcutsGuide: React.FC = () => {
   return (
     <>
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">⌨️</span>
+          <Keyboard size={16} className="help-section-icon" />
           File Operations
         </div>
         <div className="help-item">
@@ -28,7 +29,7 @@ const ShortcutsGuide: React.FC = () => {
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">✏️</span>
+          <Pencil size={16} className="help-section-icon" />
           Text Editing
         </div>
         <div className="help-item">
@@ -47,7 +48,7 @@ const ShortcutsGuide: React.FC = () => {
 
       <div className="help-section">
         <div className="help-section-title">
-          <span className="help-section-icon">🖱️</span>
+          <Mouse size={16} className="help-section-icon" />
           Mouse Actions
         </div>
         <div className="help-item">
@@ -100,8 +101,8 @@ const ShortcutsGuide: React.FC = () => {
       </div>
 
       <div className="help-tip">
-        <div className="help-tip-title">
-          💡 Pro Tip
+        <div className="help-tip-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Lightbulb size={16} /> Pro Tip
         </div>
         <div className="help-tip-content">
           Press <strong>ESC</strong> to close any modal or dropdown in the app!

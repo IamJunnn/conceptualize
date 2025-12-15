@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { TeamDriveStorage } from '../../services/teamDriveStorage'
 import './PdfViewer.css'
 
 interface PdfViewerProps {
   filePath: string
   fileName: string
   rootPath?: string
+  fileId?: string
+  storageBackend?: TeamDriveStorage
 }
 
-function PdfViewer({ filePath, fileName, rootPath }: PdfViewerProps) {
+function PdfViewer({ filePath, fileName, rootPath, fileId, storageBackend }: PdfViewerProps) {
   const [pdfSrc, setPdfSrc] = useState<string>('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -34,17 +37,40 @@ function PdfViewer({ filePath, fileName, rootPath }: PdfViewerProps) {
   }
 
   useEffect(() => {
-    try {
-      // Convert file path to secure URL that Tauri can load
-      const secureUrl = convertFileSrc(filePath)
-      setPdfSrc(secureUrl)
-      setIsLoading(false)
-    } catch (err) {
-      console.error('Failed to load PDF:', err)
-      setError(`Failed to load PDF: ${err}`)
-      setIsLoading(false)
+    const loadPdf = async () => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        // Team mode: load from Firebase Storage
+        if (storageBackend && fileId) {
+          const blob = await storageBackend.downloadFileAsBlob(fileId)
+          const blobUrl = URL.createObjectURL(blob)
+          setPdfSrc(blobUrl)
+          setIsLoading(false)
+          return
+        }
+
+        // Local mode: use Tauri's convertFileSrc
+        const secureUrl = convertFileSrc(filePath)
+        setPdfSrc(secureUrl)
+        setIsLoading(false)
+      } catch (err) {
+        console.error('Failed to load PDF:', err)
+        setError(`Failed to load PDF: ${err}`)
+        setIsLoading(false)
+      }
     }
-  }, [filePath])
+
+    loadPdf()
+
+    // Cleanup blob URL when component unmounts or fileId changes
+    return () => {
+      if (pdfSrc && pdfSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(pdfSrc)
+      }
+    }
+  }, [filePath, fileId, storageBackend])
 
   if (isLoading) {
     return (

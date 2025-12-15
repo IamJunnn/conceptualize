@@ -140,6 +140,18 @@
   color: currentColor;
 }
 
+.tab-file-icon.notifications {
+  color: currentColor;
+}
+
+.tab-file-icon.recordings {
+  color: currentColor;
+}
+
+.tab-file-icon.whiteboard {
+  color: currentColor;
+}
+
 .tab-name {
   pointer-events: none;
   overflow: hidden;
@@ -340,4 +352,33 @@
   flex-shrink: 0;
   box-shadow: 0 0 6px rgba(100, 200, 202, 0.8);
   align-self: stretch;
+}
+
+/* Delayed tooltip for tabs (1 second delay) */
+.tab.has-delayed-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  transition-delay: 0s;
+  z-index: 1000;
+  pointer-events: none;
+  margin-top: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.tab.has-delayed-tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 1s;
 }

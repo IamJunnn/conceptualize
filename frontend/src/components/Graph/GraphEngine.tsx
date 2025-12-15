@@ -13,7 +13,7 @@ interface GraphEngineProps {
   isTeamMode?: boolean; // Whether this is a team mode graph
 }
 
-const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNodeClick, onNodeDoubleClick, onNodeContextMenu, isTeamMode = false }) => {
+const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNodeClick, onNodeDoubleClick, onNodeContextMenu }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -130,16 +130,35 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
       svg.call(zoom.transform as any, initialTransform);
     }
 
+    // Helper to check if a node is "medium-connected" (3-15 connections)
+    const isMediumConnected = (nodeId: string): boolean => {
+      const connections = conceptualConnectionsMap.get(nodeId) || 0;
+      return connections >= 3 && connections <= 15;
+    };
+
     // Create force simulation with adjusted parameters for more nodes
     const simulation = d3.forceSimulation<GraphNode>(data.nodes)
       .force('link', d3.forceLink<GraphNode, GraphLink>(data.links)
         .id(d => d.id)
-        .distance(d => (d as GraphLink).type === 'structural' ? 60 : 80) // Shorter distances for closer nodes
+        .distance(d => {
+          const link = d as GraphLink;
+          const baseDistance = link.type === 'structural' ? 60 : 80;
+
+          // Get source and target IDs
+          const sourceId = typeof link.source === 'object' ? (link.source as GraphNode).id : link.source;
+          const targetId = typeof link.target === 'object' ? (link.target as GraphNode).id : link.target;
+
+          // If either node is medium-connected, add 20% to edge length
+          if (isMediumConnected(sourceId) || isMediumConnected(targetId)) {
+            return baseDistance * 1.2;
+          }
+          return baseDistance;
+        })
         .strength(d => (d as GraphLink).type === 'structural' ? 0.6 : 0.4)) // Stronger links to keep connected nodes together
       .force('charge', d3.forceManyBody().strength(-150)) // Reduced repulsion for closer clustering
       .force('collision', d3.forceCollide<GraphNode>().radius(d => {
-        if ((d as GraphNode).type === 'root') return 22;
-        return 18;
+        if ((d as GraphNode).type === 'root') return 20;
+        return 14; // Slightly reduced collision radius
       }))
       // Add center force to pull nodes together
       .force('center', d3.forceCenter(width / 2, height / 2).strength(0.1));
@@ -165,18 +184,21 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
       .append('g')
       .attr('class', 'graph-node');
 
+    // Helper to calculate node radius based on connections
+    const getNodeRadius = (nodeId: string, nodeType: string): number => {
+      if (nodeType === 'root') return 16;
+
+      const conceptualConnections = getConceptualConnections(nodeId);
+      const baseSize = 6; // Reduced base size
+      const maxSize = 13; // Slightly reduced max
+      // Gentler log scale for more spread
+      const scaledSize = baseSize + Math.log2(conceptualConnections + 1) * 2;
+      return Math.min(scaledSize, maxSize);
+    };
+
     // Add circles for nodes with type-based styling
     node.append('circle')
-      .attr('r', d => {
-        // Root node is larger
-        if (d.type === 'root') return 18;
-
-        // For files, size based on conceptual connections
-        const conceptualConnections = getConceptualConnections(d.id);
-        const baseSize = 8;
-        const maxSize = 20;
-        return Math.min(baseSize + conceptualConnections * 2, maxSize);
-      })
+      .attr('r', d => getNodeRadius(d.id, d.type))
       .attr('fill', d => {
         // Root folder is pink/magenta
         if (d.type === 'root') {
@@ -281,7 +303,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     const drag = d3.drag<SVGGElement, GraphNode>()
       .clickDistance(4) // Smaller threshold for better click detection
       .filter((event) => event.button === 0) // Only allow left-click dragging
-      .on('start', (event, d) => {
+      .on('start', (event, _d) => {
         isDragging = false;
         dragStartPos = { x: event.x, y: event.y };
         // Don't do anything yet - wait to see if it's a real drag
@@ -396,7 +418,7 @@ const GraphEngine: React.FC<GraphEngineProps> = ({ data, hiddenNodes = [], onNod
     });
 
     // Add hover effects
-    node.on('mouseenter', function(event, hoveredNodeData) {
+    node.on('mouseenter', function(_event, hoveredNodeData) {
       const connectedNodes = getConnectedNodeIds(hoveredNodeData.id);
 
       // Highlight/dim nodes

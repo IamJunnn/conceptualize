@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Team, TeamInvitation, getTeamPendingInvites, cancelInvitation, resendInvitation, updateInvitationRole, reshareTeamContents, removeTeamMember, reshareWithMember } from '../../services/teamService';
+import { Team, TeamInvitation, getTeamPendingInvites, cancelInvitation, resendInvitation, updateInvitationRole, reshareTeamContents, removeTeamMember } from '../../services/teamService';
 import { User } from '../../services/authServiceTauri';
+import ConfirmModal, { ModalVariant } from '../UI/ConfirmModal';
 import './TeamManagementModal.css';
 
 interface TeamManagementModalProps {
@@ -11,6 +12,15 @@ interface TeamManagementModalProps {
   onMemberRemoved?: () => void;
 }
 
+// Modal state interface
+interface ModalState {
+  isOpen: boolean;
+  variant: ModalVariant;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+}
+
 export default function TeamManagementModal({ team, currentUser, onClose, onInviteMore, onMemberRemoved }: TeamManagementModalProps) {
   const [pendingInvites, setPendingInvites] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +28,31 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
   const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
   const [resharingMember, setResharingMember] = useState<string | null>(null);
   const [removingMember, setRemovingMember] = useState<string | null>(null);
+
+  // Modal state for styled dialogs
+  const [modal, setModal] = useState<ModalState>({
+    isOpen: false,
+    variant: 'confirm',
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  // Show styled modal
+  const showModal = (variant: ModalVariant, title: string, message: string, onConfirm?: () => void) => {
+    setModal({
+      isOpen: true,
+      variant,
+      title,
+      message,
+      onConfirm: onConfirm || (() => setModal(m => ({ ...m, isOpen: false }))),
+    });
+  };
+
+  // Close modal
+  const closeModal = () => {
+    setModal(m => ({ ...m, isOpen: false }));
+  };
 
   // Get current user's role in the team (use lowercase for lookup)
   const currentUserRole = team.members[currentUser.email.toLowerCase()]?.role;
@@ -40,31 +75,31 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
     }
   };
 
-  const handleCancelInvite = async (inviteId: string) => {
-    if (!confirm('Are you sure you want to cancel this invitation?')) {
-      return;
-    }
-
-    try {
-      await cancelInvitation(inviteId);
-      // Refresh the list
-      await loadPendingInvites();
-    } catch (err: any) {
-      alert(`Failed to cancel invitation: ${err.message}`);
-    }
+  const handleCancelInvite = (inviteId: string) => {
+    showModal('warning', 'Cancel Invitation', 'Are you sure you want to cancel this invitation?', async () => {
+      closeModal();
+      try {
+        await cancelInvitation(inviteId);
+        // Refresh the list
+        await loadPendingInvites();
+        showModal('success', 'Invitation Cancelled', 'The invitation has been cancelled.');
+      } catch (err: any) {
+        showModal('danger', 'Error', `Failed to cancel invitation: ${err.message}`);
+      }
+    });
   };
 
   const handleResendInvite = async (invite: TeamInvitation) => {
     try {
       if (!invite.inviteCode || !invite.role) {
-        alert('Invite code not found. The invitation may have expired.');
+        showModal('warning', 'Invitation Expired', 'Invite code not found. The invitation may have expired.');
         return;
       }
 
       await resendInvitation(team.id, team.name, invite.memberEmail, invite.inviteCode, invite.role);
-      alert(`Invitation resent to ${invite.memberEmail}`);
+      showModal('success', 'Invitation Resent', `Invitation resent to ${invite.memberEmail}`);
     } catch (err: any) {
-      alert(`Failed to resend invitation: ${err.message}`);
+      showModal('danger', 'Error', `Failed to resend invitation: ${err.message}`);
     }
   };
 
@@ -74,49 +109,59 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
       // Refresh the list
       await loadPendingInvites();
     } catch (err: any) {
-      alert(`Failed to update role: ${err.message}`);
+      showModal('danger', 'Error', `Failed to update role: ${err.message}`);
     }
   };
 
-  const handleReshareContents = async (memberEmail: string) => {
-    if (!confirm(`⚠️ WARNING: Email Notifications\n\nRe-sharing will grant ${memberEmail} access to all existing folders and files, but Google will send them a separate email notification for EACH item.\n\nIf you have many folders/files, this could spam their inbox with dozens of emails.\n\nContinue anyway?`)) {
-      return;
-    }
-
-    try {
-      setResharingMember(memberEmail);
-      await reshareTeamContents(team.id, memberEmail);
-      alert(`✅ Successfully shared all team contents with ${memberEmail}\n\nNote: They will receive multiple email notifications from Google Drive.`);
-    } catch (err: any) {
-      alert(`Failed to re-share contents: ${err.message}`);
-    } finally {
-      setResharingMember(null);
-    }
+  const handleReshareContents = (memberEmail: string) => {
+    showModal(
+      'warning',
+      'Re-share Contents',
+      `Re-sharing will grant ${memberEmail} access to all existing folders and files, but Google will send them a separate email notification for EACH item. If you have many folders/files, this could spam their inbox with dozens of emails. Continue anyway?`,
+      async () => {
+        closeModal();
+        try {
+          setResharingMember(memberEmail);
+          await reshareTeamContents(team.id, memberEmail);
+          showModal('success', 'Contents Shared', `Successfully shared all team contents with ${memberEmail}. Note: They will receive multiple email notifications from Google Drive.`);
+        } catch (err: any) {
+          showModal('danger', 'Error', `Failed to re-share contents: ${err.message}`);
+        } finally {
+          setResharingMember(null);
+        }
+      }
+    );
   };
 
-  const handleRemoveMember = async (memberEmail: string) => {
+  const handleRemoveMember = (memberEmail: string) => {
     const member = team.members[memberEmail.toLowerCase()];
     const memberName = member?.displayName || memberEmail;
 
-    if (!confirm(`Are you sure you want to remove ${memberName} from the team?\n\nThis will revoke their access to all team files.`)) {
-      return;
-    }
+    showModal(
+      'danger',
+      'Remove Member',
+      `Are you sure you want to remove ${memberName} from the team? This will revoke their access to all team files.`,
+      async () => {
+        closeModal();
+        try {
+          setRemovingMember(memberEmail);
+          await removeTeamMember(team.id, memberEmail);
 
-    try {
-      setRemovingMember(memberEmail);
-      await removeTeamMember(team.id, memberEmail);
-      alert(`✅ Successfully removed ${memberName} from the team`);
-
-      // Close the modal and trigger parent refresh
-      if (onMemberRemoved) {
-        onMemberRemoved();
+          // Show success and refresh (stay on Members tab)
+          showModal('success', 'Member Removed', `Successfully removed ${memberName} from the team`, () => {
+            closeModal();
+            // Trigger parent refresh to update team data (don't close modal)
+            if (onMemberRemoved) {
+              onMemberRemoved();
+            }
+          });
+        } catch (err: any) {
+          showModal('danger', 'Error', `Failed to remove member: ${err.message}`);
+        } finally {
+          setRemovingMember(null);
+        }
       }
-      onClose(); // Close the modal instead of reloading the entire page
-    } catch (err: any) {
-      alert(`Failed to remove member: ${err.message}`);
-    } finally {
-      setRemovingMember(null);
-    }
+    );
   };
 
   const formatDate = (date: Date) => {
@@ -323,6 +368,16 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
           )}
         </div>
       </div>
+
+      {/* Styled modal for confirmations and messages */}
+      <ConfirmModal
+        isOpen={modal.isOpen}
+        variant={modal.variant}
+        title={modal.title}
+        message={modal.message}
+        onConfirm={modal.onConfirm}
+        onCancel={closeModal}
+      />
     </div>
   );
 }

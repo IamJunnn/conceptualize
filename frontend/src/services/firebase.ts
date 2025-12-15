@@ -1,9 +1,14 @@
 // Firebase Configuration and Initialization
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  CACHE_SIZE_UNLIMITED
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
-import { getFunctions } from "firebase/functions";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -21,9 +26,26 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Initialize Firestore with offline persistence
+// This caches all Firestore data locally in IndexedDB
+// Data loads instantly from cache, then syncs with server in background
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED
+  })
+});
+
 export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Specify region for callable functions
+
+// Use Functions Emulator if enabled (for local development)
+if (import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === 'true') {
+  connectFunctionsEmulator(functions, '127.0.0.1', 5003);
+  console.log('🔧 Using Functions Emulator at http://127.0.0.1:5003');
+}
+
 export const googleProvider = new GoogleAuthProvider();
 
 // Configure Google provider

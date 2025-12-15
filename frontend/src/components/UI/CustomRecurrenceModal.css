@@ -1,0 +1,350 @@
+/* Modal Overlay */
+.custom-recurrence-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(2px);
+}
+
+/* Modal Content */
+.custom-recurrence-modal {
+  background: #2d2d2d;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 360px;
+  max-width: 420px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid #3d3d3d;
+}
+
+.custom-recurrence-modal h3 {
+  color: #64c8ca;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+}
+
+/* Recurrence Row */
+.recurrence-row {
+  margin-bottom: 20px;
+}
+
+.recurrence-row > label {
+  display: block;
+  color: #b0b0b0;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+/* Interval Controls */
+.interval-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.interval-input-wrapper {
+  display: flex;
+  align-items: stretch;
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.interval-input {
+  width: 50px;
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  font-size: 14px;
+  padding: 8px 12px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.interval-input::-webkit-outer-spin-button,
+.interval-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.interval-input:focus {
+  outline: none;
+}
+
+.interval-arrows {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #3d3d3d;
+}
+
+.arrow-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 8px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.arrow-btn:hover:not(:disabled) {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.arrow-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.arrow-btn:first-child {
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.unit-select {
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  padding: 8px 32px 8px 12px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.unit-select:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.unit-select option {
+  background: #2d2d2d;
+  color: #e0e0e0;
+}
+
+/* Day Toggles */
+.day-toggles {
+  display: flex;
+  gap: 8px;
+}
+
+.day-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  color: #888;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.day-toggle:hover {
+  border-color: #64c8ca;
+  color: #64c8ca;
+}
+
+.day-toggle.selected {
+  background: #64c8ca;
+  border-color: #64c8ca;
+  color: #1e1e1e;
+}
+
+.day-toggle.selected:hover {
+  background: #52b6b8;
+  border-color: #52b6b8;
+}
+
+/* Ends Section */
+.ends-section {
+  margin-bottom: 24px;
+}
+
+.ends-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  position: relative;
+}
+
+.radio-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.radio-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #555;
+  background: transparent;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radio-option input[type="radio"]:checked + .radio-circle {
+  border-color: #64c8ca;
+}
+
+.radio-option input[type="radio"]:checked + .radio-circle::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #64c8ca;
+}
+
+.radio-label {
+  color: #e0e0e0;
+  font-size: 14px;
+  min-width: 50px;
+  line-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* Date Picker Container */
+.date-picker-container {
+  flex: 1;
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.date-picker-container.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.date-picker-container .custom-datepicker-input {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* Occurrences Container */
+.occurrences-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.occurrences-container.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.occurrences-input-wrapper {
+  display: flex;
+  align-items: stretch;
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.occurrences-input {
+  width: 50px;
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  font-size: 14px;
+  padding: 6px 8px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.occurrences-input::-webkit-outer-spin-button,
+.occurrences-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.occurrences-input:focus {
+  outline: none;
+}
+
+.occurrences-input:disabled {
+  color: #666;
+}
+
+.occurrences-label {
+  color: #888;
+  font-size: 14px;
+}
+
+/* Actions */
+.recurrence-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #3d3d3d;
+}
+
+.btn-cancel {
+  background: transparent;
+  border: none;
+  color: #64c8ca;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: rgba(100, 200, 202, 0.1);
+}
+
+.btn-done {
+  background: #64c8ca;
+  border: none;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-done:hover {
+  background: #52b6b8;
+}

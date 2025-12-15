@@ -1,6 +1,5 @@
 import { $prose } from '@milkdown/utils'
 import { Plugin, PluginKey } from '@milkdown/prose/state'
-import { Decoration, DecorationSet } from '@milkdown/prose/view'
 
 const slashCommandKey = new PluginKey('slashCommand')
 
@@ -194,8 +193,9 @@ export const slashCommandPlugin = () => {
           // Close menu on click outside
           if (menuElement) {
             setTimeout(() => {
-              const state = slashCommandKey.getState(this.state)
-              if (state.active) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const pluginState = slashCommandKey.getState((this as any).state)
+              if (pluginState?.active) {
                 closeMenu(this)
               }
             }, 10)
@@ -544,11 +544,6 @@ export const slashCommandPlugin = () => {
           // We need to insert this as text, not as a node
           // Let's create a paragraph with the text
           node = schema.nodes.paragraph.create(null, todoNode)
-          break
-        case 'image':
-          // For now, just insert a paragraph and let user add image manually
-          // TODO: Add image upload dialog
-          node = schema.nodes.paragraph.create()
           break
         case 'table':
           // Create a simple 3x3 table with proper GFM alignment attributes

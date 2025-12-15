@@ -22,47 +22,97 @@
 .team-timeline-panel .timeline-panel-header .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
 }
 
 .team-timeline-panel .timeline-panel-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: #e0e0e0;
+  white-space: nowrap;
 }
 
-.team-timeline-panel .timeline-panel-header .task-count {
-  padding: 4px 10px;
-  background: #2d2d2d;
-  border-radius: 12px;
-  font-size: 13px;
+/* Header Tabs */
+.team-timeline-panel .header-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #252525;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.team-timeline-panel .header-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   color: #888;
+  font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.team-timeline-panel .header-tab:hover {
+  color: #e0e0e0;
+  background: #2d2d2d;
+}
+
+.team-timeline-panel .header-tab.active {
+  background: #333;
+  color: #64c8ca;
+}
+
+.team-timeline-panel .header-tab svg {
+  flex-shrink: 0;
+}
+
+.team-timeline-panel .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(100, 200, 202, 0.15);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64c8ca;
+}
+
+.team-timeline-panel .header-tab:not(.active) .tab-count {
+  background: rgba(136, 136, 136, 0.15);
+  color: #888;
 }
 
 .team-timeline-panel .add-task-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: #64c8ca;
-  border: none;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid #3d3d3d;
   border-radius: 6px;
-  color: #1e1e1e;
-  font-size: 14px;
-  font-weight: 600;
+  color: #888;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .team-timeline-panel .add-task-btn:hover {
-  background: #52b6b8;
-}
-
-.team-timeline-panel .add-task-btn .add-icon {
-  width: 18px;
-  height: 18px;
+  background: rgba(100, 200, 202, 0.15);
+  border-color: #64c8ca;
+  color: #64c8ca;
 }
 
 /* Loading state */

@@ -6,15 +6,83 @@
 import { Timestamp } from 'firebase/firestore';
 
 // Channel types
-export type ChannelType = 'text' | 'dm';
+export type ChannelType = 'text' | 'dm' | 'group';
 
 // Message types
+export type MessageType = 'text' | 'system' | 'call';
+
+// Call message metadata (for type: 'call')
+export interface CallMessageData {
+  callId: string;
+  callType: 'voice' | 'video';
+  status: 'started' | 'ended' | 'missed' | 'declined';
+  duration?: number; // seconds (set when call ends)
+  initiatorName: string;
+  initiatorEmail: string;
+}
+
+// Shared file/note reference (for sharing files via chat)
+export interface SharedFile {
+  path: string; // File path in team drive
+  name: string; // Display name
+  type: 'file' | 'folder'; // Type of item shared
+  driveId?: string; // Google Drive ID (optional)
+}
+
+// Shared recording reference (for sharing recordings via chat)
+export interface SharedRecording {
+  recordingId: string;
+  title: string; // e.g., "Call with John and Jane"
+  type: 'video' | 'audio';
+  duration?: number; // seconds
+  fileUrl: string;
+  fileSize?: number;
+  createdAt: Date;
+}
+
+// Shared whiteboard reference (for sharing whiteboards via chat)
+export interface SharedWhiteboard {
+  whiteboardId: string;
+  name: string;
+  createdByName: string;
+  createdByEmail: string;
+}
+
+// Shared todo/meeting reference (for forwarding tasks/meetings to chat)
+export interface SharedTodo {
+  todoId: string;
+  teamId: string;
+  text: string;
+  type: 'task' | 'meeting';
+  priority?: number; // 1-4
+  completed: boolean;
+  assignees: string[]; // Array of emails
+  endDate?: string; // Due date for tasks
+  startDate?: string; // For meetings
+  meetingDetails?: {
+    startTime?: string;
+    endTime?: string;
+    color?: string;
+    hasVideoRoom?: boolean;
+  };
+  createdBy: string;
+}
+
+// Forwarded message info
+export interface ForwardedFrom {
+  originalSenderName: string;
+  originalSenderEmail?: string;
+  originalChannelName?: string;
+}
+
+// Chat message interface
 export interface ChatMessage {
   id: string;
   channelId: string;
   senderId: string;
   senderName: string;
   senderEmail: string;
+  senderPhotoURL?: string;
   content: string;
   createdAt: Date;
   updatedAt?: Date;
@@ -24,12 +92,36 @@ export interface ChatMessage {
   reactions?: MessageReaction[];
   attachments?: MessageAttachment[];
   mentions?: string[]; // Array of user emails mentioned
+  poll?: Poll; // Optional poll data
+  sharedFile?: SharedFile; // Shared file/note reference
+  sharedRecording?: SharedRecording; // Shared recording reference
+  sharedTodo?: SharedTodo; // Shared task/meeting reference
+  sharedWhiteboard?: SharedWhiteboard; // Shared whiteboard reference
+  type?: MessageType; // 'text' (default), 'system', or 'call'
+  callData?: CallMessageData; // Present when type is 'call'
+  forwardedFrom?: ForwardedFrom; // Present when message was forwarded
+}
+
+// Firestore attachment version (with Timestamp)
+export interface MessageAttachmentFirestore extends Omit<MessageAttachment, 'uploadedAt'> {
+  uploadedAt: Timestamp | Date;
+}
+
+// Firestore version of SharedRecording (with Timestamp)
+export interface SharedRecordingFirestore extends Omit<SharedRecording, 'createdAt'> {
+  createdAt: Timestamp;
 }
 
 // Firestore version (with Timestamp)
-export interface ChatMessageFirestore extends Omit<ChatMessage, 'createdAt' | 'updatedAt'> {
+export interface ChatMessageFirestore extends Omit<ChatMessage, 'createdAt' | 'updatedAt' | 'attachments' | 'sharedFile' | 'sharedRecording' | 'sharedTodo' | 'sharedWhiteboard' | 'callData'> {
   createdAt: Timestamp;
   updatedAt?: Timestamp;
+  attachments?: MessageAttachmentFirestore[];
+  sharedFile?: SharedFile; // Shared file is same structure in Firestore
+  sharedRecording?: SharedRecordingFirestore; // Recording with Timestamp
+  sharedTodo?: SharedTodo; // Shared todo is same structure in Firestore
+  sharedWhiteboard?: SharedWhiteboard; // Shared whiteboard is same structure in Firestore
+  callData?: CallMessageData; // Same structure in Firestore
 }
 
 // Message reaction
@@ -49,6 +141,23 @@ export interface MessageAttachment {
   thumbnailUrl?: string; // For images
   uploadedAt: Date;
   uploadedBy: string;
+}
+
+// Poll option
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: string[]; // Array of user emails who voted for this option
+}
+
+// Poll data
+export interface Poll {
+  id: string;
+  question: string;
+  options: PollOption[];
+  allowMultiple: boolean;
+  createdBy: string;
+  totalVotes: number;
 }
 
 // Channel
@@ -126,10 +235,26 @@ export interface MessageFormData {
  * Convert Firestore message to app message
  */
 export function firestoreToMessage(data: ChatMessageFirestore): ChatMessage {
+  // Convert Firestore attachments (with Timestamp uploadedAt) to app attachments (with Date)
+  const convertedAttachments: MessageAttachment[] | undefined = data.attachments?.map(att => ({
+    ...att,
+    uploadedAt: att.uploadedAt instanceof Date ? att.uploadedAt : (att.uploadedAt as Timestamp).toDate(),
+  }));
+
+  // Convert sharedRecording createdAt if present
+  const convertedRecording: SharedRecording | undefined = data.sharedRecording ? {
+    ...data.sharedRecording,
+    createdAt: data.sharedRecording.createdAt instanceof Date
+      ? data.sharedRecording.createdAt
+      : (data.sharedRecording.createdAt as Timestamp).toDate(),
+  } : undefined;
+
   return {
     ...data,
     createdAt: data.createdAt.toDate(),
     updatedAt: data.updatedAt?.toDate(),
+    attachments: convertedAttachments,
+    sharedRecording: convertedRecording,
   };
 }
 
@@ -200,9 +325,10 @@ export function formatMessageTime(date: Date): string {
 
 /**
  * Extract mentions from message content
+ * Matches @username patterns (word characters after @)
  */
 export function extractMentions(content: string): string[] {
-  const mentionRegex = /@(\S+@\S+\.\S+)/g;
+  const mentionRegex = /@([a-zA-Z0-9_.-]+)(?=\s|$)/g;
   const mentions: string[] = [];
   let match;
 
@@ -217,10 +343,11 @@ export function extractMentions(content: string): string[] {
  * Highlight mentions in message
  */
 export function highlightMentions(content: string, currentUserEmail: string): string {
+  const currentUserDisplayName = currentUserEmail.split('@')[0].toLowerCase();
   return content.replace(
-    /@(\S+@\S+\.\S+)/g,
-    (match, email) => {
-      const isCurrentUser = email === currentUserEmail;
+    /@([a-zA-Z0-9_.-]+)(?=\s|$)/g,
+    (match, username) => {
+      const isCurrentUser = username.toLowerCase() === currentUserDisplayName;
       return `<span class="mention ${isCurrentUser ? 'mention-me' : ''}">${match}</span>`;
     }
   );
@@ -228,9 +355,11 @@ export function highlightMentions(content: string, currentUserEmail: string): st
 
 /**
  * Check if message mentions user
+ * Compares username (part before @) since mentions now store usernames
  */
 export function messagesMentionsUser(message: ChatMessage, userEmail: string): boolean {
-  return message.mentions?.includes(userEmail) || false;
+  const username = userEmail.split('@')[0].toLowerCase();
+  return message.mentions?.some(mention => mention.toLowerCase() === username) || false;
 }
 
 /**

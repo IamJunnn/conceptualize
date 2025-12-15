@@ -287,3 +287,152 @@
   text-align: center;
   padding: 40px;
 }
+
+/* Billing Warning Banner (Grace Period) */
+.billing-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #3d2a00 0%, #2a1f00 100%);
+  border-bottom: 1px solid #664400;
+  color: #ffcc00;
+  font-size: 14px;
+}
+
+.billing-warning-banner.grace-period {
+  background: linear-gradient(135deg, #3d2a00 0%, #2a1f00 100%);
+  border-bottom: 1px solid #664400;
+}
+
+.billing-warning-banner svg {
+  flex-shrink: 0;
+  color: #ffcc00;
+}
+
+.billing-warning-banner span {
+  flex: 1;
+}
+
+.billing-warning-banner .resolve-btn {
+  padding: 6px 12px;
+  background: #ffcc00;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.billing-warning-banner .resolve-btn:hover {
+  background: #ffd633;
+}
+
+.billing-warning-banner .dismiss-btn {
+  padding: 4px 8px;
+  background: transparent;
+  color: #ffcc00;
+  border: 1px solid #664400;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.billing-warning-banner .dismiss-btn:hover {
+  background: rgba(255, 204, 0, 0.1);
+  border-color: #ffcc00;
+}
+
+/* Blocked User Overlay */
+.billing-blocked-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(26, 26, 26, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.blocked-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 400px;
+  padding: 40px;
+  background: #252525;
+  border-radius: 12px;
+  border: 1px solid #333;
+}
+
+.blocked-content .blocked-icon {
+  color: #ff6b6b;
+  margin-bottom: 20px;
+}
+
+.blocked-content h2 {
+  margin: 0 0 12px 0;
+  color: #fff;
+  font-size: 24px;
+}
+
+.blocked-content p {
+  margin: 0 0 24px 0;
+  color: #aaa;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.blocked-content .resolve-payment-btn {
+  padding: 12px 24px;
+  background: #64c8ca;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: background 0.2s;
+}
+
+.blocked-content .resolve-payment-btn:hover {
+  background: #7ad4d6;
+}
+
+.blocked-content .settings-btn {
+  padding: 10px 20px;
+  background: transparent;
+  color: #aaa;
+  border: 1px solid #444;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.blocked-content .settings-btn:hover {
+  background: #333;
+  color: #fff;
+  border-color: #555;
+}
+
+/* Meeting Call Overlay Container - Fullscreen overlay for standalone meeting calls */
+.meeting-call-overlay-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: #1a1a1a;
+}

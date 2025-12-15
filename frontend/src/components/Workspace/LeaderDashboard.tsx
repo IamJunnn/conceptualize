@@ -11,11 +11,21 @@ import {
   Invitation
 } from '../../services/workspaceService';
 import { useAuth } from '../../contexts/AuthContext';
+import ConfirmModal, { ModalVariant } from '../UI/ConfirmModal';
 import './AdminDashboard.css'; // Reuse the same styles
 
 interface LeaderDashboardProps {
   workspace: Workspace;
   onClose: () => void;
+}
+
+// Modal state interface
+interface ModalState {
+  isOpen: boolean;
+  variant: ModalVariant;
+  title: string;
+  message: string;
+  onConfirm: () => void;
 }
 
 const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ workspace, onClose }) => {
@@ -26,6 +36,29 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ workspace, onClose })
   const [selectedMember, setSelectedMember] = useState<WorkspaceMember | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Modal state for styled dialogs
+  const [modal, setModal] = useState<ModalState>({
+    isOpen: false,
+    variant: 'confirm',
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const showModal = (variant: ModalVariant, title: string, message: string, onConfirm?: () => void) => {
+    setModal({
+      isOpen: true,
+      variant,
+      title,
+      message,
+      onConfirm: onConfirm || (() => setModal(m => ({ ...m, isOpen: false }))),
+    });
+  };
+
+  const closeModal = () => {
+    setModal(m => ({ ...m, isOpen: false }));
+  };
 
   useEffect(() => {
     loadData();
@@ -69,7 +102,7 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ workspace, onClose })
     }
   };
 
-  const handleRemoveMember = async (member: WorkspaceMember) => {
+  const handleRemoveMember = (member: WorkspaceMember) => {
     if (!user) return;
 
     // Leaders can only remove members
@@ -78,18 +111,21 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ workspace, onClose })
       return;
     }
 
-    const confirmed = confirm(
-      `Are you sure you want to remove ${member.displayName} from the workspace?`
+    showModal(
+      'danger',
+      'Remove Member',
+      `Are you sure you want to remove ${member.displayName} from the workspace?`,
+      async () => {
+        closeModal();
+        try {
+          await removeMemberFromWorkspace(workspace.id, member.uid, user.uid);
+          showModal('success', 'Member Removed', `Successfully removed ${member.displayName} from the workspace`);
+          await loadMembers();
+        } catch (err: any) {
+          showModal('danger', 'Error', `Failed to remove member: ${err.message}`);
+        }
+      }
     );
-
-    if (!confirmed) return;
-
-    try {
-      await removeMemberFromWorkspace(workspace.id, member.uid, user.uid);
-      await loadMembers();
-    } catch (err: any) {
-      setError(err.message);
-    }
   };
 
   const getRoleIcon = (role: WorkspaceRole) => {
@@ -114,9 +150,11 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ workspace, onClose })
     }
   };
 
-  // Filter: Leaders can only manage members
-  const manageableMembers = members.filter(m => m.role === 'member');
-  const otherMembers = members.filter(m => m.role !== 'member');
+  // Filter: Leaders can only manage members (reserved for future role-based filtering)
+  const _manageableMembers = members.filter(m => m.role === 'member');
+  const _otherMembers = members.filter(m => m.role !== 'member');
+  void _manageableMembers;
+  void _otherMembers;
 
   // Sort members: admins first, then leaders, then members
   const sortedMembers = [...members].sort((a, b) => {
@@ -339,6 +377,16 @@ const LeaderDashboard: React.FC<LeaderDashboardProps> = ({ workspace, onClose })
             </div>
           </div>
         )}
+
+        {/* Styled confirmation/success modal */}
+        <ConfirmModal
+          isOpen={modal.isOpen}
+          variant={modal.variant}
+          title={modal.title}
+          message={modal.message}
+          onConfirm={modal.onConfirm}
+          onCancel={closeModal}
+        />
       </div>
     </div>
   );

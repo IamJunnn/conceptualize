@@ -18,6 +18,7 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { getErrorMessage } from '../utils/errorUtils';
 import {
   TeamTodo,
   TeamTodoFormData,
@@ -25,6 +26,7 @@ import {
   TodoPriority,
   docToTeamTodo,
 } from './teamTodoTypes';
+import { createBulkNotifications } from './teamChatService';
 
 /**
  * Get the todos collection reference for a team
@@ -46,7 +48,8 @@ function getTodoDoc(teamId: string, todoId: string) {
 export async function createTodo(
   teamId: string,
   todoData: TeamTodoFormData,
-  userEmail: string
+  userEmail: string,
+  userName?: string
 ): Promise<TeamTodo> {
   try {
     const todosRef = getTodosCollection(teamId);
@@ -54,7 +57,9 @@ export async function createTodo(
     const todoId = newDocRef.id;
 
     const now = Timestamp.now();
-    const todoDoc = {
+    const isMeeting = todoData.type === 'meeting';
+
+    const todoDoc: any = {
       id: todoId,
       text: todoData.text.trim(),
       completed: false,
@@ -66,20 +71,62 @@ export async function createTodo(
       createdBy: userEmail,
       createdAt: now,
       updatedAt: now,
+      type: todoData.type || 'task',
     };
+
+    // Add meeting details if this is a meeting
+    if (isMeeting && todoData.meetingDetails) {
+      todoDoc.meetingDetails = todoData.meetingDetails;
+    }
 
     await setDoc(newDocRef, todoDoc);
 
-    console.log(`✅ Created todo "${todoData.text}" in team ${teamId}`);
+    console.log(`✅ Created ${isMeeting ? 'meeting' : 'todo'} "${todoData.text}" in team ${teamId}`);
+
+    // Send notifications to assignees (excluding the creator)
+    const assigneesToNotify = (todoData.assignees || []).filter(email => email !== userEmail);
+    if (assigneesToNotify.length > 0) {
+      const senderName = userName || userEmail.split('@')[0];
+      const todoTitle = todoData.text.length > 50
+        ? todoData.text.substring(0, 50) + '...'
+        : todoData.text;
+
+      if (isMeeting) {
+        // Send meeting invite notification
+        const meetingTime = todoData.meetingDetails?.startTime || '';
+        const meetingDate = todoData.startDate || todoData.endDate || '';
+
+        createBulkNotifications(teamId, assigneesToNotify, {
+          type: 'meeting_invite',
+          title: 'Meeting Invitation',
+          message: `${senderName} invited you to: "${todoTitle}" on ${meetingDate} at ${meetingTime}`,
+          senderEmail: userEmail,
+          senderName,
+          todoId,
+          todoTitle: todoData.text,
+        }).catch(err => console.error('Error sending meeting invite notifications:', err));
+      } else {
+        // Send task assignment notification
+        createBulkNotifications(teamId, assigneesToNotify, {
+          type: 'todo_assigned',
+          title: 'Task Assigned to You',
+          message: `${senderName} assigned you: "${todoTitle}"`,
+          senderEmail: userEmail,
+          senderName,
+          todoId,
+          todoTitle: todoData.text,
+        }).catch(err => console.error('Error sending todo assignment notifications:', err));
+      }
+    }
 
     return {
       ...todoDoc,
       createdAt: now.toDate(),
       updatedAt: now.toDate(),
     } as TeamTodo;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to create todo:', error);
-    throw new Error(`Failed to create todo: ${error.message}`);
+    throw new Error(`Failed to create todo: ${getErrorMessage(error)}`);
   }
 }
 
@@ -89,10 +136,16 @@ export async function createTodo(
 export async function updateTodo(
   teamId: string,
   todoId: string,
-  updates: Partial<TeamTodoFormData>
+  updates: Partial<TeamTodoFormData>,
+  updaterEmail?: string,
+  updaterName?: string
 ): Promise<void> {
   try {
     const todoRef = getTodoDoc(teamId, todoId);
+
+    // Get current todo data to check for new assignees
+    const currentTodoSnap = await getDoc(todoRef);
+    const currentTodo = currentTodoSnap.data() as TeamTodoDoc | undefined;
 
     const updateData: any = {
       updatedAt: Timestamp.now(),
@@ -116,13 +169,42 @@ export async function updateTodo(
     if (updates.assignees !== undefined) {
       updateData.assignees = updates.assignees;
     }
+    if (updates.type !== undefined) {
+      updateData.type = updates.type;
+    }
+    if (updates.meetingDetails !== undefined) {
+      updateData.meetingDetails = updates.meetingDetails;
+    }
 
     await updateDoc(todoRef, updateData);
 
     console.log(`✅ Updated todo ${todoId} in team ${teamId}`);
-  } catch (error: any) {
+
+    // Send notifications to newly added assignees
+    if (updates.assignees !== undefined && updaterEmail && currentTodo) {
+      const currentAssignees = currentTodo.assignees || [];
+      const newAssignees = updates.assignees.filter(
+        email => !currentAssignees.includes(email) && email !== updaterEmail
+      );
+
+      if (newAssignees.length > 0) {
+        const senderName = updaterName || updaterEmail.split('@')[0];
+        const todoTitle = (updates.text || currentTodo.text || 'Task').substring(0, 50);
+
+        createBulkNotifications(teamId, newAssignees, {
+          type: 'todo_assigned',
+          title: 'Task Assigned to You',
+          message: `${senderName} assigned you: "${todoTitle}"`,
+          senderEmail: updaterEmail,
+          senderName,
+          todoId,
+          todoTitle: updates.text || currentTodo.text,
+        }).catch(err => console.error('Error sending todo assignment notifications:', err));
+      }
+    }
+  } catch (error) {
     console.error('Failed to update todo:', error);
-    throw new Error(`Failed to update todo: ${error.message}`);
+    throw new Error(`Failed to update todo: ${getErrorMessage(error)}`);
   }
 }
 
@@ -138,9 +220,9 @@ export async function deleteTodo(
     await deleteDoc(todoRef);
 
     console.log(`✅ Deleted todo ${todoId} from team ${teamId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to delete todo:', error);
-    throw new Error(`Failed to delete todo: ${error.message}`);
+    throw new Error(`Failed to delete todo: ${getErrorMessage(error)}`);
   }
 }
 
@@ -179,9 +261,9 @@ export async function toggleTodo(
     await updateDoc(todoRef, updateData);
 
     console.log(`✅ Toggled todo ${todoId} to ${newCompleted ? 'completed' : 'incomplete'}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to toggle todo:', error);
-    throw new Error(`Failed to toggle todo: ${error.message}`);
+    throw new Error(`Failed to toggle todo: ${getErrorMessage(error)}`);
   }
 }
 
@@ -201,9 +283,9 @@ export async function getTodos(teamId: string): Promise<TeamTodo[]> {
 
     console.log(`✅ Fetched ${todos.length} todos for team ${teamId}`);
     return todos;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get todos:', error);
-    throw new Error(`Failed to get todos: ${error.message}`);
+    throw new Error(`Failed to get todos: ${getErrorMessage(error)}`);
   }
 }
 
@@ -255,9 +337,9 @@ export async function getTodoById(
 
     const data = todoSnap.data() as TeamTodoDoc;
     return docToTeamTodo(data);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to get todo:', error);
-    throw new Error(`Failed to get todo: ${error.message}`);
+    throw new Error(`Failed to get todo: ${getErrorMessage(error)}`);
   }
 }
 
@@ -277,9 +359,9 @@ export async function assignTodo(
     });
 
     console.log(`✅ Assigned todo ${todoId} to ${assignees.length} members`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to assign todo:', error);
-    throw new Error(`Failed to assign todo: ${error.message}`);
+    throw new Error(`Failed to assign todo: ${getErrorMessage(error)}`);
   }
 }
 
@@ -299,9 +381,9 @@ export async function updateTodoPriority(
     });
 
     console.log(`✅ Updated priority for todo ${todoId} to P${priority}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to update priority:', error);
-    throw new Error(`Failed to update priority: ${error.message}`);
+    throw new Error(`Failed to update priority: ${getErrorMessage(error)}`);
   }
 }
 
@@ -321,9 +403,9 @@ export async function updateTodoDueDate(
     });
 
     console.log(`✅ Updated due date for todo ${todoId}`);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to update due date:', error);
-    throw new Error(`Failed to update due date: ${error.message}`);
+    throw new Error(`Failed to update due date: ${getErrorMessage(error)}`);
   }
 }
 
@@ -350,8 +432,8 @@ export async function deleteCompletedTodos(teamId: string): Promise<number> {
 
     console.log(`✅ Deleted ${deletedCount} completed todos from team ${teamId}`);
     return deletedCount;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to delete completed todos:', error);
-    throw new Error(`Failed to delete completed todos: ${error.message}`);
+    throw new Error(`Failed to delete completed todos: ${getErrorMessage(error)}`);
   }
 }

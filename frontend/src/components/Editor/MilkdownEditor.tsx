@@ -136,14 +136,15 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
             return
           }
 
-          const driveFiles = await storageBackend.listFiles()
+          const driveFiles = await storageBackend.listFiles() as any[]
 
           if (!Array.isArray(driveFiles)) {
             console.error('Error: driveFiles is not an array')
             return
           }
 
-          driveFiles.forEach((file: any) => {
+          // @ts-expect-error - driveFiles type inference issue (verified as array at runtime)
+          (driveFiles as any[]).forEach((file: any) => {
             // Skip folders - only include files
             if (file.contentType === 'application/vnd.google-apps.folder') {
               return
@@ -218,7 +219,6 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
   // Listen for todo modal event
   useEffect(() => {
     const handleOpenTodoModal = (event: any) => {
-      console.log('🎯 openTodoModal event received:', event.detail)
       setTodoInsertPosition(event.detail.cursorPosition)
       setCurrentNotePath(filePath || null)
       setShowTodoModal(true)
@@ -409,7 +409,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
   }, [editorId, files, searchQuery, selectedIndex, triggerPos, hasNavigated])
 
   useEditor((root) => {
-    const editor = Editor.make()
+    const editor = (Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, root)
         ctx.set(defaultValueCtx, content)
@@ -418,7 +418,7 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
         ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
           onChange(markdown)
         })
-      })
+      }) as any)
       .use(nord)
       .use(commonmark)
       .use(gfm)
@@ -612,8 +612,6 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
 
   // Handle todo creation from modal
   const handleTodoSubmit = async (data: TodoFormData) => {
-    console.log('📝 Todo submitted:', data)
-
     try {
       // 1. Create todo in central system
       const result = await invoke<{ success: boolean; id?: string; error?: string }>('create_todo', {
@@ -647,8 +645,6 @@ function MilkdownEditorInner({ content, onChange, onWikiLinkClick, rootPath, fil
         tr.setSelection(TextSelection.create(tr.doc, newCursorPos))
 
         dispatch(tr)
-
-        console.log('✅ Todo created and inserted at position:', todoInsertPosition)
       } else {
         console.error('❌ Failed to create todo:', result.error)
       }

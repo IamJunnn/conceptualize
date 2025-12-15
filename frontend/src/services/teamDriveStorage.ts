@@ -6,10 +6,11 @@
 
 import {
   uploadFile,
+  uploadBinaryFile,
   downloadFile,
+  downloadFileAsBlob,
   deleteFile,
   deleteFolder,
-  listFiles,
   listAllFilesRecursive,
   createFolder as createStorageFolder,
   moveFile as moveStorageFile,
@@ -31,6 +32,9 @@ interface FileTreeNode {
 // Content cache duration - 30 seconds
 const CONTENT_CACHE_DURATION = 30000;
 
+// Development mode flag for verbose logging
+const isDev = import.meta.env.DEV;
+
 export class TeamDriveStorage {
   private teamId: string;
   private fileCache: Map<string, { id: string; content: string; timestamp: number }> = new Map();
@@ -51,7 +55,7 @@ export class TeamDriveStorage {
    */
   async getFileTree(): Promise<FileTreeNode[]> {
     try {
-      console.log('[TeamStorage] Getting file tree for team:', this.teamId);
+      if (isDev) console.log('[TeamStorage] Getting file tree for team:', this.teamId);
 
       // Get all files recursively
       const allFiles = await listAllFilesRecursive(this.teamId);
@@ -62,7 +66,7 @@ export class TeamDriveStorage {
       // Build tree structure from flat list
       const tree = this.buildTreeFromFiles(visibleFiles);
 
-      console.log('[TeamStorage] File tree built with', tree.length, 'root items');
+      if (isDev) console.log('[TeamStorage] File tree built with', tree.length, 'root items');
       return tree;
     } catch (error) {
       console.error('[TeamStorage] Failed to get file tree:', error);
@@ -132,7 +136,7 @@ export class TeamDriveStorage {
    */
   async listFiles(): Promise<any[]> {
     try {
-      console.log('[TeamStorage] Listing files for team:', this.teamId);
+      if (isDev) console.log('[TeamStorage] Listing files for team:', this.teamId);
 
       const files = await listAllFilesRecursive(this.teamId);
 
@@ -148,6 +152,7 @@ export class TeamDriveStorage {
             size: file.size || 0,
             contentType: file.isFolder ? 'application/vnd.google-apps.folder' : file.contentType,
             modifiedTime: file.modifiedTime,
+            lastEditedBy: file.lastEditedBy,
           };
         });
     } catch (error) {
@@ -163,7 +168,7 @@ export class TeamDriveStorage {
    */
   async getFile(fileNameOrPath: string): Promise<string> {
     try {
-      console.log('[TeamStorage] Getting file:', fileNameOrPath);
+      if (isDev) console.log('[TeamStorage] Getting file:', fileNameOrPath);
 
       // Normalize backslashes to forward slashes (Windows paths)
       const normalizedInput = fileNameOrPath.replace(/\\/g, '/');
@@ -175,7 +180,7 @@ export class TeamDriveStorage {
       // Check content cache first
       const cached = this.fileCache.get(normalizedPath);
       if (cached && Date.now() - cached.timestamp < CONTENT_CACHE_DURATION) {
-        console.log('[TeamStorage] Returning cached content for:', normalizedPath);
+        if (isDev) console.log('[TeamStorage] Returning cached content for:', normalizedPath);
         return cached.content;
       }
 
@@ -185,7 +190,7 @@ export class TeamDriveStorage {
         // If a full path was provided, try direct download first
         // This handles newly created files that aren't in the file list cache yet
         relativePath = normalizedPath;
-        console.log('[TeamStorage] Using provided path:', relativePath);
+        if (isDev) console.log('[TeamStorage] Using provided path:', relativePath);
 
         try {
           const content = await downloadFile(this.teamId, relativePath);
@@ -201,7 +206,7 @@ export class TeamDriveStorage {
         } catch (downloadError: any) {
           // If direct download fails with not found, fall through to search
           if (downloadError.message?.includes('not found') || downloadError.code === 'storage/object-not-found') {
-            console.log('[TeamStorage] Direct download failed, searching file list...');
+            if (isDev) console.log('[TeamStorage] Direct download failed, searching file list...');
           } else {
             throw downloadError;
           }
@@ -254,7 +259,7 @@ export class TeamDriveStorage {
   clearCaches(): void {
     this.fileCache.clear();
     this.filePathCache.clear();
-    console.log('[TeamStorage] Caches cleared');
+    if (isDev) console.log('[TeamStorage] Caches cleared');
   }
 
   /**
@@ -265,7 +270,7 @@ export class TeamDriveStorage {
     const normalizedPath = filePath.endsWith('.md') ? filePath : `${filePath}.md`;
     const fileName = normalizedPath.split('/').pop() || normalizedPath;
 
-    console.log('[TeamStorage] Pre-caching content for:', normalizedPath);
+    if (isDev) console.log('[TeamStorage] Pre-caching content for:', normalizedPath);
 
     // Cache with both full path and filename
     this.fileCache.set(normalizedPath, {
@@ -284,9 +289,9 @@ export class TeamDriveStorage {
   /**
    * Save a file to the team folder
    */
-  async saveFile(fileName: string, content: string, parentFolderPath?: string, isNewFile: boolean = false): Promise<string> {
+  async saveFile(fileName: string, content: string, parentFolderPath?: string, isNewFile: boolean = false, editorEmail?: string): Promise<string> {
     try {
-      console.log('[TeamStorage] saveFile called:', { fileName, parentFolderPath, isNewFile, contentLength: content.length });
+      if (isDev) console.log('[TeamStorage] saveFile called:', { fileName, parentFolderPath, isNewFile, contentLength: content.length, editorEmail });
 
       const normalizedFileName = fileName.endsWith('.md') ? fileName : `${fileName}.md`;
 
@@ -302,20 +307,20 @@ export class TeamDriveStorage {
         ? `${cleanParentPath}/${normalizedFileName}`
         : normalizedFileName;
 
-      console.log('[TeamStorage] Full file path:', filePath);
+      if (isDev) console.log('[TeamStorage] Full file path:', filePath);
 
       // Check if file already exists
       if (isNewFile) {
         const exists = await fileExists(this.teamId, filePath);
         if (exists) {
-          console.log('[TeamStorage] ERROR: Trying to create new file but it already exists');
+          if (isDev) console.log('[TeamStorage] ERROR: Trying to create new file but it already exists');
           throw new Error(`A file named "${fileName}" already exists in this folder`);
         }
       }
 
       // Upload/update the file
-      const result = await uploadFile(this.teamId, filePath, content);
-      console.log('[TeamStorage] File saved:', result.id);
+      const result = await uploadFile(this.teamId, filePath, content, 'text/markdown', editorEmail);
+      if (isDev) console.log('[TeamStorage] File saved:', result.id);
 
       // Cache the file content and path
       // Cache with both filename and full path for quick lookups
@@ -343,7 +348,7 @@ export class TeamDriveStorage {
    */
   async deleteFile(fileName: string): Promise<void> {
     try {
-      console.log('[TeamStorage] Deleting file:', fileName);
+      if (isDev) console.log('[TeamStorage] Deleting file:', fileName);
 
       // Find the file to get its full path
       const allFiles = await listAllFilesRecursive(this.teamId);
@@ -366,9 +371,30 @@ export class TeamDriveStorage {
         await deleteFile(this.teamId, relativePath);
       }
 
-      console.log('[TeamStorage] File deleted:', fileName);
+      if (isDev) console.log('[TeamStorage] File deleted:', fileName);
     } catch (error) {
       console.error(`[TeamStorage] Failed to delete file "${fileName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save a binary file (images, PDFs, etc.) to the team folder
+   */
+  async saveBinaryFile(fileName: string, data: Uint8Array, contentType: string, parentFolderPath?: string): Promise<string> {
+    try {
+      if (isDev) console.log('[TeamStorage] saveBinaryFile called:', { fileName, parentFolderPath, contentType, size: data.length });
+
+      // Construct the full path
+      const filePath = parentFolderPath ? `${parentFolderPath}/${fileName}` : fileName;
+
+      // Upload binary file to Firebase Storage
+      await uploadBinaryFile(this.teamId, filePath, data, contentType);
+
+      if (isDev) console.log('[TeamStorage] Binary file saved:', filePath);
+      return filePath;
+    } catch (error) {
+      console.error(`[TeamStorage] Failed to save binary file "${fileName}":`, error);
       throw error;
     }
   }
@@ -396,7 +422,7 @@ export class TeamDriveStorage {
    */
   async renameFile(oldName: string, newName: string, fileId?: string): Promise<void> {
     try {
-      console.log('[TeamStorage] renameFile called:', { oldName, newName });
+      if (isDev) console.log('[TeamStorage] renameFile called:', { oldName, newName });
 
       // Find the file to get its path
       const allFiles = await listAllFilesRecursive(this.teamId);
@@ -413,7 +439,7 @@ export class TeamDriveStorage {
       const relativePath = file.fullPath.replace(`teams/${this.teamId}/`, '');
       await renameStorageFile(this.teamId, relativePath, newName);
 
-      console.log('[TeamStorage] Rename completed:', oldName, '->', newName);
+      if (isDev) console.log('[TeamStorage] Rename completed:', oldName, '->', newName);
     } catch (error) {
       console.error(`[TeamStorage] Failed to rename file from "${oldName}" to "${newName}":`, error);
       throw error;
@@ -425,7 +451,7 @@ export class TeamDriveStorage {
    */
   async createFolder(folderName: string, parentFolderPath?: string): Promise<void> {
     try {
-      console.log('[TeamStorage] Creating folder:', folderName, 'in', parentFolderPath || 'root');
+      if (isDev) console.log('[TeamStorage] Creating folder:', folderName, 'in', parentFolderPath || 'root');
 
       // Strip the teams/{teamId}/ prefix if present (since createStorageFolder adds it)
       let cleanParentPath = parentFolderPath;
@@ -440,7 +466,7 @@ export class TeamDriveStorage {
 
       await createStorageFolder(this.teamId, folderPath);
 
-      console.log('[TeamStorage] Folder created:', folderPath);
+      if (isDev) console.log('[TeamStorage] Folder created:', folderPath);
     } catch (error) {
       console.error(`[TeamStorage] Failed to create folder "${folderName}":`, error);
       throw error;
@@ -507,6 +533,33 @@ export class TeamDriveStorage {
       console.log('[TeamStorage] Item moved:', sourcePathOrName, 'to', newPath);
     } catch (error) {
       console.error(`[TeamStorage] Failed to move "${sourcePathOrName}":`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Download a file as a Blob (for binary files like images)
+   * @param fileId - The file path/id (can be full path or relative to team folder)
+   */
+  async downloadFileAsBlob(fileId: string): Promise<Blob> {
+    try {
+      console.log('[TeamStorage] downloadFileAsBlob called:', fileId);
+
+      // fileId might be a full path like "teams/{teamId}/file.png" or relative like "file.png"
+      // Strip the teams/{teamId}/ prefix if present to get the relative path
+      const teamPrefix = `teams/${this.teamId}/`;
+      const relativePath = fileId.startsWith(teamPrefix)
+        ? fileId.slice(teamPrefix.length)
+        : fileId;
+
+      console.log('[TeamStorage] Using relative path:', relativePath);
+
+      const blob = await downloadFileAsBlob(this.teamId, relativePath);
+
+      console.log('[TeamStorage] Blob downloaded, size:', blob.size);
+      return blob;
+    } catch (error) {
+      console.error(`[TeamStorage] Failed to download blob "${fileId}":`, error);
       throw error;
     }
   }

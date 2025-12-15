@@ -2,8 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { TeamTodo, PRIORITY_CONFIG, getInitialsFromEmail, formatTodoDate, isTodoOverdue, isTodoDueSoon } from '../../services/teamTodoTypes';
 import { TeamMember } from '../../services/teamService';
 import { toggleTodo, deleteTodo } from '../../services/teamTodoService';
-import { EllipsisVerticalIcon, PencilIcon, TrashIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { deleteCalendarEvent } from '../../services/googleCalendarService';
+import { EllipsisVerticalIcon, TrashIcon, CalendarIcon, ArrowUturnRightIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
+import ConfirmModal from '../UI/ConfirmModal';
 import './TeamTodoItem.css';
 
 interface TeamTodoItemProps {
@@ -13,6 +15,8 @@ interface TeamTodoItemProps {
   currentUserEmail: string;
   onEdit: (todo: TeamTodo) => void;
   onDeleted: () => void;
+  onForward?: (todo: TeamTodo) => void;
+  isHighlighted?: boolean;
 }
 
 export default function TeamTodoItem({
@@ -22,9 +26,12 @@ export default function TeamTodoItem({
   currentUserEmail,
   onEdit,
   onDeleted,
+  onForward,
+  isHighlighted,
 }: TeamTodoItemProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const priorityConfig = PRIORITY_CONFIG[todo.priority];
@@ -60,11 +67,21 @@ export default function TeamTodoItem({
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
+  const handleDeleteConfirm = async () => {
     try {
       setIsDeleting(true);
+      setShowDeleteConfirm(false);
+
+      // Delete Google Calendar event if it exists (for meetings)
+      if (todo.type === 'meeting' && todo.meetingDetails?.calendarEventId) {
+        try {
+          await deleteCalendarEvent(todo.meetingDetails.calendarEventId);
+          console.log('Calendar event deleted');
+        } catch (calendarErr) {
+          console.warn('Failed to delete calendar event:', calendarErr);
+        }
+      }
+
       await deleteTodo(teamId, todo.id);
       onDeleted();
     } catch (err) {
@@ -75,7 +92,10 @@ export default function TeamTodoItem({
   };
 
   return (
-    <div className={`team-todo-item ${todo.completed ? 'completed' : ''} ${isDeleting ? 'deleting' : ''}`}>
+    <div
+      className={`team-todo-item ${todo.completed ? 'completed' : ''} ${isDeleting ? 'deleting' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+      data-task-id={todo.id}
+    >
       {/* Checkbox */}
       <button
         className={`todo-checkbox ${todo.completed ? 'checked' : ''}`}
@@ -83,7 +103,7 @@ export default function TeamTodoItem({
         title={todo.completed ? 'Mark as incomplete' : 'Mark as complete'}
       >
         {todo.completed ? (
-          <CheckCircleIcon className="check-icon" />
+          <CheckCircleIcon className="todo-check-icon" />
         ) : (
           <div className="empty-circle" />
         )}
@@ -96,8 +116,12 @@ export default function TeamTodoItem({
         title={priorityConfig.label}
       />
 
-      {/* Content */}
-      <div className="todo-content">
+      {/* Content - Click to edit */}
+      <div
+        className="todo-content"
+        onClick={() => canModify && onEdit(todo)}
+        style={{ cursor: canModify ? 'pointer' : 'default' }}
+      >
         <div className="todo-title">{todo.text}</div>
 
         <div className="todo-meta">
@@ -115,14 +139,20 @@ export default function TeamTodoItem({
           {todo.assignees.length > 0 && (
             <div className="todo-assignees">
               {todo.assignees.slice(0, 3).map(email => {
-                const member = members[email];
+                // Find member by email (handles encoded Firebase keys)
+                const member = members[email] || Object.values(members).find(m => m.email?.toLowerCase() === email.toLowerCase());
+                const avatarUrl = member?.customAvatar || member?.photoURL;
                 return (
                   <div
                     key={email}
                     className="assignee-badge"
                     title={member?.displayName || email}
                   >
-                    {getInitialsFromEmail(email)}
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="" className="assignee-avatar-img" />
+                    ) : (
+                      getInitialsFromEmail(email)
+                    )}
                   </div>
                 );
               })}
@@ -153,20 +183,22 @@ export default function TeamTodoItem({
 
           {showMenu && (
             <div className="todo-menu">
-              <button
-                className="todo-menu-item"
-                onClick={() => {
-                  onEdit(todo);
-                  setShowMenu(false);
-                }}
-              >
-                <PencilIcon className="item-icon" />
-                Edit
-              </button>
+              {onForward && (
+                <button
+                  className="todo-menu-item"
+                  onClick={() => {
+                    onForward(todo);
+                    setShowMenu(false);
+                  }}
+                >
+                  <ArrowUturnRightIcon className="item-icon" />
+                  Forward
+                </button>
+              )}
               <button
                 className="todo-menu-item danger"
                 onClick={() => {
-                  handleDelete();
+                  setShowDeleteConfirm(true);
                   setShowMenu(false);
                 }}
               >
@@ -177,6 +209,18 @@ export default function TeamTodoItem({
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title={`Delete ${todo.type === 'meeting' ? 'Meeting' : 'Task'}`}
+        message={`Are you sure you want to delete "${todo.text}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDanger
+      />
     </div>
   );
 }

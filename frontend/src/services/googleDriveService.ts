@@ -653,7 +653,8 @@ export async function listFolderFiles(folderId: string): Promise<DriveFile[]> {
  */
 export async function listAllFilesRecursive(folderId: string): Promise<DriveFile[]> {
   const allFiles: DriveFile[] = [];
-  const token = await getAccessToken();
+  // Verify token is valid before recursing
+  await getAccessToken();
 
   async function listFolder(currentFolderId: string) {
     const files = await listFolderFiles(currentFolderId);

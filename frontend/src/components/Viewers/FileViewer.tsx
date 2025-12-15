@@ -19,6 +19,7 @@ interface FileViewerProps {
   editorId?: string // Unique ID for autocomplete scoping
   isActive?: boolean
   storageBackend?: TeamDriveStorage // For team mode
+  currentUserEmail?: string // For tracking who edited files
 }
 
 type FileType = 'markdown' | 'text' | 'pdf' | 'image' | 'word' | 'excel' | 'powerpoint' | 'unknown'
@@ -45,7 +46,7 @@ function getFileType(fileName: string): FileType {
   return 'unknown'
 }
 
-function FileViewer({ filePath, fileName, rootPath, fileId, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive, storageBackend }: FileViewerProps) {
+function FileViewer({ filePath, fileName, rootPath, fileId, onOpenFile, onFileCreated, onFileRenamed, onPaneActivate, editorId, isActive, storageBackend, currentUserEmail }: FileViewerProps) {
   const fileType = getFileType(fileName)
 
   switch (fileType) {
@@ -64,23 +65,24 @@ function FileViewer({ filePath, fileName, rootPath, fileId, onOpenFile, onFileCr
           editorId={editorId}
           isActive={isActive}
           storageBackend={storageBackend}
+          currentUserEmail={currentUserEmail}
         />
       )
 
     case 'pdf':
-      return <PdfViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+      return <PdfViewer filePath={filePath} fileName={fileName} rootPath={rootPath} fileId={fileId} storageBackend={storageBackend} />
 
     case 'image':
-      return <ImageViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+      return <ImageViewer filePath={filePath} fileName={fileName} rootPath={rootPath} fileId={fileId} storageBackend={storageBackend} />
 
     case 'word':
-      return <WordViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+      return <WordViewer filePath={filePath} fileName={fileName} rootPath={rootPath} fileId={fileId} storageBackend={storageBackend} />
 
     case 'excel':
-      return <ExcelViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+      return <ExcelViewer filePath={filePath} fileName={fileName} rootPath={rootPath} fileId={fileId} storageBackend={storageBackend} />
 
     case 'powerpoint':
-      return <PowerPointViewer filePath={filePath} fileName={fileName} rootPath={rootPath} />
+      return <PowerPointViewer filePath={filePath} fileName={fileName} rootPath={rootPath} fileId={fileId} storageBackend={storageBackend} />
 
     case 'unknown':
     default:

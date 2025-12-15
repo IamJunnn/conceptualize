@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { UserPlus, Crown, Star, User } from 'lucide-react';
 import { DeepLinkInvitation } from '../../services/deepLinkService';
 import './ModeSelectionScreen.css'; // Reuse the same styles

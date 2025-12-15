@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChange, User, signOut as authSignOut } from '../services/authServiceTauri';
+import { checkLocalPartnerDomain } from '../services/promoService';
+import type { PartnerCheck } from '../services/promoTypes';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../services/firebase';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => void;
+  partnerInfo: PartnerCheck | null;
+  isPartnerUser: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,6 +32,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [appMode, setAppModeState] = useState<'local' | 'team' | null>(null);
+  const [partnerInfo, setPartnerInfo] = useState<PartnerCheck | null>(null);
 
   // Monitor app mode changes
   useEffect(() => {
@@ -48,20 +55,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Skip authentication for local mode
       setUser(null);
       setLoading(false);
+      setPartnerInfo(null);
       return;
     }
 
     if (appMode === 'team') {
-      console.log('🔐 AuthContext: Setting up auth listener for team mode');
       // Set up auth listener for team mode
       const unsubscribe = onAuthStateChange((newUser) => {
-        console.log('🔐 AuthContext: Auth state changed:', newUser ? `User: ${newUser.email}` : 'No user');
         setUser(newUser);
         setLoading(false);
       });
 
       return () => {
-        console.log('🔐 AuthContext: Cleaning up auth listener');
         unsubscribe();
       };
     }
@@ -69,6 +74,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Mode not set yet
     setLoading(false);
   }, [appMode]);
+
+  // Listen to user profile changes in real-time
+  useEffect(() => {
+    if (!user?.uid || appMode !== 'team') {
+      return;
+    }
+
+    // Set up real-time listener to user document
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const userData = snapshot.data();
+          // Update user state with new profile data
+          setUser((prevUser) => {
+            if (!prevUser) return null;
+            return {
+              ...prevUser,
+              displayName: userData.displayName || prevUser.displayName,
+              customAvatar: userData.customAvatar || '',
+              photoURL: userData.photoURL || prevUser.photoURL || '',
+            };
+          });
+        }
+      },
+      (error) => {
+        console.error('Error listening to user profile changes:', error);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [user?.uid, appMode]);
+
+  // Check for partner domain when user logs in
+  useEffect(() => {
+    const checkPartnerDomain = async () => {
+      if (user?.email && appMode === 'team') {
+        try {
+          const result = await checkLocalPartnerDomain(user.email);
+          setPartnerInfo(result);
+          if (result.isPartner) {
+            console.log(`🤝 Partner domain detected: ${result.domain} (${result.partnerName})`);
+          }
+        } catch (error) {
+          console.error('Error checking partner domain:', error);
+          setPartnerInfo(null);
+        }
+      } else {
+        setPartnerInfo(null);
+      }
+    };
+
+    checkPartnerDomain();
+  }, [user?.email, appMode]);
 
   const signOut = async () => {
     await authSignOut();
@@ -78,7 +140,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshUser = async () => {
     // Force reload user data from Firestore
     if (user && appMode === 'team') {
-      console.log('🔄 Refreshing user data from Firestore...');
       const { getCurrentUser } = await import('../services/authServiceTauri');
       const { auth } = await import('../services/firebase');
       const firebaseUser = auth.currentUser;
@@ -86,7 +147,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (firebaseUser) {
         const freshUser = await getCurrentUser(firebaseUser);
         setUser(freshUser);
-        console.log('✅ User data refreshed:', freshUser);
       }
     }
   };
@@ -95,7 +155,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     loading,
     signOut,
-    refreshUser
+    refreshUser,
+    partnerInfo,
+    isPartnerUser: partnerInfo?.isPartner || false,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

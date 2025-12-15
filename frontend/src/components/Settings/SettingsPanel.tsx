@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { getAppMode, setAppMode } from '../../services/appModeService';
+import { updateUserAvatar, updateUserDisplayName } from '../../services/authServiceTauri';
 import { invoke } from '@tauri-apps/api/core';
-import { isAdmin, isLeaderOrAdmin } from '../../services/authServiceTauri';
+import { Team, getUserTeams, isInternalProEmail } from '../../services/teamService';
+import { getPromoStatusFromBilling } from '../../services/promoService';
+import { getTeamStorageUsage } from '../../services/storageTrackingService';
+import type { ActivePromoInfo } from '../../services/promoTypes';
+import { formatBytes } from '../../services/billingTypes';
 import {
   Folder,
   Users,
@@ -10,52 +16,82 @@ import {
   Crown,
   Star,
   User,
-  Shield,
   FolderOpen,
   ExternalLink,
-  Download
+  Download,
+  Plus,
+  Pencil,
+  CreditCard,
+  Clock,
+  HardDrive,
+  Sparkles,
+  AlertCircle,
+  Check
 } from 'lucide-react';
+import AvatarPicker from './AvatarPicker';
+import UpgradeModal from '../Billing/UpgradeModal';
+import type { StorageUsage } from '../../services/billingTypes';
 import './SettingsPanel.css';
 
-interface Team {
-  id: string;
-  name: string;
-  description?: string;
-  [key: string]: any;
+// Type for team subscription info
+interface TeamSubscriptionInfo {
+  team: Team;
+  isOwner: boolean;
+  subscriptionStatus: 'free' | 'promo' | 'subscribed';
+  promoInfo?: ActivePromoInfo;
+  storageUsed: number;
+  storageLimit: number;
+  memberCount: number;
 }
 
 interface SettingsPanelProps {
   onClose: () => void;
-  onOpenUserManagement?: () => void;
   onModeSwitch?: () => void;
   currentTeam?: Team;
   availableTeams?: Team[];
   onSwitchTeam?: (team: Team) => void;
   selectedTeam?: any;
   isTabMode?: boolean; // When true, renders as inline content instead of modal
+  onCreateTeam?: () => void; // Open the create team modal
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
-  onOpenUserManagement,
   onModeSwitch,
   currentTeam,
   availableTeams,
   onSwitchTeam,
   selectedTeam,
-  isTabMode = false
+  isTabMode = false,
+  onCreateTeam
 }) => {
-  const { user, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'account'>('general');
+  const { user, signOut, refreshUser } = useAuth();
+
+  // Persist active tab in localStorage
+  const [activeTab, setActiveTab] = useLocalStorage<'general' | 'account' | 'subscription'>('settings-active-tab', 'general');
+
   const [appMode, setAppModeState] = useState<'local' | 'team' | null>(null);
   const [currentFolder, setCurrentFolder] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+
+  // Subscription tab state
+  const [teamSubscriptions, setTeamSubscriptions] = useState<TeamSubscriptionInfo[]>([]);
+  const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
+  const [upgradeModalTeam, setUpgradeModalTeam] = useState<TeamSubscriptionInfo | null>(null);
 
   // Get team-specific role if in team mode
   // Use lowercase email for lookup since members are stored with lowercase keys
   const userEmailLower = user?.email?.toLowerCase();
   const displayRole = selectedTeam && user && userEmailLower ?
-    (selectedTeam.members?.[userEmailLower]?.role || user.role) :
+    // First check if user is the team creator (owner)
+    (selectedTeam.createdBy?.toLowerCase() === userEmailLower ? 'owner' :
+     // Then check team members for their role
+     selectedTeam.members?.[userEmailLower]?.role || user.role) :
     user?.role;
 
   useEffect(() => {
@@ -68,6 +104,82 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     };
     loadSettings();
   }, []);
+
+  // Load subscription data when subscription tab is opened
+  useEffect(() => {
+    const loadSubscriptionData = async () => {
+      if (activeTab !== 'subscription' || !user?.email) return;
+
+      setIsLoadingSubscriptions(true);
+      try {
+        // Get all teams for user
+        const teams = await getUserTeams(user.email);
+
+        // Load subscription info for each team where user is owner
+        const subscriptionPromises = teams.map(async (team) => {
+          const userEmail = user.email?.toLowerCase() || '';
+          const memberInfo = team.members?.[userEmail];
+          // Check both createdBy field and member role for robustness
+          const isOwner = team.createdBy?.toLowerCase() === userEmail || memberInfo?.role === 'owner';
+
+          // Get promo status
+          let promoInfo: ActivePromoInfo | null = null;
+          let subscriptionStatus: 'free' | 'promo' | 'subscribed' = 'free';
+
+          try {
+            // Check if team owner has internal domain (auto-pro)
+            const isInternalTeam = isInternalProEmail(team.createdBy);
+
+            promoInfo = await getPromoStatusFromBilling(team.id);
+            if (isInternalTeam || team.billing?.subscription?.status === 'active') {
+              subscriptionStatus = 'subscribed';
+            } else if (promoInfo) {
+              subscriptionStatus = 'promo';
+            }
+          } catch (err) {
+            console.error('Error getting promo status for team:', team.id, err);
+          }
+
+          // Get storage usage
+          let storageUsed = 0;
+          let storageLimit = 2 * 1024 * 1024 * 1024; // 2GB default for free
+          try {
+            const usage = await getTeamStorageUsage(team.id);
+            storageUsed = usage.usedBytes;
+            storageLimit = usage.limitBytes;
+          } catch (err) {
+            console.error('Error getting storage for team:', team.id, err);
+          }
+
+          const memberCount = team.memberEmails?.length || Object.keys(team.members || {}).length;
+
+          return {
+            team,
+            isOwner,
+            subscriptionStatus,
+            promoInfo: promoInfo || undefined,
+            storageUsed,
+            storageLimit,
+            memberCount
+          } as TeamSubscriptionInfo;
+        });
+
+        const subscriptions = await Promise.all(subscriptionPromises);
+        // Only show subscriptions for teams where the user is the owner
+        // Non-owners should not see or manage subscriptions for teams they were invited to
+        const ownerSubscriptions = subscriptions.filter(sub => sub.isOwner);
+        // Sort by team name
+        ownerSubscriptions.sort((a, b) => a.team.name.localeCompare(b.team.name));
+        setTeamSubscriptions(ownerSubscriptions);
+      } catch (error) {
+        console.error('Error loading subscription data:', error);
+      } finally {
+        setIsLoadingSubscriptions(false);
+      }
+    };
+
+    loadSubscriptionData();
+  }, [activeTab, user?.email]);
 
   const handleChangeFolder = async () => {
     try {
@@ -110,6 +222,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       onClose();
     } catch (error) {
       console.error('Error signing out:', error);
+    }
+  };
+
+  const handleAvatarSelect = async (avatarUrl: string) => {
+    if (!user) return;
+
+    setIsUpdatingAvatar(true);
+    try {
+      await updateUserAvatar(user.uid, avatarUrl);
+      refreshUser(); // Refresh user data to show new avatar
+    } catch (error) {
+      console.error('Error updating avatar:', error);
+    } finally {
+      setIsUpdatingAvatar(false);
+    }
+  };
+
+  const handleStartEditName = () => {
+    setEditingName(user?.displayName || '');
+    setIsEditingName(true);
+  };
+
+  const handleCancelEditName = () => {
+    setIsEditingName(false);
+    setEditingName('');
+  };
+
+  const handleSaveName = async () => {
+    if (!user || !editingName.trim()) return;
+
+    setIsUpdatingName(true);
+    try {
+      await updateUserDisplayName(user.uid, editingName.trim());
+      refreshUser(); // Refresh user data to show new name
+      setIsEditingName(false);
+      setEditingName('');
+    } catch (error) {
+      console.error('Error updating name:', error);
+    } finally {
+      setIsUpdatingName(false);
     }
   };
 
@@ -170,6 +322,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           >
             Account
           </button>
+          {appMode === 'team' && (
+            <button
+              className={`settings-tab ${activeTab === 'subscription' ? 'active' : ''}`}
+              onClick={() => setActiveTab('subscription')}
+            >
+              Subscription
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -279,44 +439,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </button>
               </div>
 
-              {/* Admin Dashboard (only for admins) */}
-              {user && isAdmin(user) && (
-                <div className="setting-item highlight">
-                  <div className="setting-label">
-                    <span className="setting-title">
-                      <Shield size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />
-                      Admin Dashboard
-                    </span>
-                    <span className="setting-description">
-                      Manage users, roles, and team permissions
-                    </span>
-                  </div>
-                  <button
-                    className="primary-button"
-                    onClick={onOpenUserManagement}
-                  >
-                    Open Dashboard
-                  </button>
-                </div>
-              )}
-
-              {/* Leader Dashboard (only for leaders, not admins) */}
-              {user && !isAdmin(user) && isLeaderOrAdmin(user) && (
-                <div className="setting-item highlight">
-                  <div className="setting-label">
-                    <span className="setting-title">⭐ Leader Dashboard</span>
-                    <span className="setting-description">
-                      Manage team members
-                    </span>
-                  </div>
-                  <button
-                    className="primary-button"
-                    onClick={onOpenUserManagement}
-                  >
-                    Open Dashboard
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -328,11 +450,66 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <>
                   {/* User Info */}
                   <div className="user-info-card">
-                    <div className="user-avatar">
-                      {user.displayName?.charAt(0).toUpperCase() || 'U'}
+                    <div
+                      className={`user-avatar clickable ${isUpdatingAvatar ? 'updating' : ''}`}
+                      onClick={() => setShowAvatarPicker(true)}
+                      title="Click to change avatar"
+                    >
+                      {user.customAvatar ? (
+                        <img src={user.customAvatar} alt="Avatar" className="avatar-image" />
+                      ) : (
+                        user.displayName?.charAt(0).toUpperCase() || 'U'
+                      )}
+                      <div className="avatar-edit-overlay">
+                        <Pencil size={16} />
+                      </div>
                     </div>
                     <div className="user-details">
-                      <h4>{user.displayName}</h4>
+                      {isEditingName ? (
+                        <div className="name-edit-container">
+                          <input
+                            type="text"
+                            className="name-edit-input"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveName();
+                              if (e.key === 'Escape') handleCancelEditName();
+                            }}
+                            autoFocus
+                            disabled={isUpdatingName}
+                          />
+                          <div className="name-edit-actions">
+                            <button
+                              className="name-edit-btn save"
+                              onClick={handleSaveName}
+                              disabled={isUpdatingName || !editingName.trim()}
+                              title="Save"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              className="name-edit-btn cancel"
+                              onClick={handleCancelEditName}
+                              disabled={isUpdatingName}
+                              title="Cancel"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="name-display-container">
+                          <h4>{user.displayName}</h4>
+                          <button
+                            className="name-edit-trigger"
+                            onClick={handleStartEditName}
+                            title="Edit name"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      )}
                       <p>{user.email}</p>
                       <span className="role-badge">
                         {displayRole === 'owner' && (
@@ -370,19 +547,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Role Permissions */}
-                  <div className="setting-item">
-                    <div className="setting-label">
-                      <span className="setting-title">Your Permissions</span>
-                      <span className="setting-description">
-                        {displayRole === 'owner' && 'Full control over the team and all its resources'}
-                        {displayRole === 'admin' && 'Full access to all features and user management'}
-                        {displayRole === 'leader' && 'Can manage team members and access leader-level content'}
-                        {displayRole === 'member' && 'Can view and edit team notes and collaborate'}
-                        {(!displayRole || !['owner', 'admin', 'leader', 'member'].includes(displayRole)) && 'Can access team content and collaborate'}
-                      </span>
+                  {/* Start New Team */}
+                  {onCreateTeam && (
+                    <div className="setting-item">
+                      <div className="setting-label">
+                        <span className="setting-title">Start New Team</span>
+                        <span className="setting-description">
+                          Create a new team and invite members to collaborate
+                        </span>
+                      </div>
+                      <button className="new-team-button" onClick={onCreateTeam} title="Create New Team">
+                        <Plus size={18} className="new-team-icon" />
+                        <span className="new-team-text">New Team</span>
+                      </button>
                     </div>
-                  </div>
+                  )}
 
                   {/* Sign Out */}
                   <div className="setting-item">
@@ -402,7 +581,183 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               )}
             </div>
           )}
+
+          {activeTab === 'subscription' && (
+            <div className="settings-section subscription-section">
+              <h3>
+                <CreditCard size={20} />
+                Your Subscriptions
+              </h3>
+
+              {isLoadingSubscriptions ? (
+                <div className="subscription-loading">
+                  <div className="loading-spinner" />
+                  <p>Loading subscriptions...</p>
+                </div>
+              ) : teamSubscriptions.length === 0 ? (
+                <div className="no-subscriptions">
+                  <p>You don't own any teams. Only team owners can view and manage subscriptions.</p>
+                </div>
+              ) : (
+                <div className="subscription-list">
+                  {teamSubscriptions.map((sub) => (
+                    <div key={sub.team.id} className={`subscription-card ${sub.subscriptionStatus}`}>
+                      <div className="subscription-header">
+                        <div className="subscription-team-info">
+                          <h4>{sub.team.name}</h4>
+                          <div className="subscription-meta">
+                            <span className="member-count">
+                              <Users size={14} />
+                              {sub.memberCount} member{sub.memberCount !== 1 ? 's' : ''}
+                            </span>
+                            {sub.isOwner && (
+                              <span className="owner-badge">
+                                <Crown size={12} />
+                                Owner
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`subscription-status-badge ${sub.subscriptionStatus}`}>
+                          {sub.subscriptionStatus === 'promo' && (
+                            <>
+                              <Sparkles size={14} />
+                              Pro Trial
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'subscribed' && (
+                            <>
+                              <CreditCard size={14} />
+                              Pro
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'free' && (
+                            <>
+                              <AlertCircle size={14} />
+                              Free
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="subscription-details">
+                        {/* Status Info */}
+                        {sub.subscriptionStatus === 'promo' && sub.promoInfo && (
+                          <div className="subscription-promo-info">
+                            <Clock size={14} />
+                            <span>
+                              {sub.promoInfo.daysRemaining} day{sub.promoInfo.daysRemaining !== 1 ? 's' : ''} remaining
+                              {sub.promoInfo.daysRemaining <= 3 && (
+                                <span className="expiring-warning"> - Expiring soon!</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {sub.subscriptionStatus === 'subscribed' && (
+                          <div className="subscription-price-info">
+                            <CreditCard size={14} />
+                            <span>$3/user/month</span>
+                          </div>
+                        )}
+
+                        {/* Storage */}
+                        <div className="subscription-storage">
+                          <div className="storage-label">
+                            <HardDrive size={14} />
+                            <span>Storage: {formatBytes(sub.storageUsed)} / {formatBytes(sub.storageLimit)}</span>
+                          </div>
+                          <div className="storage-bar">
+                            <div
+                              className="storage-fill"
+                              style={{ width: `${Math.min(100, (sub.storageUsed / sub.storageLimit) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions - Only show for owners */}
+                      {sub.isOwner && (
+                        <div className="subscription-actions">
+                          {sub.subscriptionStatus === 'promo' && (
+                            <button
+                              className="subscription-upgrade-btn"
+                              onClick={() => setUpgradeModalTeam(sub)}
+                            >
+                              <Sparkles size={14} />
+                              Upgrade to Pro
+                            </button>
+                          )}
+                          {sub.subscriptionStatus === 'subscribed' && (
+                            <>
+                              <button className="subscription-manage-btn">
+                                Manage Subscription
+                              </button>
+                              <button className="subscription-cancel-btn">
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'free' && (
+                            <button
+                              className="subscription-upgrade-btn"
+                              onClick={() => setUpgradeModalTeam(sub)}
+                            >
+                              <Sparkles size={14} />
+                              Upgrade to Pro
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Avatar Picker Modal */}
+        {showAvatarPicker && (
+          <AvatarPicker
+            currentAvatar={user?.customAvatar}
+            onSelect={handleAvatarSelect}
+            onClose={() => setShowAvatarPicker(false)}
+          />
+        )}
+
+        {/* Upgrade Modal */}
+        {upgradeModalTeam && (
+          <UpgradeModal
+            isOpen={true}
+            onClose={() => setUpgradeModalTeam(null)}
+            teamId={upgradeModalTeam.team.id}
+            teamName={upgradeModalTeam.team.name}
+            usage={{
+              usedBytes: upgradeModalTeam.storageUsed,
+              limitBytes: upgradeModalTeam.storageLimit,
+              percentUsed: Math.round((upgradeModalTeam.storageUsed / upgradeModalTeam.storageLimit) * 100),
+              status: 'ok',
+              permissions: {
+                canCreateNotes: true,
+                canUploadFiles: true,
+                canEditNotes: true,
+                canDeleteFiles: true,
+                canInviteMembers: true,
+              },
+              usedFormatted: formatBytes(upgradeModalTeam.storageUsed),
+              limitFormatted: formatBytes(upgradeModalTeam.storageLimit),
+              requiresUpgrade: true,
+              monthlyPrice: upgradeModalTeam.memberCount * 3,
+              memberCount: upgradeModalTeam.memberCount,
+            } as StorageUsage}
+            onPromoSuccess={() => {
+              setUpgradeModalTeam(null);
+              // Refresh subscriptions to show updated status
+              setIsLoadingSubscriptions(true);
+              setTimeout(() => window.location.reload(), 500);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -433,6 +788,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           >
             Account
           </button>
+          {appMode === 'team' && (
+            <button
+              className={`settings-tab ${activeTab === 'subscription' ? 'active' : ''}`}
+              onClick={() => setActiveTab('subscription')}
+            >
+              Subscription
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -542,44 +905,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </button>
               </div>
 
-              {/* Admin Dashboard (only for admins) */}
-              {user && isAdmin(user) && (
-                <div className="setting-item highlight">
-                  <div className="setting-label">
-                    <span className="setting-title">
-                      <Shield size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'middle' }} />
-                      Admin Dashboard
-                    </span>
-                    <span className="setting-description">
-                      Manage users, roles, and team permissions
-                    </span>
-                  </div>
-                  <button
-                    className="primary-button"
-                    onClick={onOpenUserManagement}
-                  >
-                    Open Dashboard
-                  </button>
-                </div>
-              )}
-
-              {/* Leader Dashboard (only for leaders, not admins) */}
-              {user && !isAdmin(user) && isLeaderOrAdmin(user) && (
-                <div className="setting-item highlight">
-                  <div className="setting-label">
-                    <span className="setting-title">⭐ Leader Dashboard</span>
-                    <span className="setting-description">
-                      Manage team members
-                    </span>
-                  </div>
-                  <button
-                    className="primary-button"
-                    onClick={onOpenUserManagement}
-                  >
-                    Open Dashboard
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -591,11 +916,66 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <>
                   {/* User Info */}
                   <div className="user-info-card">
-                    <div className="user-avatar">
-                      {user.displayName?.charAt(0).toUpperCase() || 'U'}
+                    <div
+                      className={`user-avatar clickable ${isUpdatingAvatar ? 'updating' : ''}`}
+                      onClick={() => setShowAvatarPicker(true)}
+                      title="Click to change avatar"
+                    >
+                      {user.customAvatar ? (
+                        <img src={user.customAvatar} alt="Avatar" className="avatar-image" />
+                      ) : (
+                        user.displayName?.charAt(0).toUpperCase() || 'U'
+                      )}
+                      <div className="avatar-edit-overlay">
+                        <Pencil size={16} />
+                      </div>
                     </div>
                     <div className="user-details">
-                      <h4>{user.displayName}</h4>
+                      {isEditingName ? (
+                        <div className="name-edit-container">
+                          <input
+                            type="text"
+                            className="name-edit-input"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveName();
+                              if (e.key === 'Escape') handleCancelEditName();
+                            }}
+                            autoFocus
+                            disabled={isUpdatingName}
+                          />
+                          <div className="name-edit-actions">
+                            <button
+                              className="name-edit-btn save"
+                              onClick={handleSaveName}
+                              disabled={isUpdatingName || !editingName.trim()}
+                              title="Save"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              className="name-edit-btn cancel"
+                              onClick={handleCancelEditName}
+                              disabled={isUpdatingName}
+                              title="Cancel"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="name-display-container">
+                          <h4>{user.displayName}</h4>
+                          <button
+                            className="name-edit-trigger"
+                            onClick={handleStartEditName}
+                            title="Edit name"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      )}
                       <p>{user.email}</p>
                       <span className="role-badge">
                         {displayRole === 'owner' && (
@@ -633,19 +1013,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Role Permissions */}
-                  <div className="setting-item">
-                    <div className="setting-label">
-                      <span className="setting-title">Your Permissions</span>
-                      <span className="setting-description">
-                        {displayRole === 'owner' && 'Full control over the team and all its resources'}
-                        {displayRole === 'admin' && 'Full access to all features and user management'}
-                        {displayRole === 'leader' && 'Can manage team members and access leader-level content'}
-                        {displayRole === 'member' && 'Can view and edit team notes and collaborate'}
-                        {(!displayRole || !['owner', 'admin', 'leader', 'member'].includes(displayRole)) && 'Can access team content and collaborate'}
-                      </span>
+                  {/* Start New Team */}
+                  {onCreateTeam && (
+                    <div className="setting-item">
+                      <div className="setting-label">
+                        <span className="setting-title">Start New Team</span>
+                        <span className="setting-description">
+                          Create a new team and invite members to collaborate
+                        </span>
+                      </div>
+                      <button className="new-team-button" onClick={onCreateTeam} title="Create New Team">
+                        <Plus size={18} className="new-team-icon" />
+                        <span className="new-team-text">New Team</span>
+                      </button>
                     </div>
-                  </div>
+                  )}
 
                   {/* Sign Out */}
                   <div className="setting-item">
@@ -665,8 +1047,184 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               )}
             </div>
           )}
+
+          {activeTab === 'subscription' && (
+            <div className="settings-section subscription-section">
+              <h3>
+                <CreditCard size={20} />
+                Your Subscriptions
+              </h3>
+
+              {isLoadingSubscriptions ? (
+                <div className="subscription-loading">
+                  <div className="loading-spinner" />
+                  <p>Loading subscriptions...</p>
+                </div>
+              ) : teamSubscriptions.length === 0 ? (
+                <div className="no-subscriptions">
+                  <p>You don't own any teams. Only team owners can view and manage subscriptions.</p>
+                </div>
+              ) : (
+                <div className="subscription-list">
+                  {teamSubscriptions.map((sub) => (
+                    <div key={sub.team.id} className={`subscription-card ${sub.subscriptionStatus}`}>
+                      <div className="subscription-header">
+                        <div className="subscription-team-info">
+                          <h4>{sub.team.name}</h4>
+                          <div className="subscription-meta">
+                            <span className="member-count">
+                              <Users size={14} />
+                              {sub.memberCount} member{sub.memberCount !== 1 ? 's' : ''}
+                            </span>
+                            {sub.isOwner && (
+                              <span className="owner-badge">
+                                <Crown size={12} />
+                                Owner
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`subscription-status-badge ${sub.subscriptionStatus}`}>
+                          {sub.subscriptionStatus === 'promo' && (
+                            <>
+                              <Sparkles size={14} />
+                              Pro Trial
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'subscribed' && (
+                            <>
+                              <CreditCard size={14} />
+                              Pro
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'free' && (
+                            <>
+                              <AlertCircle size={14} />
+                              Free
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="subscription-details">
+                        {/* Status Info */}
+                        {sub.subscriptionStatus === 'promo' && sub.promoInfo && (
+                          <div className="subscription-promo-info">
+                            <Clock size={14} />
+                            <span>
+                              {sub.promoInfo.daysRemaining} day{sub.promoInfo.daysRemaining !== 1 ? 's' : ''} remaining
+                              {sub.promoInfo.daysRemaining <= 3 && (
+                                <span className="expiring-warning"> - Expiring soon!</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {sub.subscriptionStatus === 'subscribed' && (
+                          <div className="subscription-price-info">
+                            <CreditCard size={14} />
+                            <span>$3/user/month</span>
+                          </div>
+                        )}
+
+                        {/* Storage */}
+                        <div className="subscription-storage">
+                          <div className="storage-label">
+                            <HardDrive size={14} />
+                            <span>Storage: {formatBytes(sub.storageUsed)} / {formatBytes(sub.storageLimit)}</span>
+                          </div>
+                          <div className="storage-bar">
+                            <div
+                              className="storage-fill"
+                              style={{ width: `${Math.min(100, (sub.storageUsed / sub.storageLimit) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions - Only show for owners */}
+                      {sub.isOwner && (
+                        <div className="subscription-actions">
+                          {sub.subscriptionStatus === 'promo' && (
+                            <button
+                              className="subscription-upgrade-btn"
+                              onClick={() => setUpgradeModalTeam(sub)}
+                            >
+                              <Sparkles size={14} />
+                              Upgrade to Pro
+                            </button>
+                          )}
+                          {sub.subscriptionStatus === 'subscribed' && (
+                            <>
+                              <button className="subscription-manage-btn">
+                                Manage Subscription
+                              </button>
+                              <button className="subscription-cancel-btn">
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'free' && (
+                            <button
+                              className="subscription-upgrade-btn"
+                              onClick={() => setUpgradeModalTeam(sub)}
+                            >
+                              <Sparkles size={14} />
+                              Upgrade to Pro
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Avatar Picker Modal */}
+      {showAvatarPicker && (
+        <AvatarPicker
+          currentAvatar={user?.customAvatar}
+          onSelect={handleAvatarSelect}
+          onClose={() => setShowAvatarPicker(false)}
+        />
+      )}
+
+      {/* Upgrade Modal */}
+      {upgradeModalTeam && (
+        <UpgradeModal
+          isOpen={true}
+          onClose={() => setUpgradeModalTeam(null)}
+          teamId={upgradeModalTeam.team.id}
+          teamName={upgradeModalTeam.team.name}
+          usage={{
+            usedBytes: upgradeModalTeam.storageUsed,
+            limitBytes: upgradeModalTeam.storageLimit,
+            percentUsed: Math.round((upgradeModalTeam.storageUsed / upgradeModalTeam.storageLimit) * 100),
+            status: 'ok',
+            permissions: {
+              canCreateNotes: true,
+              canUploadFiles: true,
+              canEditNotes: true,
+              canDeleteFiles: true,
+              canInviteMembers: true,
+            },
+            usedFormatted: formatBytes(upgradeModalTeam.storageUsed),
+            limitFormatted: formatBytes(upgradeModalTeam.storageLimit),
+            requiresUpgrade: true,
+            monthlyPrice: upgradeModalTeam.memberCount * 3,
+            memberCount: upgradeModalTeam.memberCount,
+          } as StorageUsage}
+          onPromoSuccess={() => {
+            setUpgradeModalTeam(null);
+            // Refresh subscriptions to show updated status
+            setIsLoadingSubscriptions(true);
+            setTimeout(() => window.location.reload(), 500);
+          }}
+        />
+      )}
     </div>
   );
 };

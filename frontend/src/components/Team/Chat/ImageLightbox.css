@@ -1,0 +1,190 @@
+/* ImageLightbox - Full-screen image viewer */
+
+.image-lightbox-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  animation: lightboxFadeIn 0.15s ease-out;
+}
+
+@keyframes lightboxFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Top toolbar */
+.lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(20, 20, 20, 0.98);
+  border-bottom: 1px solid #333;
+  backdrop-filter: blur(8px);
+  z-index: 2;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.image-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #b0b0b0;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zoom-level {
+  font-size: 11px;
+  color: #64c8ca;
+  background: rgba(100, 200, 202, 0.12);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #909090;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+.toolbar-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.copied {
+  color: #4caf50;
+}
+
+.toolbar-btn.downloaded {
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+}
+
+.toolbar-btn.close-btn {
+  margin-left: 4px;
+}
+
+.toolbar-btn.close-btn:hover {
+  background: rgba(220, 53, 69, 0.15);
+  color: #dc3545;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #404040;
+  margin: 0 6px;
+}
+
+/* Image container */
+.lightbox-image-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  cursor: default;
+}
+
+.lightbox-image-container.dragging {
+  cursor: grabbing !important;
+}
+
+.lightbox-image {
+  max-width: 90vw;
+  max-height: calc(100vh - 120px);
+  object-fit: contain;
+  transition: transform 0.1s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Remove transition during drag for smooth panning */
+.lightbox-image-container.dragging .lightbox-image {
+  transition: none;
+}
+
+/* Bottom hint - hidden by default for cleaner look */
+.lightbox-hint {
+  display: none;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .lightbox-toolbar {
+    padding: 6px 12px;
+  }
+
+  .toolbar-left {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .image-name {
+    max-width: 100px;
+    font-size: 11px;
+  }
+
+  .zoom-level {
+    display: none;
+  }
+
+  .toolbar-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .toolbar-divider {
+    margin: 0 3px;
+    height: 16px;
+  }
+
+  .lightbox-image {
+    max-width: 100vw;
+    max-height: calc(100vh - 60px);
+  }
+}

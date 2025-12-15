@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { FileText } from 'lucide-react';
 import { Team } from '../../services/teamService';
 import { TeamNote, listTeamNotes, createTeamNote, deleteTeamNote } from '../../services/teamNotesService';
 import './TeamNotesViewer.css';
@@ -154,7 +155,7 @@ export default function TeamNotesViewer({ team }: TeamNotesViewerProps) {
         <div className="notes-list">
           {notes.map((note) => (
             <div key={note.id} className="note-item">
-              <div className="note-icon">📄</div>
+              <div className="note-icon"><FileText size={18} /></div>
               <div className="note-content">
                 <div className="note-name">{note.name}</div>
                 <div className="note-meta">

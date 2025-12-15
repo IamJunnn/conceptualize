@@ -10,29 +10,46 @@
 
 .messages-container {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
   padding: 16px;
+  padding-right: 8px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+
+  /* Standard scrollbar properties (Firefox & modern browsers) */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 200, 202, 0.4) transparent;
 }
 
-/* Custom scrollbar for messages */
+/* Webkit scrollbar (Chrome, Safari, Edge) */
 .messages-container::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 .messages-container::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: transparent;
 }
 
 .messages-container::-webkit-scrollbar-thumb {
-  background: #3d3d3d;
-  border-radius: 4px;
+  background: rgba(100, 200, 202, 0.4);
+  border-radius: 3px;
 }
 
 .messages-container::-webkit-scrollbar-thumb:hover {
-  background: #4d4d4d;
+  background: rgba(100, 200, 202, 0.6);
+}
+
+.messages-container::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
+}
+
+.messages-container::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Date separator */
@@ -148,4 +165,19 @@
   margin: 0;
   font-size: 14px;
   color: #888;
+}
+
+/* Message highlight animation (for scrolling to replied message) */
+.message-highlight {
+  animation: messageHighlight 2s ease-out;
+}
+
+@keyframes messageHighlight {
+  0% {
+    background: rgba(100, 200, 202, 0.3);
+    border-radius: 8px;
+  }
+  100% {
+    background: transparent;
+  }
 }

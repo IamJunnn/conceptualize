@@ -11,7 +11,8 @@ import {
   Timestamp
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { User, UserRole } from "./authServiceTauri";
+import { UserRole } from "./authServiceTauri";
+import { getErrorMessage } from "../utils/errorUtils";
 
 export interface UserData {
   uid: string;
@@ -43,8 +44,8 @@ export const getAllUsers = async (): Promise<UserData[]> => {
         lastLogin: data.lastLogin?.toDate()
       };
     });
-  } catch (error: any) {
-    throw new Error(`Failed to get users: ${error.message}`);
+  } catch (error) {
+    throw new Error(`Failed to get users: ${getErrorMessage(error)}`);
   }
 };
 
@@ -72,8 +73,8 @@ export const addUser = async (
       createdBy: createdByUid,
       isTemporary: true // Flag to identify pre-authorized users
     });
-  } catch (error: any) {
-    throw new Error(`Failed to add user: ${error.message}`);
+  } catch (error) {
+    throw new Error(`Failed to add user: ${getErrorMessage(error)}`);
   }
 };
 
@@ -94,8 +95,8 @@ export const updateUserRole = async (uid: string, role: UserRole): Promise<void>
       role,
       updatedAt: Timestamp.now()
     });
-  } catch (error: any) {
-    throw new Error(`Failed to update user role: ${error.message}`);
+  } catch (error) {
+    throw new Error(`Failed to update user role: ${getErrorMessage(error)}`);
   }
 };
 
@@ -105,8 +106,8 @@ export const updateUserRole = async (uid: string, role: UserRole): Promise<void>
 export const removeUser = async (uid: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, "users", uid));
-  } catch (error: any) {
-    throw new Error(`Failed to remove user: ${error.message}`);
+  } catch (error) {
+    throw new Error(`Failed to remove user: ${getErrorMessage(error)}`);
   }
 };
 

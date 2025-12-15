@@ -20,17 +20,27 @@ const StorageUsageMeter: React.FC<StorageUsageMeterProps> = ({
   showUpgradeButton = true,
   onUpgradeClick,
 }) => {
-  const getStatusColor = () => {
-    switch (usage.status) {
-      case 'ok':
-        return 'var(--color-success, #10b981)';
-      case 'warning':
-        return 'var(--color-warning, #f59e0b)';
-      case 'exceeded':
-      case 'enterprise':
-        return 'var(--color-error, #ef4444)';
-      default:
-        return 'var(--color-primary, #6366f1)';
+  // Get dynamic storage color based on usage percentage
+  const getStatusColor = (): string => {
+    const percentUsed = usage.percentUsed;
+
+    if (percentUsed <= 50) {
+      // 0-50%: Conceptualize teal
+      return '#64c8ca';
+    } else if (percentUsed <= 85) {
+      // 50-85%: Transition from teal to amber
+      const progress = (percentUsed - 50) / 35; // 0 to 1
+      const r = Math.round(100 + progress * (245 - 100)); // 100 → 245
+      const g = Math.round(200 + progress * (158 - 200)); // 200 → 158
+      const b = Math.round(202 + progress * (11 - 202)); // 202 → 11
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      // 85-100%: Transition from amber to red
+      const progress = (percentUsed - 85) / 15; // 0 to 1
+      const r = Math.round(245 + progress * (239 - 245)); // 245 → 239
+      const g = Math.round(158 - progress * 90); // 158 → 68
+      const b = Math.round(11 - progress * (11 - 68)); // 11 → 68
+      return `rgb(${r}, ${g}, ${b})`;
     }
   };
 

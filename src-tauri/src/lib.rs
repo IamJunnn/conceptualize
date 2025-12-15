@@ -608,6 +608,100 @@ fn write_file(file_path: String, content: String) -> CreateResult {
 }
 
 #[tauri::command]
+fn is_path_directory(path: String) -> Result<bool, String> {
+    let path_buf = PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err("Path does not exist".to_string());
+    }
+    Ok(path_buf.is_dir())
+}
+
+#[tauri::command]
+fn copy_directory(source: String, destination: String) -> Result<(), String> {
+    let source_path = PathBuf::from(&source);
+    let dest_path = PathBuf::from(&destination);
+
+    if !source_path.exists() {
+        return Err("Source path does not exist".to_string());
+    }
+
+    if !source_path.is_dir() {
+        return Err("Source is not a directory".to_string());
+    }
+
+    // Create the destination directory with the source folder name
+    let folder_name = source_path.file_name()
+        .ok_or("Could not get folder name")?;
+    let final_dest = dest_path.join(folder_name);
+
+    // Recursive copy function
+    fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
+        fs::create_dir_all(dst).map_err(|e| format!("Failed to create directory: {}", e))?;
+
+        for entry in fs::read_dir(src).map_err(|e| format!("Failed to read directory: {}", e))? {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path();
+            let dest_path = dst.join(entry.file_name());
+
+            if path.is_dir() {
+                copy_dir_recursive(&path, &dest_path)?;
+            } else {
+                fs::copy(&path, &dest_path).map_err(|e| format!("Failed to copy file: {}", e))?;
+            }
+        }
+        Ok(())
+    }
+
+    copy_dir_recursive(&source_path, &final_dest)?;
+    Ok(())
+}
+
+/// List all files in a directory recursively with their relative paths
+/// Returns a list of (absolute_path, relative_path) tuples
+#[tauri::command]
+fn list_directory_files(dir_path: String) -> Result<Vec<(String, String)>, String> {
+    let source_path = PathBuf::from(&dir_path);
+
+    if !source_path.exists() {
+        return Err("Directory does not exist".to_string());
+    }
+
+    if !source_path.is_dir() {
+        return Err("Path is not a directory".to_string());
+    }
+
+    let folder_name = source_path.file_name()
+        .ok_or("Could not get folder name")?
+        .to_string_lossy()
+        .to_string();
+
+    let mut files: Vec<(String, String)> = Vec::new();
+
+    fn collect_files(dir: &PathBuf, base_relative: &str, files: &mut Vec<(String, String)>) -> Result<(), String> {
+        for entry in fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {}", e))? {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path();
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            let relative_path = if base_relative.is_empty() {
+                file_name.clone()
+            } else {
+                format!("{}/{}", base_relative, file_name)
+            };
+
+            if path.is_dir() {
+                collect_files(&path, &relative_path, files)?;
+            } else {
+                files.push((path.to_string_lossy().to_string(), relative_path));
+            }
+        }
+        Ok(())
+    }
+
+    collect_files(&source_path, &folder_name, &mut files)?;
+    Ok(files)
+}
+
+#[tauri::command]
 fn reveal_in_explorer(path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(&path);
 
@@ -1847,6 +1941,51 @@ fn toggle_note_todo(
     Ok(())
 }
 
+/// Download a file from a URL to the specified path
+#[tauri::command]
+async fn download_file(url: String, save_path: String) -> Result<String, String> {
+    use std::io::Write;
+
+    println!("📥 Downloading file from: {}", url);
+    println!("   Save path: {}", save_path);
+
+    // Create HTTP client
+    let client = reqwest::Client::new();
+
+    // Send GET request
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+
+    // Check if request was successful
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+
+    // Get the bytes
+    let bytes = response.bytes()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    // Ensure parent directory exists
+    let path = PathBuf::from(&save_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    // Write to file
+    let mut file = fs::File::create(&path)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    file.write_all(&bytes)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    println!("✅ Downloaded {} bytes to: {}", bytes.len(), save_path);
+
+    Ok(save_path)
+}
+
 #[tauri::command]
 fn search_files(root_path: String, query: String) -> Result<Vec<SearchResult>, String> {
     fn search_in_directory(
@@ -2058,6 +2197,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).build())?;
@@ -2069,7 +2212,8 @@ pub fn run() {
             get_config_value, set_config_value, delete_config_value,
             get_file_tree, create_file, create_folder,
             get_markdown_files, delete_item, rename_item, move_item, read_file, read_binary_file, get_file_size, write_file,
-            reveal_in_explorer, open_file_external, find_file_by_name, search_files,
+            reveal_in_explorer, open_file_external, find_file_by_name, search_files, is_path_directory, copy_directory, list_directory_files,
+            download_file,
             // Old Todo commands (to be deprecated)
             get_todos, save_todos, add_todo_list, add_todo, update_todo, delete_todo,
             // New note-embedded todo commands

@@ -1,0 +1,296 @@
+/* FileLightbox - Document viewer modal */
+
+.file-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.file-lightbox-modal {
+  background: #1e1e1e;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 1200px;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.file-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+  background: #252525;
+}
+
+.file-lightbox-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 16px;
+}
+
+.file-lightbox-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.file-lightbox-action-btn,
+.file-lightbox-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.file-lightbox-action-btn:hover,
+.file-lightbox-close-btn:hover {
+  background: #333;
+  color: #e0e0e0;
+}
+
+.file-lightbox-content {
+  flex: 1;
+  overflow: auto;
+  background: #fff;
+  padding: 24px;
+}
+
+.file-lightbox-content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.file-lightbox-content::-webkit-scrollbar-track {
+  background: #f0f0f0;
+}
+
+.file-lightbox-content::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 5px;
+}
+
+.file-lightbox-content::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Loading state */
+.file-lightbox-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #64c8ca;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error state */
+.file-lightbox-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #ef4444;
+  gap: 16px;
+  text-align: center;
+}
+
+.download-fallback-btn {
+  padding: 10px 20px;
+  background: #64c8ca;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.download-fallback-btn:hover {
+  background: #5ab8ba;
+}
+
+/* Viewer content */
+.file-lightbox-viewer {
+  min-height: 100%;
+  color: #1e1e1e;
+}
+
+/* Word viewer */
+.docx-viewer {
+  max-width: 800px;
+  margin: 0 auto;
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.docx-viewer h1,
+.docx-viewer h2,
+.docx-viewer h3,
+.docx-viewer h4,
+.docx-viewer h5,
+.docx-viewer h6 {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #1e1e1e;
+}
+
+.docx-viewer p {
+  margin-bottom: 12px;
+}
+
+.docx-viewer ul,
+.docx-viewer ol {
+  margin-bottom: 12px;
+  padding-left: 24px;
+}
+
+.docx-viewer table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+
+.docx-viewer table td,
+.docx-viewer table th {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+.docx-viewer table th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+/* Excel viewer */
+.xlsx-viewer {
+  color: #1e1e1e;
+}
+
+.excel-sheet {
+  margin-bottom: 32px;
+}
+
+.excel-sheet:last-child {
+  margin-bottom: 0;
+}
+
+.excel-sheet-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e1e1e;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #64c8ca;
+}
+
+.xlsx-viewer table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  background: #fff;
+}
+
+.xlsx-viewer table td,
+.xlsx-viewer table th {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.xlsx-viewer table th {
+  background: #f8f8f8;
+  font-weight: 600;
+  color: #1e1e1e;
+}
+
+.xlsx-viewer table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.xlsx-viewer table tr:hover {
+  background: #f0f0f0;
+}
+
+/* PowerPoint viewer (limited) */
+.pptx-viewer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.pptx-preview-message {
+  text-align: center;
+  color: #666;
+  max-width: 400px;
+}
+
+.pptx-preview-message p {
+  margin: 12px 0;
+}
+
+.pptx-preview-message strong {
+  font-size: 18px;
+  color: #1e1e1e;
+}

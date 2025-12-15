@@ -47,3 +47,9 @@ nul
 latest.json
 latest.json.template
 .taurignore
+
+# Firebase
+.firebase/
+
+# Frontend env
+frontend.env

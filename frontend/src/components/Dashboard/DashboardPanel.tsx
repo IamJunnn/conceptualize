@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import * as d3 from 'd3';
+import { formatBytes } from '../../services/billingTypes';
 import {
   X,
   FileText,
@@ -78,15 +79,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
   const [allNotes, setAllNotes] = useState<{ name: string; path: string }[]>([]);
   const [activeDetailView, setActiveDetailView] = useState<DetailView>(null);
   const storagePieRef = useRef<SVGSVGElement>(null);
-
-  // Format bytes to human readable
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
 
   // Calculate workspace statistics
   const calculateWorkspaceStats = async (folderPath: string): Promise<WorkspaceStats> => {
@@ -290,16 +282,13 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
   };
 
   const loadStats = async () => {
-    console.log('[Dashboard] loadStats called with rootPath:', rootPath);
     setIsLoadingStats(true);
     const stats = await calculateWorkspaceStats(rootPath);
-    console.log('[Dashboard] Final stats:', stats);
     setWorkspaceStats(stats);
     setIsLoadingStats(false);
   };
 
   useEffect(() => {
-    console.log('[Dashboard] useEffect triggered, rootPath:', rootPath);
     loadStats();
   }, [rootPath]);
 
@@ -451,11 +440,11 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
             <div className="detail-summary">
               <div className="summary-stat">
                 <span className="summary-value">{workspaceStats.totalNotes}</span>
-                <span className="summary-label">Total Notes</span>
+                <span className="summary-label">Total notes</span>
               </div>
               <div className="summary-stat">
                 <span className="summary-value">{Object.keys(workspaceStats.notesByFolder).length}</span>
-                <span className="summary-label">Folders with Notes</span>
+                <span className="summary-label">Folders with notes</span>
               </div>
               <div className="summary-stat">
                 <span className="summary-value">
@@ -463,10 +452,10 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     ? (workspaceStats.totalNotes / Math.max(Object.keys(workspaceStats.notesByFolder).length, 1)).toFixed(1)
                     : 0}
                 </span>
-                <span className="summary-label">Avg per Folder</span>
+                <span className="summary-label">Avg per folder</span>
               </div>
             </div>
-            <h4 className="detail-section-title">Notes by Folder</h4>
+            <h4 className="detail-section-title">Notes by folder</h4>
             <div className="folder-distribution">
               {Object.entries(workspaceStats.notesByFolder)
                 .sort((a, b) => b[1].length - a[1].length)
@@ -513,13 +502,13 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
             <div className="detail-summary">
               <div className="summary-stat">
                 <span className="summary-value">{workspaceStats.totalFolders}</span>
-                <span className="summary-label">Total Folders</span>
+                <span className="summary-label">Total folders</span>
               </div>
               <div className="summary-stat">
                 <span className="summary-value">
                   {workspaceStats.allFolders.filter(f => f.noteCount > 0).length}
                 </span>
-                <span className="summary-label">With Notes</span>
+                <span className="summary-label">With notes</span>
               </div>
               <div className="summary-stat">
                 <span className="summary-value">
@@ -528,7 +517,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                 <span className="summary-label">Empty</span>
               </div>
             </div>
-            <h4 className="detail-section-title">All Folders</h4>
+            <h4 className="detail-section-title">All folders</h4>
             <div className="folders-list">
               {workspaceStats.allFolders
                 .sort((a, b) => b.noteCount - a.noteCount)
@@ -551,7 +540,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
             <div className="detail-summary">
               <div className="summary-stat">
                 <span className="summary-value">{workspaceStats.totalLinks}</span>
-                <span className="summary-label">Total Links</span>
+                <span className="summary-label">Total links</span>
               </div>
               <div className="summary-stat">
                 <span className="summary-value">{workspaceStats.brokenLinks.length}</span>
@@ -563,10 +552,10 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     ? (workspaceStats.totalLinks / workspaceStats.totalNotes).toFixed(1)
                     : 0}
                 </span>
-                <span className="summary-label">Avg per Note</span>
+                <span className="summary-label">Avg per note</span>
               </div>
             </div>
-            <h4 className="detail-section-title">All Connections ({workspaceStats.allLinks.length})</h4>
+            <h4 className="detail-section-title">All connections ({workspaceStats.allLinks.length})</h4>
             <div className="links-list">
               {workspaceStats.allLinks.slice(0, 50).map((link, idx) => (
                 <div key={idx} className="link-item">
@@ -612,7 +601,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
             <div className="detail-summary">
               <div className="summary-stat">
                 <span className="summary-value">{workspaceStats.storageUsed}</span>
-                <span className="summary-label">Total Storage</span>
+                <span className="summary-label">Total storage</span>
               </div>
               <div className="summary-stat">
                 <span className="summary-value">{workspaceStats.allFiles.length}</span>
@@ -624,7 +613,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     ? formatBytes(workspaceStats.storageBytes / workspaceStats.allFiles.length)
                     : '0 B'}
                 </span>
-                <span className="summary-label">Avg Size</span>
+                <span className="summary-label">Avg size</span>
               </div>
             </div>
             <div className="storage-chart-container">
@@ -642,7 +631,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
                 ))}
               </div>
             </div>
-            <h4 className="detail-section-title">Largest Files</h4>
+            <h4 className="detail-section-title">Largest files</h4>
             <div className="files-list">
               {workspaceStats.allFiles
                 .sort((a, b) => b.size - a.size)
@@ -809,7 +798,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
             <section className="dashboard-section">
               <h3 className="warning">
                 <FileX size={18} />
-                Orphan Notes
+                Orphan notes
                 <span className="section-badge warning">No connections</span>
               </h3>
               <p className="section-description">
@@ -835,7 +824,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
             <section className="dashboard-section">
               <h3 className="error">
                 <AlertCircle size={18} />
-                Broken Links
+                Broken links
                 <span className="section-badge error">{workspaceStats.brokenLinks.length} found</span>
               </h3>
               <p className="section-description">

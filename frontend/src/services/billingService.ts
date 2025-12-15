@@ -3,23 +3,25 @@
  * Handles Stripe integration for subscription management
  */
 
-import { doc, getDoc, updateDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
 import {
-  PRICING,
+  STORAGE_LIMITS,
   calculateMonthlyPrice,
+  calculateCloudStorageLimit,
+  getChatStorageLimit,
+  canUploadToChat,
   SubscriptionStatus,
   TeamBilling,
 } from './billingTypes';
 import { getTeamMemberCount } from './storageTrackingService';
-
-// Stripe publishable key (safe to expose in frontend)
-// TODO: Replace with your actual Stripe publishable key
-const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_key_here';
+import { getPromoStatusFromBilling, getPromoAwareStatus } from './promoService';
+import type { PromoAwareStatus, ActivePromoInfo } from './promoTypes';
+import { getErrorMessage } from '../utils/errorUtils';
 
 // Stripe price ID for the per-member subscription
-// TODO: Create this in Stripe Dashboard and add here
+// Set VITE_STRIPE_PRICE_ID in your .env file (create price at https://dashboard.stripe.com/prices)
 const STRIPE_PRICE_ID = import.meta.env.VITE_STRIPE_PRICE_ID || 'price_your_price_id';
 
 /**
@@ -40,7 +42,6 @@ export async function initializeTeamBilling(
 
     // Skip if billing already initialized
     if (data.billing?.ownerId) {
-      console.log('Team billing already initialized');
       return;
     }
 
@@ -50,6 +51,9 @@ export async function initializeTeamBilling(
       billing: {
         memberCount,
         storageUsedBytes: 0,
+        chatStorageUsedBytes: 0,
+        cloudStorageLimitBytes: STORAGE_LIMITS.FREE_CLOUD_STORAGE,
+        chatStorageLimitBytes: 0, // No chat for free tier
         lastStorageCalculation: Timestamp.now(),
         subscription: {
           status: 'free' as SubscriptionStatus,
@@ -59,12 +63,34 @@ export async function initializeTeamBilling(
         monthlyPriceCents: Math.round(calculateMonthlyPrice(memberCount) * 100),
       },
     });
-
-    console.log(`✅ Initialized billing for team ${teamId}`);
   } catch (error) {
     console.error('Error initializing team billing:', error);
     throw error;
   }
+}
+
+/**
+ * Helper to convert Firestore Timestamp or milliseconds to Date
+ */
+function toDate(value: any): Date | undefined {
+  if (!value) return undefined;
+  // If it's a Firestore Timestamp with toDate method
+  if (typeof value?.toDate === 'function') {
+    return value.toDate();
+  }
+  // If it's already a Date
+  if (value instanceof Date) {
+    return value;
+  }
+  // If it's a number (milliseconds)
+  if (typeof value === 'number') {
+    return new Date(value);
+  }
+  // If it's an object with seconds (Firestore Timestamp structure)
+  if (value?.seconds) {
+    return new Date(value.seconds * 1000);
+  }
+  return undefined;
 }
 
 /**
@@ -84,11 +110,11 @@ export async function getTeamBilling(teamId: string): Promise<TeamBilling | null
 
     return {
       ...data.billing,
-      lastStorageCalculation: data.billing.lastStorageCalculation?.toDate(),
+      lastStorageCalculation: toDate(data.billing.lastStorageCalculation),
       subscription: {
         ...data.billing.subscription,
-        currentPeriodStart: data.billing.subscription?.currentPeriodStart?.toDate(),
-        currentPeriodEnd: data.billing.subscription?.currentPeriodEnd?.toDate(),
+        currentPeriodStart: toDate(data.billing.subscription?.currentPeriodStart),
+        currentPeriodEnd: toDate(data.billing.subscription?.currentPeriodEnd),
       },
     } as TeamBilling;
   } catch (error) {
@@ -172,7 +198,6 @@ export async function updateSubscriptionQuantity(teamId: string): Promise<void> 
     const billing = await getTeamBilling(teamId);
 
     if (!billing?.subscription?.stripeSubscriptionId) {
-      console.log('No active subscription to update');
       return;
     }
 
@@ -190,8 +215,6 @@ export async function updateSubscriptionQuantity(teamId: string): Promise<void> 
       'billing.memberCount': memberCount,
       'billing.monthlyPriceCents': Math.round(calculateMonthlyPrice(memberCount) * 100),
     });
-
-    console.log(`✅ Updated subscription quantity to ${memberCount} members`);
   } catch (error) {
     console.error('Error updating subscription quantity:', error);
     throw error;
@@ -221,8 +244,6 @@ export async function cancelSubscription(teamId: string, immediately = false): P
       'billing.subscription.cancelAtPeriodEnd': !immediately,
       'billing.subscription.status': immediately ? 'canceled' : 'active',
     });
-
-    console.log(`✅ Subscription ${immediately ? 'canceled immediately' : 'set to cancel at period end'}`);
   } catch (error) {
     console.error('Error canceling subscription:', error);
     throw error;
@@ -231,12 +252,15 @@ export async function cancelSubscription(teamId: string, immediately = false): P
 
 /**
  * Check if user needs to see upgrade prompt
+ * Now promo-aware: won't show if team has active promo
  */
 export async function shouldShowUpgradePrompt(teamId: string): Promise<{
   show: boolean;
   reason?: string;
   price?: number;
   memberCount?: number;
+  promoInfo?: ActivePromoInfo;
+  isReadOnly?: boolean;
 }> {
   try {
     const billing = await getTeamBilling(teamId);
@@ -245,20 +269,37 @@ export async function shouldShowUpgradePrompt(teamId: string): Promise<{
       return { show: false };
     }
 
-    // Already paying
+    // Already paying via subscription
     if (billing.subscription?.status === 'active') {
       return { show: false };
     }
 
+    // Check for active promo
+    const promoInfo = await getPromoStatusFromBilling(teamId);
+    if (promoInfo) {
+      // Has active promo - don't show upgrade prompt, but maybe show expiry warning
+      if (promoInfo.isExpiringSoon) {
+        return {
+          show: true,
+          reason: 'promo_expiring',
+          price: calculateMonthlyPrice(billing.memberCount),
+          memberCount: billing.memberCount,
+          promoInfo,
+        };
+      }
+      return { show: false, promoInfo };
+    }
+
     const { STORAGE_LIMITS } = await import('./billingTypes');
 
-    // Check if over free limit
+    // Check if over free limit - this means READ-ONLY mode
     if (billing.storageUsedBytes > STORAGE_LIMITS.FREE_TIER) {
       return {
         show: true,
         reason: 'storage_exceeded',
         price: calculateMonthlyPrice(billing.memberCount),
         memberCount: billing.memberCount,
+        isReadOnly: true,
       };
     }
 
@@ -329,7 +370,6 @@ export async function syncSubscriptionStatus(teamId: string): Promise<{
       cancelAtPeriodEnd?: boolean;
     };
 
-    console.log(`✅ Subscription synced for team ${teamId}: ${data.status}`);
     return {
       status: data.status as SubscriptionStatus,
       synced: data.synced,
@@ -363,7 +403,6 @@ export async function verifyCheckoutSession(
     };
 
     if (data.success) {
-      console.log(`✅ Checkout verified for team ${teamId}`);
       return {
         success: true,
         status: data.status as SubscriptionStatus,
@@ -374,11 +413,11 @@ export async function verifyCheckoutSession(
         error: data.error || 'Unknown error',
       };
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error verifying checkout session:', error);
     return {
       success: false,
-      error: error.message || 'Failed to verify checkout',
+      error: getErrorMessage(error),
     };
   }
 }
@@ -402,13 +441,11 @@ export async function handlePaymentSuccess(teamId: string): Promise<boolean> {
 
   // Handle canceled checkout
   if (canceled) {
-    console.log('Checkout was canceled');
     cleanUrl();
     return false;
   }
 
   if (!sessionId) {
-    console.log('No session_id found in URL');
     // Still sync to check current status
     await syncSubscriptionStatus(teamId);
     return false;
@@ -422,6 +459,7 @@ export async function handlePaymentSuccess(teamId: string): Promise<boolean> {
 
 /**
  * Check if team can access chat feature (paid feature)
+ * Now promo-aware: returns true if team has active promo OR active subscription
  */
 export async function canAccessChat(teamId: string): Promise<boolean> {
   try {
@@ -429,7 +467,15 @@ export async function canAccessChat(teamId: string): Promise<boolean> {
     if (!billing) {
       return false;
     }
-    return billing.subscription?.status === 'active';
+
+    // Check subscription first
+    if (billing.subscription?.status === 'active') {
+      return true;
+    }
+
+    // Check for active promo
+    const promoInfo = await getPromoStatusFromBilling(teamId);
+    return promoInfo !== null;
   } catch (error) {
     console.error('Error checking chat access:', error);
     return false;
@@ -438,16 +484,85 @@ export async function canAccessChat(teamId: string): Promise<boolean> {
 
 /**
  * Check if team can upload files in chat (paid feature)
+ * Now promo-aware
  */
 export async function canUploadFiles(teamId: string): Promise<boolean> {
-  // Same as chat access for now
+  // Same as chat access - promo-aware
   return canAccessChat(teamId);
 }
 
 /**
- * Get file size limit for team (8MB for paid, 0 for free)
+ * Check if team has paid access (subscription OR active promo)
+ * Use this for feature gating
+ */
+export async function hasPaidAccess(teamId: string): Promise<boolean> {
+  return canAccessChat(teamId);
+}
+
+/**
+ * Get full promo-aware status for a team
+ * Returns combined promo + subscription status for UI display
+ */
+export async function getFullBillingStatus(teamId: string): Promise<PromoAwareStatus> {
+  const billing = await getTeamBilling(teamId);
+  const subscriptionStatus = billing?.subscription?.status || 'free';
+  const storageUsedBytes = billing?.storageUsedBytes || 0;
+
+  return getPromoAwareStatus(teamId, subscriptionStatus, storageUsedBytes);
+}
+
+/**
+ * Get file size limit for team (15MB for paid, 0 for free)
  */
 export async function getFileSizeLimit(teamId: string): Promise<number> {
   const hasAccess = await canAccessChat(teamId);
-  return hasAccess ? 8 * 1024 * 1024 : 0; // 8MB for paid, 0 for free
+  return hasAccess ? STORAGE_LIMITS.MAX_FILE_SIZE : 0; // 15MB for paid, 0 for free
+}
+
+/**
+ * Check if files can be uploaded to chat (per-message limit check)
+ * @param teamId - The team ID
+ * @param files - Array of files to upload in this message
+ */
+export async function checkChatUploadAllowed(
+  teamId: string,
+  files: File[]
+): Promise<{ canUpload: boolean; reason?: string }> {
+  try {
+    // Use promo-aware status which includes partnership/promo + subscription
+    const status = await getFullBillingStatus(teamId);
+    const isPaid = status.isPaid; // true if subscription OR active promo/partnership
+
+    return canUploadToChat(files, isPaid);
+  } catch (error) {
+    console.error('Error checking chat upload:', error);
+    return { canUpload: false, reason: 'Unable to verify upload. Please try again.' };
+  }
+}
+
+/**
+ * Update storage limits when subscription changes
+ * Now promo-aware: considers both subscription and partnership/promo status
+ */
+export async function updateStorageLimits(teamId: string): Promise<void> {
+  try {
+    const billing = await getTeamBilling(teamId);
+    if (!billing) return;
+
+    // Use promo-aware status
+    const status = await getFullBillingStatus(teamId);
+    const isPaid = status.isPaid; // true if subscription OR active promo/partnership
+    const memberCount = billing.memberCount || 1;
+
+    const cloudStorageLimitBytes = calculateCloudStorageLimit(isPaid, memberCount);
+    const chatStorageLimitBytes = getChatStorageLimit(isPaid);
+
+    await updateDoc(doc(db, 'teams', teamId), {
+      'billing.cloudStorageLimitBytes': cloudStorageLimitBytes,
+      'billing.chatStorageLimitBytes': chatStorageLimitBytes,
+    });
+  } catch (error) {
+    console.error('Error updating storage limits:', error);
+    throw error;
+  }
 }

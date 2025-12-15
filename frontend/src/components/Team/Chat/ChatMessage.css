@@ -2,10 +2,12 @@
 
 .chat-message {
   display: flex;
-  gap: 12px;
-  padding: 4px 12px;
+  gap: 10px;
+  padding: 4px 8px;
   position: relative;
   transition: background 0.15s;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .chat-message:hover {
@@ -27,24 +29,34 @@
 
 /* Avatar */
 .message-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #64c8ca, #52b6b8);
+  background: linear-gradient(135deg, #64c8ca, #b298dc);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: #1e1e1e;
   flex-shrink: 0;
   margin-top: 2px;
+  overflow: hidden;
+  padding: 2px; /* Creates gradient ring around avatar */
+}
+
+.message-avatar .avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%; /* Match parent's border-radius for ring effect */
 }
 
 /* Message body */
 .message-body {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .message-header {
@@ -55,28 +67,98 @@
 }
 
 .message-sender {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
 }
 
 .message-time {
-  font-size: 11px;
+  font-size: 10px;
   color: #888;
 }
 
 .message-edited {
-  font-size: 11px;
+  font-size: 10px;
   color: #666;
   font-style: italic;
 }
 
+.message-pinned {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #888;
+}
+
+/* Forwarded indicator */
+.forwarded-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.forwarded-indicator .forwarded-icon {
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.forwarded-indicator span {
+  font-style: italic;
+}
+
+/* Reply context - shows original message being replied to */
+.reply-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #888;
+  border-left: 2px solid #64c8ca;
+  background: rgba(100, 200, 202, 0.05);
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.reply-context:hover {
+  background: rgba(100, 200, 202, 0.1);
+}
+
+.reply-context-icon {
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.reply-context-name {
+  color: #64c8ca;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.reply-context-content {
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
 .message-content {
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
   color: #ccc;
   word-wrap: break-word;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
 }
 
 /* @mentions */
@@ -86,6 +168,13 @@
   padding: 0 4px;
   border-radius: 3px;
   font-weight: 600;
+  cursor: default;
+}
+
+/* Highlight when current user is mentioned */
+.mention.mention-me {
+  color: #1e1e1e;
+  background: linear-gradient(135deg, #64c8ca, #b298dc);
 }
 
 /* Edit form */
@@ -95,16 +184,38 @@
 
 .edit-textarea {
   width: 100%;
-  min-height: 60px;
+  min-height: 36px;
+  max-height: 200px;
   padding: 8px 12px;
   background: #2d2d2d;
   border: 1px solid #64c8ca;
   border-radius: 6px;
   color: #e0e0e0;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.45;
   font-family: inherit;
-  resize: vertical;
+  resize: none;
   outline: none;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for edit textarea */
+.edit-textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.edit-textarea::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 4px;
+}
+
+.edit-textarea::-webkit-scrollbar-thumb {
+  background: #64c8ca;
+  border-radius: 4px;
+}
+
+.edit-textarea::-webkit-scrollbar-thumb:hover {
+  background: #52b6b8;
 }
 
 .edit-textarea:focus {
@@ -120,7 +231,6 @@
 
 .edit-actions button {
   padding: 6px 16px;
-  border: none;
   border-radius: 4px;
   font-size: 13px;
   font-weight: 600;
@@ -128,29 +238,46 @@
   transition: all 0.2s;
 }
 
-.btn-cancel {
-  background: transparent;
-  color: #888;
-  border: 1px solid #3d3d3d;
+.edit-actions .btn-cancel,
+.message-edit-form .edit-actions button.btn-cancel,
+button.btn-cancel {
+  background-color: #3d3d3d !important;
+  background: #3d3d3d !important;
+  color: #e0e0e0 !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  outline: none !important;
 }
 
-.btn-cancel:hover:not(:disabled) {
-  background: #2d2d2d;
-  color: #ccc;
+.edit-actions .btn-cancel:hover:not(:disabled),
+button.btn-cancel:hover:not(:disabled) {
+  background-color: #4d4d4d !important;
+  background: #4d4d4d !important;
+  color: #fff !important;
 }
 
-.btn-save {
-  background: #64c8ca;
-  color: #1e1e1e;
+.edit-actions .btn-save,
+.message-edit-form .edit-actions button.btn-save,
+button.btn-save {
+  background-color: #64c8ca !important;
+  background: #64c8ca !important;
+  color: #1e1e1e !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  outline: none !important;
 }
 
-.btn-save:hover:not(:disabled) {
-  background: #52b6b8;
+.edit-actions .btn-save:hover:not(:disabled),
+button.btn-save:hover:not(:disabled) {
+  background-color: #52b6b8 !important;
+  background: #52b6b8 !important;
   transform: translateY(-1px);
 }
 
-.btn-save:disabled,
-.btn-cancel:disabled {
+.edit-actions .btn-save:disabled,
+.edit-actions .btn-cancel:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -188,6 +315,11 @@
   transform: scale(1.05);
 }
 
+.reaction-bubble.active {
+  background: rgba(100, 200, 202, 0.3);
+  border-color: #64c8ca;
+}
+
 .reaction-count {
   font-size: 11px;
   font-weight: 600;
@@ -197,20 +329,21 @@
 /* Action buttons */
 .message-actions {
   position: absolute;
-  top: -12px;
+  top: -6px;
   right: 16px;
   display: flex;
-  gap: 4px;
+  gap: 0;
   background: #2d2d2d;
   border: 1px solid #3d3d3d;
-  border-radius: 6px;
-  padding: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  padding: 1px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
-.action-btn {
-  width: 32px;
-  height: 32px;
+.message-actions .action-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -219,15 +352,738 @@
   border-radius: 4px;
   color: #888;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  padding: 0;
+  gap: 0;
+  flex: none;
 }
 
-.action-btn:hover {
+.message-actions .action-btn:hover {
   background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+/* Emoji reaction buttons */
+.message-actions .action-btn-emoji {
+  font-size: 14px;
+  padding: 0;
+}
+
+.message-actions .action-btn-emoji.active {
+  background: rgba(100, 200, 202, 0.25);
+}
+
+.message-actions .action-btn-emoji:hover {
+  background: rgba(100, 200, 202, 0.3);
+  transform: scale(1.1);
+}
+
+/* Divider between emoji and action buttons */
+.action-divider {
+  width: 1px;
+  height: 18px;
+  background: #4d4d4d;
+  margin: 0 2px;
+  align-self: center;
+}
+
+/* Delete button - red hover */
+.message-actions .action-btn.action-btn-delete:hover {
+  background: rgba(220, 53, 69, 0.15) !important;
+  color: #dc3545 !important;
+}
+
+/* Pin button - show teal when already pinned */
+.message-actions .action-btn-pin.pinned {
+  color: #64c8ca;
+}
+
+.message-actions .action-btn-pin.pinned:hover {
+  background: rgba(100, 200, 202, 0.25);
   color: #64c8ca;
 }
 
 /* Own message highlighting */
 .chat-message.own-message .message-avatar {
-  background: linear-gradient(135deg, #52b6b8, #64c8ca);
+  background: linear-gradient(135deg, #b298dc, #64c8ca);
+}
+
+/* Links in messages */
+.message-link {
+  color: #64c8ca;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.message-link:hover {
+  text-decoration: underline;
+}
+
+/* Shared File Card */
+.shared-file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #2b2d31;
+  border-radius: 8px;
+  border: 1px solid #3f4147;
+  margin-top: 8px;
+  max-width: 320px;
+  transition: all 0.15s ease;
+}
+
+.shared-file-card.clickable {
+  cursor: pointer;
+}
+
+.shared-file-card.clickable:hover {
+  background: #32353b;
+  border-color: #5865f2;
+}
+
+.shared-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+.shared-file-card .shared-file-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Folder icon style - using class instead of :has() for better compatibility */
+.shared-file-card.folder .shared-file-icon {
+  background: rgba(196, 79, 196, 0.15);
+  color: #c44fc4;
+}
+
+.shared-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.shared-file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f2f3f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shared-file-type {
+  font-size: 12px;
+  color: #949ba4;
+}
+
+/* Shared Recording Card */
+.shared-recording-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #2b2d31;
+  border-radius: 8px;
+  border: 1px solid #3f4147;
+  margin-top: 8px;
+  max-width: 360px;
+  transition: all 0.15s ease;
+}
+
+.shared-recording-card.clickable {
+  cursor: pointer;
+}
+
+.shared-recording-card.clickable:hover {
+  background: #32353b;
+  border-color: #64c8ca;
+}
+
+.shared-recording-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.shared-recording-card.video .shared-recording-icon {
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+.shared-recording-card.audio .shared-recording-icon {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.shared-recording-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.shared-recording-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f2f3f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shared-recording-meta {
+  font-size: 12px;
+  color: #949ba4;
+}
+
+.shared-recording-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.shared-recording-card.clickable:hover .shared-recording-play {
+  background: rgba(100, 200, 202, 0.25);
+}
+
+.shared-recording-card.audio .shared-recording-play {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.shared-recording-card.audio.clickable:hover .shared-recording-play {
+  background: rgba(168, 85, 247, 0.25);
+}
+
+/* ==================== Shared Todo/Meeting Card ==================== */
+.shared-todo-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #252525;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  margin-top: 8px;
+  max-width: 400px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shared-todo-card:hover {
+  background: #2a2a2a;
+  border-color: #3d3d3d;
+}
+
+.shared-todo-card.completed {
+  opacity: 0.7;
+}
+
+.shared-todo-card.completed .shared-todo-title {
+  text-decoration: line-through;
+  color: #888;
+}
+
+/* Checkbox for tasks */
+.shared-todo-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #5a5e66;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.shared-todo-checkbox:hover {
+  color: #64c8ca;
+}
+
+.shared-todo-checkbox.checked {
+  color: #57f287;
+}
+
+/* Priority indicator for tasks */
+.shared-todo-priority {
+  width: 4px;
+  min-height: 100%;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.shared-todo-priority.priority-1 {
+  background: #ef4444;
+}
+
+.shared-todo-priority.priority-2 {
+  background: #f59e0b;
+}
+
+.shared-todo-priority.priority-3 {
+  background: #64c8ca;
+}
+
+.shared-todo-priority.priority-4 {
+  background: #6b7280;
+}
+
+/* Meeting color indicator */
+.shared-todo-meeting-indicator {
+  width: 4px;
+  min-height: 100%;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+/* Todo content */
+.shared-todo-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.shared-todo-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e5e7eb;
+  word-wrap: break-word;
+}
+
+.shared-todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.shared-todo-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #888;
+}
+
+.shared-todo-date svg {
+  color: #64c8ca;
+}
+
+/* Assignees */
+.shared-todo-assignees {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.shared-todo-assignee {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #64c8ca, #4a9a9c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #1e1e1e;
+  border: 2px solid #252525;
+  margin-left: -6px;
+  overflow: hidden;
+}
+
+.shared-todo-assignee:first-child {
+  margin-left: 0;
+}
+
+.shared-todo-assignee img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shared-todo-more {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+}
+
+/* Join button for meetings */
+.shared-todo-join-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #64c8ca, #4a9a9c);
+  border: none;
+  border-radius: 6px;
+  color: #1e1e1e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.shared-todo-join-btn:hover {
+  background: linear-gradient(135deg, #7dd3d5, #64c8ca);
+  transform: scale(1.02);
+}
+
+.shared-todo-join-btn:active {
+  transform: scale(0.98);
+}
+
+/* Meeting type card styling */
+.shared-todo-card.meeting {
+  border-left: 3px solid #64c8ca;
+}
+
+.shared-todo-card.meeting:hover {
+  border-left-color: #7dd3d5;
+}
+
+/* Shared Whiteboard Card */
+.shared-whiteboard-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #2b2d31;
+  border-radius: 8px;
+  border: 1px solid #3f4147;
+  border-left: 3px solid #64c8ca;
+  margin-top: 8px;
+  max-width: 360px;
+  transition: all 0.15s ease;
+}
+
+.shared-whiteboard-card.clickable {
+  cursor: pointer;
+}
+
+.shared-whiteboard-card.clickable:hover {
+  background: #32353b;
+  border-color: #64c8ca;
+  border-left-color: #7dd3d5;
+}
+
+.shared-whiteboard-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.shared-whiteboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.shared-whiteboard-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f2f3f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shared-whiteboard-meta {
+  font-size: 12px;
+  color: #949ba4;
+}
+
+/* Attachments container */
+.message-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Image attachments */
+.attachment-image-container {
+  position: relative;
+  display: inline-block;
+  max-width: 400px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.attachment-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.attachment-image:hover {
+  opacity: 0.9;
+}
+
+.attachment-image-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.attachment-image-container:hover .attachment-image-overlay {
+  opacity: 1;
+}
+
+.attachment-action {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(30, 30, 30, 0.8);
+  border: none;
+  border-radius: 4px;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.attachment-action:hover {
+  background: rgba(100, 200, 202, 0.9);
+  color: #1e1e1e;
+  transform: scale(1.05);
+}
+
+.attachment-action.downloaded {
+  background: rgba(76, 175, 80, 0.9);
+  color: #fff;
+}
+
+/* File attachments */
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  max-width: 350px;
+}
+
+.attachment-file-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(100, 200, 202, 0.15);
+  border-radius: 8px;
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.attachment-file-icon.pdf {
+  background: rgba(220, 53, 69, 0.15);
+  color: #dc3545;
+}
+
+.attachment-file-icon.document {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+/* Clickable attachment (PDF, documents) */
+.attachment-file.attachment-file-clickable {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.attachment-file.attachment-file-clickable:hover {
+  background: #2d2d2d;
+}
+
+.attachment-file.attachment-file-clickable:hover .attachment-file-icon.pdf {
+  background: rgba(220, 53, 69, 0.25);
+}
+
+.attachment-file.attachment-file-clickable:hover .attachment-file-icon.document {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.attachment-file-name.clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.attachment-file-icon.pdf + .attachment-file-info .attachment-file-name.clickable {
+  color: #dc3545;
+}
+
+.attachment-file-icon.document + .attachment-file-info .attachment-file-name.clickable {
+  color: #3b82f6;
+}
+
+.attachment-file-name.clickable:hover {
+  text-decoration: underline;
+}
+
+.attachment-file-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attachment-file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #64c8ca;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-file-name:hover {
+  text-decoration: underline;
+}
+
+.attachment-file-size {
+  font-size: 12px;
+  color: #888;
+}
+
+.attachment-download-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.attachment-download-btn:hover {
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+  transform: scale(1.05);
+}
+
+.attachment-download-btn.downloaded {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+/* Call System Messages */
+.chat-message.call-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 4px 0;
+  background: rgba(100, 200, 202, 0.08);
+  border-radius: 8px;
+  border-left: 3px solid #64c8ca;
+}
+
+.chat-message.call-message:hover {
+  background: rgba(100, 200, 202, 0.12);
+}
+
+/* Missed/declined call styling */
+.chat-message.call-message.missed,
+.chat-message.call-message.declined {
+  background: rgba(239, 68, 68, 0.08);
+  border-left-color: #ef4444;
+}
+
+.chat-message.call-message.missed:hover,
+.chat-message.call-message.declined:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.call-message-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(100, 200, 202, 0.2);
+  border-radius: 50%;
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.chat-message.call-message.missed .call-message-icon,
+.chat-message.call-message.declined .call-message-icon {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.call-message-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.call-message-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.call-message-time {
+  font-size: 11px;
+  color: #888;
 }

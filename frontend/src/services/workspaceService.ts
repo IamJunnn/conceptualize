@@ -10,10 +10,9 @@ import {
   where,
   getDocs,
   Timestamp,
-  arrayUnion,
-  arrayRemove
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { getErrorMessage } from "../utils/errorUtils";
 
 // Workspace role type
 export type WorkspaceRole = "member" | "leader" | "admin";
@@ -103,9 +102,9 @@ export const createWorkspace = async (
     }, { merge: true });
 
     return workspace;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error creating workspace:", error);
-    throw new Error(`Failed to create workspace: ${error.message}`);
+    throw new Error(`Failed to create workspace: ${getErrorMessage(error)}`);
   }
 };
 
@@ -129,9 +128,9 @@ export const getWorkspace = async (workspaceId: string): Promise<Workspace | nul
       updatedAt: data.updatedAt?.toDate() || new Date(),
       memberCount: data.memberCount || 0
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error getting workspace:", error);
-    throw new Error(`Failed to get workspace: ${error.message}`);
+    throw new Error(`Failed to get workspace: ${getErrorMessage(error)}`);
   }
 };
 
@@ -147,7 +146,7 @@ export const getUserWorkspace = async (uid: string): Promise<Workspace | null> =
     }
 
     return await getWorkspace(userDoc.data().workspaceId);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error getting user workspace:", error);
     return null;
   }
@@ -171,9 +170,9 @@ export const getWorkspaceMembers = async (workspaceId: string): Promise<Workspac
         joinedAt: data.joinedAt?.toDate() || new Date()
       };
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error getting workspace members:", error);
-    throw new Error(`Failed to get workspace members: ${error.message}`);
+    throw new Error(`Failed to get workspace members: ${getErrorMessage(error)}`);
   }
 };
 
@@ -192,7 +191,7 @@ export const getMemberRole = async (
     }
 
     return memberDoc.data().role as WorkspaceRole;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error getting member role:", error);
     return null;
   }
@@ -249,9 +248,9 @@ export const updateMemberRole = async (
       role: newRole
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error updating member role:", error);
-    throw new Error(`Failed to update member role: ${error.message}`);
+    throw new Error(`Failed to update member role: ${getErrorMessage(error)}`);
   }
 };
 
@@ -307,9 +306,9 @@ export const removeMemberFromWorkspace = async (
       });
     }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error removing member:", error);
-    throw new Error(`Failed to remove member: ${error.message}`);
+    throw new Error(`Failed to remove member: ${getErrorMessage(error)}`);
   }
 };
 
@@ -361,9 +360,9 @@ export const createInvitation = async (
     });
 
     return invitation;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error creating invitation:", error);
-    throw new Error(`Failed to create invitation: ${error.message}`);
+    throw new Error(`Failed to create invitation: ${getErrorMessage(error)}`);
   }
 };
 
@@ -395,7 +394,7 @@ export const getInvitationByToken = async (token: string): Promise<Invitation | 
       status: data.status,
       token: data.token
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error getting invitation:", error);
     return null;
   }
@@ -465,9 +464,9 @@ export const acceptInvitation = async (
       status: "accepted"
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error accepting invitation:", error);
-    throw new Error(`Failed to accept invitation: ${error.message}`);
+    throw new Error(`Failed to accept invitation: ${getErrorMessage(error)}`);
   }
 };
 
@@ -502,9 +501,9 @@ export const getPendingInvitations = async (workspaceId: string): Promise<Invita
     });
 
     return invitations;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error getting pending invitations:", error);
-    throw new Error(`Failed to get pending invitations: ${error.message}`);
+    throw new Error(`Failed to get pending invitations: ${getErrorMessage(error)}`);
   }
 };
 
@@ -541,9 +540,9 @@ export const cancelInvitation = async (invitationId: string, requesterUid: strin
       cancelledAt: Timestamp.now()
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error cancelling invitation:", error);
-    throw new Error(`Failed to cancel invitation: ${error.message}`);
+    throw new Error(`Failed to cancel invitation: ${getErrorMessage(error)}`);
   }
 };
 
@@ -593,9 +592,9 @@ export const resendInvitation = async (invitationId: string, requesterUid: strin
       token: data.token,
     };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error resending invitation:", error);
-    throw new Error(`Failed to resend invitation: ${error.message}`);
+    throw new Error(`Failed to resend invitation: ${getErrorMessage(error)}`);
   }
 };
 

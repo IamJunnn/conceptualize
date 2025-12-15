@@ -1,0 +1,365 @@
+/* BackgroundSelectorModal */
+
+.background-selector-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.background-selector-modal {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 12px;
+  width: 400px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.background-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.background-selector-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.background-selector-header .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.background-selector-header .close-btn:hover {
+  background: #333;
+  color: #e0e0e0;
+}
+
+.background-selector-content {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.background-selector-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.background-selector-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.background-selector-content::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+/* Sections */
+.background-section {
+  margin-bottom: 20px;
+}
+
+.background-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #888;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.section-header svg {
+  color: #64c8ca;
+}
+
+/* Background options */
+.blur-options,
+.gradient-options,
+.user-backgrounds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.background-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: #252525;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.background-option:hover {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+.background-option.active {
+  border-color: #64c8ca;
+  background: rgba(100, 200, 202, 0.1);
+}
+
+.background-option span {
+  font-size: 11px;
+  color: #888;
+}
+
+.background-option.active span {
+  color: #64c8ca;
+}
+
+.option-preview {
+  width: 60px;
+  height: 45px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.option-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Top options row (None and Mirror) */
+.top-options {
+  display: flex;
+  gap: 10px;
+}
+
+.top-options .background-option {
+  flex: 1;
+}
+
+/* None option */
+.none-option .none-preview {
+  color: #666;
+}
+
+.none-option.active .none-preview {
+  color: #64c8ca;
+}
+
+/* Mirror option */
+.mirror-option .mirror-preview {
+  color: #666;
+}
+
+.mirror-option.active .mirror-preview {
+  color: #64c8ca;
+}
+
+/* Blur previews */
+.blur-preview {
+  position: relative;
+  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+}
+
+.blur-sample {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, #555 20%, transparent 70%);
+}
+
+.blur-preview.light .blur-sample {
+  filter: blur(2px);
+}
+
+.blur-preview.medium .blur-sample {
+  filter: blur(4px);
+}
+
+.blur-preview.strong .blur-sample {
+  filter: blur(6px);
+}
+
+/* Gradient previews */
+.gradient-preview {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* Gradient option sizing */
+.gradient-option {
+  min-width: 80px;
+}
+
+.gradient-option span {
+  text-align: center;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Upload option */
+.upload-option .upload-preview {
+  border: 2px dashed #444;
+  background: transparent;
+  color: #666;
+}
+
+.upload-option:hover .upload-preview {
+  border-color: #64c8ca;
+  color: #64c8ca;
+}
+
+.upload-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #444;
+  border-top-color: #64c8ca;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* User background with delete */
+.user-bg-option {
+  position: relative;
+}
+
+.delete-bg-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.user-bg-option:hover .delete-bg-btn {
+  opacity: 1;
+}
+
+.delete-bg-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+/* Check icon */
+.check-icon {
+  position: absolute;
+  bottom: 28px;
+  right: 8px;
+  color: #64c8ca;
+  background: #1e1e1e;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+/* Team background placeholder */
+.no-background-message {
+  padding: 16px;
+  background: #252525;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.no-background-message p {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
+.no-background-message .hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #555;
+}
+
+/* Error message */
+.upload-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 12px;
+}
+
+/* Upload hint */
+.upload-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #555;
+}
+
+/* Team background option - larger */
+.team-bg-option .option-preview {
+  width: 100%;
+  height: 80px;
+}
+
+.team-bg-option {
+  width: 100%;
+}

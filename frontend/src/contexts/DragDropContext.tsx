@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 
-export type EditorPane = 'left' | 'right';
+export type EditorPane = 'left' | 'right' | 'single';
 export type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center';
 
 export interface DraggedTab {

@@ -32,8 +32,8 @@ function SimpleTitleBar() {
   };
 
   return (
-    <div className="simple-title-bar" data-tauri-drag-region>
-      <div className="simple-title-bar-title" data-tauri-drag-region>
+    <div className="simple-title-bar" data-tauri-drag-region onDoubleClick={handleMaximize}>
+      <div className="simple-title-bar-title" data-tauri-drag-region onDoubleClick={handleMaximize}>
         Conceptualize
       </div>
 

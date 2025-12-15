@@ -33,8 +33,8 @@ export const sendInvitationEmail = async (
     console.log('✓', result);
     console.log('='.repeat(60));
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error sending invitation email:', error);
-    throw new Error(`Failed to send invitation email: ${error}`);
+    throw new Error(`Failed to send invitation email: ${error instanceof Error ? error.message : String(error)}`);
   }
 };

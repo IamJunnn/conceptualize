@@ -129,3 +129,46 @@
   background: #ff4444;
   color: #fff;
 }
+
+/* Whiteboard Context Menu */
+.whiteboard-context-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.whiteboard-context-menu {
+  position: fixed;
+  background: #2d2d2d;
+  border: 1px solid #3e3e3e;
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1001;
+}
+
+.whiteboard-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.whiteboard-context-menu button:hover {
+  background: #3e3e3e;
+}
+
+.whiteboard-context-menu button.delete {
+  color: #ef4444;
+}
+
+.whiteboard-context-menu button.delete:hover {
+  background: rgba(239, 68, 68, 0.15);
+}

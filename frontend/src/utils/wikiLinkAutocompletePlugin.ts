@@ -46,7 +46,7 @@ export const wikiLinkAutocompletePlugin = () => {
       },
       props: {
         handleTextInput(view, from, _to, text) {
-          const { state, dispatch } = view
+          const { state } = view
           const { doc } = state
 
           // Check if we're typing '[['

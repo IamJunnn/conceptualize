@@ -1,17 +1,12 @@
 // Utility functions for managing important notes
 
+import { getLocalStorage, setLocalStorage } from '../hooks/useLocalStorage';
+
 const IMPORTANT_NOTES_KEY = 'importantNotes';
 
 export function getImportantNotes(): Set<string> {
-  const stored = localStorage.getItem(IMPORTANT_NOTES_KEY);
-  if (stored) {
-    try {
-      return new Set(JSON.parse(stored));
-    } catch (e) {
-      return new Set();
-    }
-  }
-  return new Set();
+  const stored = getLocalStorage<string[]>(IMPORTANT_NOTES_KEY, []);
+  return new Set(stored);
 }
 
 export function isImportantNote(filePath: string): boolean {
@@ -28,19 +23,18 @@ export function toggleImportantNote(filePath: string): boolean {
     importantNotes.add(filePath);
   }
 
-  localStorage.setItem(IMPORTANT_NOTES_KEY, JSON.stringify(Array.from(importantNotes)));
-
+  setLocalStorage(IMPORTANT_NOTES_KEY, Array.from(importantNotes));
   return importantNotes.has(filePath);
 }
 
 export function markAsImportant(filePath: string): void {
   const importantNotes = getImportantNotes();
   importantNotes.add(filePath);
-  localStorage.setItem(IMPORTANT_NOTES_KEY, JSON.stringify(Array.from(importantNotes)));
+  setLocalStorage(IMPORTANT_NOTES_KEY, Array.from(importantNotes));
 }
 
 export function unmarkAsImportant(filePath: string): void {
   const importantNotes = getImportantNotes();
   importantNotes.delete(filePath);
-  localStorage.setItem(IMPORTANT_NOTES_KEY, JSON.stringify(Array.from(importantNotes)));
+  setLocalStorage(IMPORTANT_NOTES_KEY, Array.from(importantNotes));
 }

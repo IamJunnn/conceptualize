@@ -1,4 +1,5 @@
 import React from 'react';
+import { FileText } from 'lucide-react';
 import ShortcutsGuide from '../guides/ShortcutsGuide';
 import MarkdownGuide from '../guides/MarkdownGuide';
 import './HelpModal.css';
@@ -36,7 +37,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ guide, onClose }) => {
       <div className="help-modal" onClick={(e) => e.stopPropagation()}>
         <div className="help-modal-header">
           <div className="help-modal-title">
-            <span className="help-modal-icon">📄</span>
+            <FileText size={16} className="help-modal-icon" />
             <span>{getGuideTitle()}</span>
             <span className="help-modal-badge">Read-only</span>
           </div>

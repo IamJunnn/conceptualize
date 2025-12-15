@@ -8,9 +8,11 @@ import {
   FolderOpenIcon,
   EyeSlashIcon,
   EyeIcon,
-  StarIcon
+  StarIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+import { PanelRight } from 'lucide-react';
 import { useGraphVisibility } from '../../contexts/GraphVisibilityContext';
 import { isImportantNote, toggleImportantNote } from '../../utils/importantNotes';
 import './ContextMenu.css';
@@ -30,6 +32,7 @@ interface ContextMenuProps {
   onRevealInExplorer?: (path: string) => void;
   onOpenExternal?: (path: string) => void;
   onOpenInSecondPane?: (path: string, name: string) => void;
+  onShareViaMessage?: (path: string, name: string, itemType: 'file' | 'folder') => void; // Share via chat message
   allPaths?: string[]; // All file/folder paths for cascade operations
   mode?: 'local' | 'team'; // Operating mode
   userRole?: 'owner' | 'admin' | 'leader' | 'member'; // User role in team mode
@@ -50,6 +53,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
   onRevealInExplorer,
   onOpenExternal,
   onOpenInSecondPane,
+  onShareViaMessage,
   mode = 'local',
   userRole,
   allPaths = [],
@@ -107,8 +111,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
     onClose();
   };
 
-  // Check if user has delete permission (owner or admin only in team mode)
-  const canDelete = mode === 'local' || (userRole === 'owner' || userRole === 'admin');
+  // Check if user has delete permission (local mode or any team member)
+  const canDelete = mode === 'local' || !!userRole;
 
   return (
     <div
@@ -122,9 +126,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
             className="context-menu-item"
             onClick={() => handleAction(() => onOpenInSecondPane(itemPath, itemName))}
           >
-            <svg className="menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4v16m6-16v16M4 8h16M4 16h16" />
-            </svg>
+            <PanelRight size={16} className="menu-icon" />
             Open in Second Pane
           </div>
           <div className="context-menu-separator" />
@@ -189,13 +191,27 @@ const ContextMenu: React.FC<ContextMenuProps> = ({
           <div className="context-menu-separator" />
         </>
       )}
-      <div
-        className="context-menu-item"
-        onClick={() => handleAction(() => onRefresh())}
-      >
-        <ArrowPathIcon className="menu-icon" />
-        Refresh
-      </div>
+      {mode === 'team' && onShareViaMessage && (
+        <>
+          <div
+            className="context-menu-item"
+            onClick={() => handleAction(() => onShareViaMessage(itemPath, itemName, itemType))}
+          >
+            <ChatBubbleLeftRightIcon className="menu-icon" />
+            Share via Message
+          </div>
+          <div className="context-menu-separator" />
+        </>
+      )}
+      {mode === 'local' && (
+        <div
+          className="context-menu-item"
+          onClick={() => handleAction(() => onRefresh())}
+        >
+          <ArrowPathIcon className="menu-icon" />
+          Refresh
+        </div>
+      )}
       {mode === 'local' && onRevealInExplorer && (
         <>
           <div

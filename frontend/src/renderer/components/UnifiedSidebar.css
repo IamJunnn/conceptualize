@@ -26,7 +26,6 @@
 .sidebar-title {
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #e0e0e0;
   margin: 0;
@@ -141,10 +140,36 @@
   display: none;
 }
 
-.sidebar-content.root-drag-over {
-  background-color: rgba(9, 71, 113, 0.3);
+/* Sidebar drop overlay - always present for smooth transitions */
+.sidebar-content {
+  position: relative;
+}
+
+.sidebar-content::before {
+  content: 'Drop files to add to folder';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(100, 200, 202, 0.12);
   outline: 2px dashed #64c8ca;
   outline-offset: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64c8ca;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s ease-out;
+}
+
+.sidebar-content.root-drag-over::before {
+  opacity: 1;
 }
 
 /* Tree Node Container */
@@ -159,7 +184,7 @@
   display: flex;
   align-items: center;
   height: 22px;
-  padding: 0 4px;
+  padding: 0 2px;
   cursor: pointer !important;
   border-radius: 4px;
   transition: none; /* Disable transitions during normal interaction for snappier feel */
@@ -203,23 +228,25 @@
   background-color: transparent;
 }
 
+/* Base tree-node with transition for smooth drag effects */
+.tree-node {
+  cursor: pointer !important;
+  transition: background-color 0.08s ease-out, box-shadow 0.08s ease-out, border-left 0.08s ease-out;
+  border-left: 3px solid transparent;
+}
+
 /* Drag over styling - when dragging over a folder */
 .tree-node.drag-over {
-  background-color: rgba(9, 71, 113, 0.4) !important;
+  background-color: rgba(100, 200, 202, 0.25) !important;
   border-left: 3px solid #64c8ca;
-  box-shadow: inset 0 0 0 1px #64c8ca;
-  /* Quick visual feedback for drag-over */
-  transition: background-color 0.1s ease-out, box-shadow 0.1s ease-out;
+  box-shadow: inset 0 0 10px rgba(100, 200, 202, 0.3), 0 0 4px rgba(100, 200, 202, 0.4);
+  border-radius: 4px;
 }
 
 /* Dragging state - item being dragged */
 .tree-node.dragging {
   opacity: 0.5;
   cursor: grabbing !important;
-}
-
-.tree-node {
-  cursor: pointer !important;
 }
 
 .tree-node[draggable="true"]:active {
@@ -410,5 +437,299 @@
 .drag-preview-name {
   color: #fff;
   font-weight: 500;
+}
+
+/* ============================================
+   Sidebar Sections Layout (for team mode)
+   ============================================ */
+
+.sidebar-sections {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Section container */
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 32px; /* Minimum height for collapsed section header */
+  transition: none; /* Remove transition for snappy resize */
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-section.files-section {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.sidebar-section.whiteboards-section {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.sidebar-section.collapsed {
+  flex: 0 0 auto;
+  height: auto !important;
+}
+
+/* Minimal collapsed bar for sections */
+.section-collapsed-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.section-collapsed-bar:hover {
+  background-color: #2a2a2a;
+}
+
+.section-collapsed-bar .section-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  margin-left: auto;
+}
+
+.section-collapsed-bar:hover .section-actions {
+  opacity: 1;
+}
+
+.collapsed-bar-icon {
+  width: 14px;
+  height: 14px;
+  color: #808080;
+  flex-shrink: 0;
+}
+
+.collapsed-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #808080;
+}
+
+.collapsed-bar-chevron {
+  width: 12px;
+  height: 12px;
+  color: #666;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+/* Section header */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 4px;
+  background-color: #1e1e1e;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+  user-select: none;
+  min-height: 32px;
+  box-sizing: border-box;
+}
+
+.section-header:hover {
+  background-color: #2a2a2a;
+}
+
+.section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-chevron {
+  width: 14px;
+  height: 14px;
+  color: #808080;
+  flex-shrink: 0;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #b0b0b0;
+}
+
+.section-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.section-header:hover .section-actions {
+  opacity: 1;
+}
+
+.section-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #808080;
+  transition: all 0.15s ease;
+}
+
+.section-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.section-action-btn .action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Section content */
+.section-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0;
+  /* Hide scrollbar UI but keep functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.section-content::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
+}
+
+/* Draggable section divider */
+.unified-sidebar .section-divider {
+  height: 4px;
+  background: #252525;
+  cursor: row-resize;
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  margin: 2px 0;
+}
+
+.unified-sidebar .section-divider:hover {
+  background: #333;
+}
+
+.unified-sidebar .section-divider.dragging {
+  background: #3a3a3a;
+}
+
+.unified-sidebar .divider-handle {
+  width: 24px;
+  height: 2px;
+  background: #555;
+  border-radius: 1px;
+  transition: background-color 0.15s ease;
+}
+
+.unified-sidebar .section-divider:hover .divider-handle,
+.unified-sidebar .section-divider.dragging .divider-handle {
+  background: #64c8ca;
+}
+
+/* ============================================
+   Whiteboard List Items (simple style like file tree)
+   ============================================ */
+
+.whiteboard-list {
+  padding: 0;
+}
+
+.whiteboard-item {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 4px 0 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0;
+  transition: background-color 0.15s ease, transform 0.2s ease, opacity 0.2s ease;
+  -webkit-user-select: none;
+  user-select: none;
+  animation: whiteboard-item-enter 0.25s ease-out;
+}
+
+@keyframes whiteboard-item-enter {
+  from {
+    opacity: 0.5;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.whiteboard-item:hover {
+  background-color: #2d2d2d;
+}
+
+.whiteboard-item.active {
+  background-color: #64c8ca;
+}
+
+.whiteboard-item.active:hover {
+  background-color: #7dd3d5;
+}
+
+.whiteboard-item-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #cccccc;
+}
+
+.whiteboard-item.active .whiteboard-item-name {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+/* Whiteboard rename input */
+.whiteboard-rename-input {
+  flex: 1;
+  height: 18px;
+  padding: 0 4px;
+  margin: 0;
+  background: var(--input-bg, #1e1e1e);
+  border: 1px solid var(--accent-color, #0d5a8f);
+  border-radius: 2px;
+  color: var(--text-primary, #cccccc);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.whiteboard-rename-input:focus {
+  border-color: var(--accent-color, #1177bb);
 }
 

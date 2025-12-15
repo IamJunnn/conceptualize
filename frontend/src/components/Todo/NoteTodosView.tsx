@@ -104,9 +104,10 @@ const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile, onT
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
-  const isDateWarning = (todo: NoteTodo) => {
+  const _isDateWarning = (todo: NoteTodo) => {
     return todo.end_date && !todo.start_date
   }
+  void _isDateWarning // Reserved for future date warning indicators
 
   const handleToggleTodo = async (todo: NoteTodo) => {
     try {
@@ -297,8 +298,6 @@ const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile, onT
 
   const handleQuickAddSubmit = async (data: TodoFormData) => {
     try {
-      console.log('📝 Submitting todo:', data)
-
       // Get current todos to find or create a list
       const todoData = await invoke<{ lists: Array<{ id: string; name: string }> }>('get_todos')
 
@@ -306,15 +305,12 @@ const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile, onT
 
       // If no lists exist, create a default one
       if (!listId) {
-        console.log('⚠️ No lists found, creating default list')
         const newList = await invoke<{ id: string }>('add_todo_list', {
           name: 'Quick Todos',
-          icon: '📝'
+          icon: 'list'
         })
         listId = newList.id
       }
-
-      console.log('📋 Using list ID:', listId)
 
       // Use add_unified_todo with proper parameters
       // For FAB-created todos: noteName=null (don't write to file), linkedNote=selected note (just reference)
@@ -330,7 +326,6 @@ const NoteTodosView: React.FC<NoteTodosViewProps> = ({ rootPath, onOpenFile, onT
         linkedNote: data.linkedNoteName // Pass the linked note for reference
       })
 
-      console.log('✅ Todo created successfully')
       setShowQuickAddModal(false)
       await loadTodos()
       onTodoCreated?.() // Notify parent to refresh all todo views

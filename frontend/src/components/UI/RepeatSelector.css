@@ -1,0 +1,127 @@
+/* Repeat Selector Wrapper */
+.repeat-selector-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Input Button */
+.repeat-selector-input {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  text-align: left;
+}
+
+.repeat-selector-input:hover:not(:disabled) {
+  border-color: #4d4d4d;
+}
+
+.repeat-selector-input:focus {
+  outline: none;
+  border-color: #64c8ca;
+}
+
+.repeat-selector-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.repeat-selector-input .placeholder {
+  color: #888;
+}
+
+.repeat-selector-input .has-value {
+  color: #e0e0e0;
+}
+
+.repeat-selector-input .chevron-icon {
+  color: #64c8ca;
+  flex-shrink: 0;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.repeat-selector-input:hover .chevron-icon {
+  opacity: 1;
+}
+
+.repeat-selector-input .chevron-icon.open {
+  transform: rotate(180deg);
+}
+
+/* Dropdown */
+.repeat-selector-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  padding: 4px;
+}
+
+/* Custom scrollbar */
+.repeat-selector-dropdown::-webkit-scrollbar {
+  width: 8px;
+}
+
+.repeat-selector-dropdown::-webkit-scrollbar-track {
+  background: #252525;
+  border-radius: 4px;
+}
+
+.repeat-selector-dropdown::-webkit-scrollbar-thumb {
+  background: #4d4d4d;
+  border-radius: 4px;
+}
+
+.repeat-selector-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #5d5d5d;
+}
+
+/* Repeat option */
+.repeat-option {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.repeat-option:hover {
+  background: rgba(100, 200, 202, 0.15);
+  color: #64c8ca;
+}
+
+.repeat-option.selected {
+  background: #64c8ca;
+  color: #1e1e1e;
+  font-weight: 500;
+}
+
+.repeat-option.selected:hover {
+  background: #52b6b8;
+  color: #1e1e1e;
+}
+

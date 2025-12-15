@@ -1,0 +1,180 @@
+/* Date Change Confirmation Modal - Scoped styles */
+.date-change-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(2px);
+}
+
+.date-change-modal {
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  position: relative;
+  animation: dateChangeModalSlideIn 0.2s ease-out;
+}
+
+@keyframes dateChangeModalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.date-change-modal .dcm-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-change-modal .dcm-close-btn:hover {
+  background: #3d3d3d;
+  color: #e0e0e0;
+}
+
+.date-change-modal .dcm-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.date-change-modal .dcm-header-icon {
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.date-change-modal .dcm-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.date-change-modal .dcm-content {
+  margin-bottom: 24px;
+}
+
+.date-change-modal .dcm-todo-title {
+  font-size: 15px;
+  color: #e0e0e0;
+  font-weight: 500;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  border-left: 3px solid #64c8ca;
+}
+
+.date-change-modal .dcm-date-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.date-change-modal .dcm-date-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.date-change-modal .dcm-date-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.date-change-modal .dcm-date-value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.date-change-modal .dcm-date-value.old {
+  color: #888;
+  text-decoration: line-through;
+}
+
+.date-change-modal .dcm-date-value.new {
+  color: #64c8ca;
+}
+
+.date-change-modal .dcm-arrow {
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.date-change-modal .dcm-assignees {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: rgba(100, 200, 202, 0.1);
+  border: 1px solid rgba(100, 200, 202, 0.3);
+  border-radius: 8px;
+  color: #64c8ca;
+  font-size: 13px;
+}
+
+.date-change-modal .dcm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.date-change-modal .dcm-btn-cancel {
+  padding: 10px 20px;
+  background: #3d3d3d;
+  border: none;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-change-modal .dcm-btn-cancel:hover {
+  background: #4d4d4d;
+}
+
+.date-change-modal .dcm-btn-confirm {
+  padding: 10px 20px;
+  background: #64c8ca;
+  border: none;
+  border-radius: 8px;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-change-modal .dcm-btn-confirm:hover {
+  background: #7dd3d5;
+}

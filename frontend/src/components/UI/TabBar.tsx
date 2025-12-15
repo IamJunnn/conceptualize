@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useDragDrop, EditorPane } from '../../contexts/DragDropContext';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
-import { DocumentIcon, StarIcon, ClipboardDocumentListIcon, CalendarIcon, Squares2X2Icon, XMarkIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { DocumentIcon, StarIcon, ClipboardDocumentListIcon, CalendarIcon, Squares2X2Icon, XMarkIcon, Cog6ToothIcon, ChatBubbleLeftRightIcon, BellIcon } from '@heroicons/react/24/outline';
+import { MonitorPlay, PenTool } from 'lucide-react';
 import { isImportantNote, toggleImportantNote } from '../../utils/importantNotes';
 import './TabBar.css';
 
@@ -343,7 +344,9 @@ export function TabBar({
     <div className="tab-bar" ref={tabBarRef}>
       {allTabs.map((file, index) => {
         const isGraphTab = file.path === 'special://graph';
-        const displayName = file.name.replace(/\.md$/, '');
+        const isChatTab = file.path === 'special://chat';
+        // Force "Messages" for chat tab, otherwise use file name
+        const displayName = isChatTab ? 'Messages' : file.name.replace(/\.md$/, '');
         // Use pendingDragRef as fallback since draggedTab state update is async
         const activeDragFilePath = draggedTab?.filePath || pendingDragRef.current?.filePath;
         const activeDragSourcePane = draggedTab?.sourcePane || pendingDragRef.current?.sourcePane;
@@ -356,7 +359,7 @@ export function TabBar({
         // For Graph tab, check if activeTab is 'graph' (not 'special://graph')
         const isActive = isGraphTab ? activeTab === 'graph' : activeTab === file.path;
 
-        // Only show icons for special tabs (Dashboard, Graph, Todos, Timeline, Settings)
+        // Only show icons for special tabs (Dashboard, Graph, Todos, Timeline, Chat, Recordings, Whiteboard, Settings)
         let SpecialIcon: React.ElementType | null = null;
         let specialIconClass = 'tab-file-icon';
         if (file.path === 'special://dashboard') {
@@ -368,15 +371,28 @@ export function TabBar({
           SpecialIcon = ClipboardDocumentListIcon;
         } else if (file.path === 'special://timeline') {
           SpecialIcon = CalendarIcon;
+        } else if (file.path === 'special://chat') {
+          SpecialIcon = ChatBubbleLeftRightIcon;
+          specialIconClass = 'tab-file-icon chat';
+        } else if (file.path === 'special://recordings') {
+          SpecialIcon = () => <MonitorPlay size={16} className="tab-file-icon recordings" />;
+        } else if (file.path.startsWith('special://whiteboard')) {
+          SpecialIcon = () => <PenTool size={16} className="tab-file-icon whiteboard" />;
         } else if (file.path === 'special://settings') {
           SpecialIcon = Cog6ToothIcon;
           specialIconClass = 'tab-file-icon settings';
+        } else if (file.path === 'special://notifications') {
+          SpecialIcon = BellIcon;
+          specialIconClass = 'tab-file-icon notifications';
         }
+
+        // Tooltip text for the tab
+        const tooltipText = isChatTab ? 'Messages' : file.name;
 
         return (
           <div
             key={file.path}
-            className={`tab file-tab ${isActive ? 'active' : ''} ${isPaneActive ? 'pane-active' : 'pane-inactive'} ${isDragging ? 'dragging' : ''} ${showDropIndicator ? 'drop-target-left' : ''}`}
+            className={`tab file-tab ${isActive ? 'active' : ''} ${isPaneActive ? 'pane-active' : 'pane-inactive'} ${isDragging ? 'dragging' : ''} ${showDropIndicator ? 'drop-target-left' : ''} ${isChatTab ? 'has-delayed-tooltip' : ''}`}
             onMouseDown={(e) => handleTabMouseDown(e, file.path, file.name, file.id)}
             onContextMenu={(e) => !isGraphTab && handleTabContextMenu(e, file.path)}
             onClick={() => {
@@ -387,7 +403,8 @@ export function TabBar({
                 onPaneActivate?.();
               }
             }}
-            title={file.name}
+            title={!isChatTab ? file.name : undefined}
+            data-tooltip={isChatTab ? tooltipText : undefined}
           >
             {SpecialIcon && (
               <SpecialIcon className={specialIconClass} />
@@ -479,7 +496,11 @@ export function TabBar({
         const isTodos = previewData.filePath === 'special://todos';
         const isTimeline = previewData.filePath === 'special://timeline';
         const isDashboard = previewData.filePath === 'special://dashboard';
+        const isChat = previewData.filePath === 'special://chat';
+        const isRecordings = previewData.filePath === 'special://recordings';
+        const isWhiteboard = previewData.filePath.startsWith('special://whiteboard');
         const isSettings = previewData.filePath === 'special://settings';
+        const isNotifications = previewData.filePath === 'special://notifications';
 
         let PreviewIcon: React.ElementType = DocumentIcon;
         let iconClass = 'tab-drag-preview-icon';
@@ -501,10 +522,24 @@ export function TabBar({
           PreviewIcon = Squares2X2Icon;
           iconClass = 'tab-drag-preview-icon';
           displayName = 'Dashboard';
+        } else if (isChat) {
+          PreviewIcon = ChatBubbleLeftRightIcon;
+          iconClass = 'tab-drag-preview-icon';
+          displayName = 'Messages';
+        } else if (isRecordings) {
+          PreviewIcon = () => <MonitorPlay size={16} className="tab-drag-preview-icon" />;
+          displayName = 'Recordings';
+        } else if (isWhiteboard) {
+          PreviewIcon = () => <PenTool size={16} className="tab-drag-preview-icon" />;
+          displayName = 'Whiteboard';
         } else if (isSettings) {
           PreviewIcon = Cog6ToothIcon;
           iconClass = 'tab-drag-preview-icon';
           displayName = 'Settings';
+        } else if (isNotifications) {
+          PreviewIcon = BellIcon;
+          iconClass = 'tab-drag-preview-icon';
+          displayName = 'Notifications';
         } else if (previewData.fileName.endsWith('.md')) {
           iconClass = 'tab-drag-preview-icon md-file';
           displayName = previewData.fileName.slice(0, -3);

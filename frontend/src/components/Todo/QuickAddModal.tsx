@@ -46,7 +46,7 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
   const [description, setDescription] = useState<string | null>(null)
   const [files, setFiles] = useState<FileItem[]>([])
   const [showAutocomplete, setShowAutocomplete] = useState(false)
-  const [autocompletePosition, setAutocompletePosition] = useState({ top: 0, left: 0 })
+  const [, setAutocompletePosition] = useState({ top: 0, left: 0 })
   const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0)
   const noteInputRef = useRef<HTMLInputElement>(null)
   const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -96,10 +96,8 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
   const loadFiles = async () => {
     if (!rootPath) {
-      console.log('⚠️ No rootPath provided, cannot load files')
       return
     }
-    console.log('📂 Loading files from:', rootPath)
     try {
       const result = await invoke<{ files: Array<{ path: string; content: string }> }>('get_markdown_files', { rootPath })
 
@@ -122,8 +120,6 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
         }
       })
 
-      console.log('✅ Files loaded successfully:', fileList.length, 'total files')
-      console.log('📝 MD files loaded:', fileList.filter(f => f.type === 'md').length)
       setFiles(fileList)
     } catch (error) {
       console.error('❌ Failed to load files:', error)
@@ -175,22 +171,14 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
   }
 
   const handleNoteInputFocus = () => {
-    console.log('🎯 Note input focused!')
-    console.log('📁 Total files loaded:', files.length)
-    console.log('📝 MD files:', files.filter(f => f.type === 'md').length)
-    console.log('🔍 Current search query:', noteSearchQuery)
-
     // Clear any pending blur timeout
     if (blurTimeoutRef.current) {
-      console.log('🚫 Clearing blur timeout')
       clearTimeout(blurTimeoutRef.current)
       blurTimeoutRef.current = null
     }
 
     setShowAutocomplete(true)
     setSelectedAutocompleteIndex(0)
-
-    console.log('✅ Set showAutocomplete to TRUE')
 
     // Update autocomplete position
     if (noteInputRef.current) {
@@ -335,11 +323,9 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
     }
   }
 
-  const handleNoteInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    console.log('👋 Input blur triggered')
+  const handleNoteInputBlur = (_e: React.FocusEvent<HTMLInputElement>) => {
     // Delay closing to allow click on dropdown items
     blurTimeoutRef.current = setTimeout(() => {
-      console.log('⏰ Closing dropdown after blur delay')
       setShowAutocomplete(false)
     }, 300)
   }
@@ -354,7 +340,7 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
     }
   }
 
-  const getPriorityLabel = (p: number) => {
+  const _getPriorityLabel = (p: number) => {
     switch (p) {
       case 1: return 'P1 - Urgent'
       case 2: return 'P2 - High'
@@ -363,6 +349,7 @@ const QuickAddModal: React.FC<QuickAddModalProps> = ({
       default: return 'No Priority'
     }
   }
+  void _getPriorityLabel // Reserved for future priority label tooltips
 
   const formatDateForInput = (dateStr: string | null) => {
     if (!dateStr) return ''

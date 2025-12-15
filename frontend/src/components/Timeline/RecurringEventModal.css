@@ -1,0 +1,197 @@
+/* Recurring Event Modal - Scoped styles */
+.recurring-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(2px);
+}
+
+.recurring-modal {
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 380px;
+  padding: 24px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  position: relative;
+  animation: recurringModalSlideIn 0.2s ease-out;
+}
+
+@keyframes recurringModalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.recurring-modal .rem-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recurring-modal .rem-close-btn:hover {
+  background: #3d3d3d;
+  color: #e0e0e0;
+}
+
+.recurring-modal .rem-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.recurring-modal .rem-header-icon {
+  color: #64c8ca;
+  flex-shrink: 0;
+}
+
+.recurring-modal .rem-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.recurring-modal .rem-content {
+  margin-bottom: 24px;
+}
+
+.recurring-modal .rem-event-info {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  border-left: 3px solid #64c8ca;
+}
+
+.recurring-modal .rem-event-title {
+  font-size: 15px;
+  color: #e0e0e0;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.recurring-modal .rem-event-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64c8ca;
+}
+
+.recurring-modal .rem-event-date .rem-meeting-time {
+  color: #888;
+}
+
+.recurring-modal .rem-scope-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recurring-modal .rem-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #1e1e1e;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recurring-modal .rem-scope-option:hover {
+  background: #2d2d2d;
+}
+
+.recurring-modal .rem-scope-option.selected {
+  border-color: #64c8ca;
+  background: rgba(100, 200, 202, 0.08);
+}
+
+.recurring-modal .rem-scope-option input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  margin-top: 2px;
+  accent-color: #64c8ca;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.recurring-modal .rem-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recurring-modal .rem-option-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.recurring-modal .rem-option-desc {
+  font-size: 12px;
+  color: #888;
+}
+
+.recurring-modal .rem-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.recurring-modal .rem-btn-cancel {
+  padding: 10px 20px;
+  background: #3d3d3d;
+  border: none;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recurring-modal .rem-btn-cancel:hover {
+  background: #4d4d4d;
+}
+
+.recurring-modal .rem-btn-confirm {
+  padding: 10px 24px;
+  background: #64c8ca;
+  border: none;
+  border-radius: 8px;
+  color: #1e1e1e;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.recurring-modal .rem-btn-confirm:hover {
+  background: #7dd3d5;
+}

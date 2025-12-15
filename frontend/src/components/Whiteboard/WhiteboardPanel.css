@@ -1,0 +1,774 @@
+/* WhiteboardPanel Styles - Minimal Version (using tldraw defaults) */
+
+.whiteboard-panel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+/* Remove black outline/stroke from tldraw text */
+.whiteboard-canvas .tl-text-shape text,
+.whiteboard-canvas .tl-text text,
+.whiteboard-canvas [data-shape-type="text"] text,
+.whiteboard-canvas .tl-shape text,
+.whiteboard-canvas .tl-canvas text,
+.whiteboard-canvas svg text,
+.tl-container text,
+.tl-canvas text {
+  stroke: none !important;
+  stroke-width: 0 !important;
+  paint-order: fill stroke !important;
+  -webkit-text-stroke: 0 !important;
+}
+
+/* Full-screen canvas */
+.whiteboard-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.whiteboard-canvas.fullscreen {
+  position: absolute;
+  inset: 0;
+}
+
+/* Floating presence indicators */
+.whiteboard-presence-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(22, 22, 42, 0.9);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #a1a1aa;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Floating action buttons */
+.whiteboard-floating-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  z-index: 100;
+}
+
+/* When presence is visible, move actions below it */
+.whiteboard-panel:has(.whiteboard-presence-overlay) .whiteboard-floating-actions {
+  top: 56px;
+}
+
+.floating-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(22, 22, 42, 0.9);
+  backdrop-filter: blur(8px);
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.floating-action-btn:hover {
+  background: rgba(45, 45, 68, 0.95);
+  color: #ffffff;
+}
+
+.presence-avatars {
+  display: flex;
+  gap: -4px;
+}
+
+.presence-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #64c8ca, #b298dc);
+  color: #1e1e1e;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(22, 22, 42, 0.9);
+  margin-left: -8px;
+  padding: 2px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.presence-avatar:first-child {
+  margin-left: 0;
+}
+
+.presence-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.presence-count {
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+/* tldraw container fills the canvas */
+.whiteboard-canvas .tl-container {
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading state */
+.whiteboard-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8f9fa;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Empty state - when no whiteboard selected */
+.whiteboard-empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(to right, #e8e8e8 1px, transparent 1px),
+    linear-gradient(to bottom, #e8e8e8 1px, transparent 1px);
+  background-size: 24px 24px;
+  text-align: center;
+}
+
+.whiteboard-empty-state .empty-icon {
+  color: #aaa;
+  margin-bottom: 16px;
+}
+
+.whiteboard-empty-state p {
+  margin: 0;
+  color: #888;
+  font-size: 14px;
+}
+
+/* ============================================
+   Drop Overlay for External File Drag & Drop
+   ============================================ */
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(37, 37, 37, 0.97) 0%,
+    rgba(37, 37, 37, 0.95) 50%,
+    rgba(37, 37, 37, 0.97) 100%
+  );
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  pointer-events: none;
+  animation: dropOverlayFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes dropOverlayFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(12px);
+  }
+}
+
+.drop-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 72px;
+  border: 2px solid rgba(100, 200, 202, 0.4);
+  border-radius: 20px;
+  background: linear-gradient(
+    180deg,
+    rgba(100, 200, 202, 0.06) 0%,
+    rgba(100, 200, 202, 0.02) 100%
+  );
+  box-shadow:
+    0 0 60px rgba(100, 200, 202, 0.15),
+    0 0 100px rgba(100, 200, 202, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: dropContentGlow 2s ease-in-out infinite;
+}
+
+@keyframes dropContentGlow {
+  0%, 100% {
+    border-color: rgba(100, 200, 202, 0.4);
+    box-shadow:
+      0 0 60px rgba(100, 200, 202, 0.15),
+      0 0 100px rgba(100, 200, 202, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    border-color: rgba(100, 200, 202, 0.6);
+    box-shadow:
+      0 0 80px rgba(100, 200, 202, 0.2),
+      0 0 120px rgba(100, 200, 202, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+.drop-overlay-content svg {
+  color: #64c8ca;
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 12px rgba(100, 200, 202, 0.5));
+  animation: dropIconFloat 1.5s ease-in-out infinite;
+}
+
+@keyframes dropIconFloat {
+  0%, 100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 12px rgba(100, 200, 202, 0.5));
+  }
+  50% {
+    transform: translateY(-6px);
+    filter: drop-shadow(0 4px 16px rgba(100, 200, 202, 0.6));
+  }
+}
+
+.drop-overlay-content h3 {
+  margin: 0 0 10px 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.drop-overlay-content p {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(161, 161, 170, 0.9);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* Remote cursors */
+.remote-cursor {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1000;
+  transition: all 0.1s ease-out;
+}
+
+.remote-cursor-pointer {
+  width: 12px;
+  height: 18px;
+}
+
+.remote-cursor-label {
+  position: absolute;
+  top: 18px;
+  left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: #ffffff;
+}
+
+/* ============================================
+   TLDraw Main Toolbar Styling
+   ============================================ */
+
+/* Main toolbar container - dark mode (default) */
+.whiteboard-canvas .tlui-main-toolbar__tools,
+.whiteboard-canvas .tlui-toolbar.tlui-main-toolbar__tools {
+  background: #2b2b2b !important;
+  border-radius: 12px !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+  padding: 6px !important;
+  gap: 4px !important;
+}
+
+/* Main toolbar container - light mode */
+.tl-theme__light .tlui-main-toolbar__tools,
+.tl-theme__light .tlui-toolbar.tlui-main-toolbar__tools {
+  background: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Toolbar buttons - base style (dark mode) */
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button,
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button__tool {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  border: none !important;
+  color: #9ca3af !important;
+  transition: all 0.15s ease !important;
+}
+
+/* Toolbar buttons - light mode */
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button,
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button__tool {
+  color: #6b7280 !important;
+}
+
+/* Toolbar button hover - dark mode */
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button:hover,
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button__tool:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #e5e7eb !important;
+}
+
+/* Toolbar button hover - light mode */
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button:hover,
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button__tool:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #374151 !important;
+}
+
+/* Selected tool - Conceptualize primary color (#64c8ca) */
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button[aria-pressed="true"],
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button__tool[aria-pressed="true"] {
+  background: #64c8ca !important;
+  color: #1a1a2e !important;
+  box-shadow: 0 2px 6px rgba(100, 200, 202, 0.4) !important;
+}
+
+/* Selected tool - light mode (same color works for both) */
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button[aria-pressed="true"],
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button__tool[aria-pressed="true"] {
+  background: #64c8ca !important;
+  color: #1a1a2e !important;
+  box-shadow: 0 2px 6px rgba(100, 200, 202, 0.4) !important;
+}
+
+/* Selected tool hover - slightly darker */
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button[aria-pressed="true"]:hover,
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button__tool[aria-pressed="true"]:hover,
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button[aria-pressed="true"]:hover,
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button__tool[aria-pressed="true"]:hover {
+  background: #52b5b7 !important;
+  color: #1a1a2e !important;
+}
+
+/* Toolbar icons */
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button .tlui-icon,
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button__tool .tlui-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Toolbar overflow/more button */
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-button[data-testid="tools.more"] {
+  color: #9ca3af !important;
+}
+
+.tl-theme__light .tlui-main-toolbar__tools .tlui-button[data-testid="tools.more"] {
+  color: #6b7280 !important;
+}
+
+/* ============================================
+   Override TLDraw CSS Variables for Portal Theming
+   Popovers are rendered as portals at body level,
+   outside the .tl-theme__light container. We override
+   the CSS variables on :root when in light mode.
+   ============================================ */
+
+/* Light mode - override CSS variables on :root for portals */
+:root[data-whiteboard-theme="light"] {
+  --tl-color-panel: hsl(0, 0%, 99%) !important;
+  --tl-color-panel-contrast: hsl(0, 0%, 100%) !important;
+  --tl-color-low: hsl(0, 0%, 93%) !important;
+  --tl-color-muted-2: hsl(0, 0%, 0%, 0.1) !important;
+  --tl-color-text: hsl(0, 0%, 20%) !important;
+  --tl-color-icon: hsl(0, 0%, 20%) !important;
+  --tl-shadow-3: 0px 2px 16px hsl(0, 0%, 0%, 6%), inset 0px 0px 0px 1px hsl(0, 0%, 100%) !important;
+}
+
+/* Dark mode - override CSS variables on :root for portals */
+:root:not([data-whiteboard-theme="light"]) {
+  --tl-color-panel: hsl(235, 6.8%, 13.5%) !important;
+  --tl-color-panel-contrast: hsl(245, 12%, 23%) !important;
+  --tl-color-low: hsl(228, 5%, 20%) !important;
+  --tl-color-muted-2: hsl(0, 0%, 100%, 0.1) !important;
+  --tl-color-text: hsl(0, 0%, 98%) !important;
+  --tl-color-icon: hsl(0, 0%, 80%) !important;
+  --tl-shadow-3: inset 0px 0px 0px 1px hsl(245, 12%, 23%) !important;
+}
+
+/* Toolbar overflow dropdown styling */
+.tlui-popover__content {
+  border-radius: 12px !important;
+}
+
+/* Inner overflow content - equal padding */
+.tlui-main-toolbar__overflow-content {
+  padding: 8px !important;
+}
+
+
+/* Overflow dropdown grid buttons - base styling */
+.tlui-popover__content .tlui-button-grid__button {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+/* Remove the large ::after hover effect */
+.tlui-popover__content .tlui-button::after,
+.tlui-popover__content .tlui-button-grid__button::after {
+  display: none !important;
+}
+
+/* Overflow dropdown buttons - dark mode */
+:root:not([data-whiteboard-theme="light"]) .tlui-popover__content .tlui-button {
+  color: #9ca3af !important;
+}
+
+/* Overflow dropdown buttons - light mode */
+:root[data-whiteboard-theme="light"] .tlui-popover__content .tlui-button {
+  color: #6b7280 !important;
+}
+
+/* Overflow dropdown button hover - dark mode */
+:root:not([data-whiteboard-theme="light"]) .tlui-popover__content .tlui-button:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #e5e7eb !important;
+  border-radius: 8px !important;
+}
+
+/* Overflow dropdown button hover - light mode */
+:root[data-whiteboard-theme="light"] .tlui-popover__content .tlui-button:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #374151 !important;
+  border-radius: 8px !important;
+}
+
+/* ============================================
+   Essential tldraw Customizations Only
+   ============================================ */
+
+/* Hide tldraw watermark */
+.whiteboard-canvas [class*="watermark"],
+.whiteboard-canvas a[href*="tldraw.dev"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Hide page menu (we don't use multiple pages) */
+.whiteboard-canvas .tlui-page-menu__wrapper,
+.whiteboard-canvas [class*="page-menu"] {
+  display: none !important;
+}
+
+/* Hide navigation panel (zoom controls - we use our own) */
+.whiteboard-canvas .tlui-navigation-panel,
+.whiteboard-canvas [class*="navigation-panel"] {
+  display: none !important;
+}
+
+/* ============================================
+   Custom Floating Toolbar (Top Center)
+   ============================================ */
+
+.custom-toolbar-container {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: #252525;
+  backdrop-filter: blur(10px);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 150;
+}
+
+.custom-toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #dbdee1;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  white-space: nowrap;
+}
+
+.custom-toolbar-btn:hover {
+  background: #404249;
+  color: #ffffff;
+}
+
+.custom-toolbar-btn.active {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.custom-toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.custom-toolbar-btn .chevron {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 0 6px;
+}
+
+/* Insert dropdown menu */
+.insert-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  background: #252525;
+  backdrop-filter: blur(12px);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  z-index: 200;
+}
+
+.insert-dropdown-section {
+  padding: 6px 0;
+}
+
+.insert-dropdown-section:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+}
+
+.insert-dropdown-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #8e9297;
+  letter-spacing: 0.02em;
+  padding: 6px 8px 4px;
+}
+
+.insert-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #dbdee1;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.insert-dropdown-item:hover {
+  background: #404249;
+  color: #ffffff;
+}
+
+.insert-dropdown-item svg {
+  width: 18px;
+  height: 18px;
+  color: #b5bac1;
+  flex-shrink: 0;
+}
+
+.insert-dropdown-item:hover svg {
+  color: #ffffff;
+}
+
+/* Export dropdown menu */
+.export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 260px;
+  background: #252525;
+  backdrop-filter: blur(12px);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  z-index: 200;
+}
+
+.export-dropdown-section {
+  padding: 6px 0;
+}
+
+.export-dropdown-section:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+}
+
+.export-dropdown-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #8e9297;
+  letter-spacing: 0.02em;
+  padding: 6px 8px 4px;
+}
+
+/* Format and Quality option buttons */
+.export-format-options,
+.export-quality-options {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.format-option,
+.quality-option {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #b5bac1;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  text-align: center;
+}
+
+.format-option:hover,
+.quality-option:hover {
+  background: #404249;
+  color: #dbdee1;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.format-option.active,
+.quality-option.active {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+  border-color: #64c8ca;
+}
+
+/* Background checkbox */
+.export-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #dbdee1;
+  transition: color 0.1s ease;
+  border-radius: 4px;
+}
+
+.export-checkbox-label:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: #ffffff;
+}
+
+.export-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #64c8ca;
+  cursor: pointer;
+}
+
+/* Export action button */
+.export-dropdown-section.export-action {
+  padding-top: 8px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.export-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #64c8ca 0%, #4fa8aa 100%);
+  color: #1e1e1e;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(100, 200, 202, 0.3);
+}
+
+.export-action-btn:hover {
+  background: linear-gradient(135deg, #52b5b7 0%, #3d9698 100%);
+  box-shadow: 0 4px 12px rgba(100, 200, 202, 0.4);
+  transform: translateY(-1px);
+}
+
+.export-action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+

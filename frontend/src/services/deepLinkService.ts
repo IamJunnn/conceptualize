@@ -151,7 +151,7 @@ export const acceptPendingInvitation = async (
     clearPendingInvitation();
 
     console.log('Invitation accepted successfully');
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error accepting invitation:', error);
     throw error;
   }

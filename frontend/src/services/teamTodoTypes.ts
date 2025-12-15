@@ -14,8 +14,54 @@ export const PRIORITY_CONFIG = {
   4: { label: 'P4 - Low', color: '#6b7280', bgColor: 'rgba(107, 114, 128, 0.15)' },
 } as const;
 
+// Meeting color presets
+export const MEETING_COLORS = [
+  { name: 'Teal', value: '#64c8ca' },
+  { name: 'Blue', value: '#3b82f6' },
+  { name: 'Purple', value: '#8b5cf6' },
+  { name: 'Pink', value: '#ec4899' },
+  { name: 'Orange', value: '#f97316' },
+  { name: 'Green', value: '#10b981' },
+  { name: 'Red', value: '#ef4444' },
+  { name: 'Yellow', value: '#eab308' },
+] as const;
+
 // Filter options for todo list
 export type TodoFilter = 'all' | 'my-tasks' | 'unassigned';
+
+// Todo type - task or meeting
+export type TodoType = 'task' | 'meeting';
+
+// Repeat frequency options (legacy, still used for simple repeat types)
+export type RepeatFrequency = 'none' | 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'weekdays' | 'custom';
+
+// Recurrence end type
+export type RecurrenceEndType = 'never' | 'on' | 'after';
+
+// Full recurrence pattern for custom recurrence
+export interface RecurrencePattern {
+  type: RepeatFrequency;
+  interval?: number;           // e.g., every 2 weeks
+  unit?: 'day' | 'week' | 'month';
+  weekDays?: number[];         // 0=Sun, 1=Mon, 2=Tue, etc.
+  dayOfMonth?: number;         // For monthly: which day of month
+  weekOfMonth?: number;        // For monthly: 1st, 2nd, 3rd, 4th, or -1 for last
+  endType: RecurrenceEndType;
+  endDate?: string;            // YYYY-MM-DD - when recurrence ends (if endType is 'on')
+  occurrences?: number;        // Number of occurrences (if endType is 'after')
+}
+
+// Meeting-specific details
+export interface MeetingDetails {
+  startTime: string;       // HH:MM format (24h)
+  endTime: string;         // HH:MM format (24h)
+  repeat: RepeatFrequency; // Simple repeat type for backward compatibility
+  repeatUntil?: string;    // YYYY-MM-DD format - when repeat ends (legacy)
+  recurrence?: RecurrencePattern; // Full recurrence pattern (new)
+  color: string;           // Hex color for timeline display
+  calendarEventId?: string; // Google Calendar event ID if synced
+  hasVideoRoom?: boolean;  // Whether meeting has an attached video room
+}
 
 // Main Team Todo interface
 export interface TeamTodo {
@@ -32,6 +78,8 @@ export interface TeamTodo {
   updatedAt: Date;
   completedAt?: Date;
   completedBy?: string; // Email of who completed
+  type: TodoType;      // 'task' or 'meeting'
+  meetingDetails?: MeetingDetails; // Only for type: 'meeting'
 }
 
 // Data for creating/updating a todo
@@ -42,6 +90,8 @@ export interface TeamTodoFormData {
   endDate?: string;
   description?: string;
   assignees: string[];
+  type?: TodoType;
+  meetingDetails?: MeetingDetails;
 }
 
 // Firestore document data (raw from database)
@@ -59,6 +109,8 @@ export interface TeamTodoDoc {
   updatedAt: { seconds: number; nanoseconds: number } | Date;
   completedAt?: { seconds: number; nanoseconds: number } | Date;
   completedBy?: string;
+  type?: TodoType;
+  meetingDetails?: MeetingDetails;
 }
 
 // Helper to convert Firestore timestamp to Date
@@ -86,6 +138,8 @@ export function docToTeamTodo(doc: TeamTodoDoc): TeamTodo {
     updatedAt: firestoreTimestampToDate(doc.updatedAt) || new Date(),
     completedAt: firestoreTimestampToDate(doc.completedAt),
     completedBy: doc.completedBy,
+    type: doc.type || 'task',
+    meetingDetails: doc.meetingDetails,
   };
 }
 

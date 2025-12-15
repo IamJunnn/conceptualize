@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { User } from '../../services/authServiceTauri';
 import { Team, inviteTeamMember } from '../../services/teamService';
+import { isValidEmail } from '../../utils/validators';
 import './InviteMemberModal.css';
 
 interface InviteMemberModalProps {
@@ -28,8 +29,7 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(memberEmail.trim())) {
+    if (!isValidEmail(memberEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -111,10 +111,10 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
           <div className="info-box">
             <strong>What happens next?</strong>
             <ul>
-              <li>An invitation will be sent via the app</li>
-              <li>The team folder will be shared in Google Drive</li>
-              <li>They'll receive an email from Google about the shared folder</li>
-              <li>Once they accept, they can view and edit team notes</li>
+              <li>An invitation email will be sent</li>
+              <li>Inform your team member to download the app</li>
+              <li>They sign up through the app</li>
+              <li>Once they sign in, they'll automatically join the team</li>
             </ul>
           </div>
 
