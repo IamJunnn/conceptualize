@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { User } from '../../services/authServiceTauri';
-import { getUserTeams, Team, getPendingInvites, acceptTeamInvite, updateMemberProfile, getMemberAccessLevel, getGracePeriodDaysRemaining, TeamMember, isInternalProEmail } from '../../services/teamService';
+import { getUserTeams, Team, getPendingInvites, acceptTeamInvite, updateMemberProfile, getMemberAccessLevel, getGracePeriodDaysRemaining, TeamMember, isInternalProEmail, decodeEmailKey } from '../../services/teamService';
 import TitleBar from '../UI/TitleBar';
 import { UnifiedSidebar } from '../../renderer/components/UnifiedSidebar';
 import GraphView from '../Graph/GraphView';
@@ -61,7 +61,8 @@ import {
 import { Channel, SharedFile, SharedRecording, SharedTodo, SharedWhiteboard, generateDMChannelId } from '../../services/teamChatTypes';
 import { toggleTodo, subscribeToTodos } from '../../services/teamTodoService';
 import { CallState } from '../../services/callTypes';
-import { subscribeToCallState } from '../../services/callService';
+import { subscribeToCallState, subscribeToIncomingCalls, answerCall, declineCall } from '../../services/callService';
+import IncomingCallModal from './Chat/IncomingCallModal';
 import { subscribeToTeamRecordings } from '../../services/recordingService';
 import { Recording } from '../../services/recordingTypes';
 import ShareToChatModal from './Chat/ShareToChatModal';
@@ -512,6 +513,48 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     loadTeams();
   }, [user.email]);
 
+  // Sync user profile changes to all teams (displayName, avatar)
+  // This runs separately from loadTeams so profile updates sync immediately
+  useEffect(() => {
+    if (!teams.length || !user.email) return;
+
+    const userEmailLower = user.email.toLowerCase();
+    let hasChanges = false;
+
+    // Check if any team member data needs updating
+    teams.forEach(team => {
+      const member = team.members[userEmailLower];
+      if (member) {
+        const needsUpdate =
+          (user.displayName && member.displayName !== user.displayName) ||
+          (user.photoURL && member.photoURL !== user.photoURL) ||
+          (user.customAvatar && member.customAvatar !== user.customAvatar);
+
+        if (needsUpdate) {
+          hasChanges = true;
+          // Update Firestore
+          updateMemberProfile(team.id, user.email, user.displayName, user.photoURL, user.customAvatar);
+          // Update local state
+          if (user.displayName) member.displayName = user.displayName;
+          if (user.photoURL) member.photoURL = user.photoURL;
+          if (user.customAvatar) member.customAvatar = user.customAvatar;
+        }
+      }
+    });
+
+    // Trigger re-render if changes were made
+    if (hasChanges) {
+      setTeams([...teams]);
+      // Also update selectedTeam if it exists
+      if (selectedTeam) {
+        const updatedTeam = teams.find(t => t.id === selectedTeam.id);
+        if (updatedTeam) {
+          setSelectedTeam({ ...updatedTeam });
+        }
+      }
+    }
+  }, [user.displayName, user.customAvatar, user.photoURL, teams.length]);
+
   const loadTeams = async () => {
     try {
       setLoading(true);
@@ -551,15 +594,23 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         yourRole: t.members[userEmailLower]?.role,
         yourJoinedAt: t.members[userEmailLower]?.joinedAt
       })));
-      setTeams(userTeams);
-
       // Sync user's current profile (photoURL, displayName, customAvatar) to all their teams
       // This ensures profile info is shown even for existing members
+      // Also update the local state immediately so we don't wait for Firestore
+      const userEmailLowerForSync = user.email.toLowerCase();
       if (user.photoURL || user.displayName || user.customAvatar) {
         userTeams.forEach(team => {
+          // Update Firestore
           updateMemberProfile(team.id, user.email, user.displayName, user.photoURL, user.customAvatar);
+          // Also update local state immediately
+          if (team.members[userEmailLowerForSync]) {
+            if (user.displayName) team.members[userEmailLowerForSync].displayName = user.displayName;
+            if (user.photoURL) team.members[userEmailLowerForSync].photoURL = user.photoURL;
+            if (user.customAvatar) team.members[userEmailLowerForSync].customAvatar = user.customAvatar;
+          }
         });
       }
+      setTeams(userTeams);
 
       // Check for pending upgrade team (stored in localStorage before Stripe redirect)
       // This is more reliable than URL params in Tauri apps
@@ -796,6 +847,58 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     };
   }, []);
 
+  // Subscribe to incoming calls (global - works regardless of which tab is active)
+  useEffect(() => {
+    if (!selectedTeam?.id || !user.email) {
+      return;
+    }
+
+    const unsubscribe = subscribeToIncomingCalls(
+      selectedTeam.id,
+      user.email,
+      () => {
+        // Callback is optional - incomingCall state is managed globally via callState
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [selectedTeam?.id, user.email]);
+
+  // Get incoming call from global call state
+  const incomingCall = globalCallState?.incomingCall || null;
+
+  // Handle answering an incoming call
+  const handleAnswerIncomingCall = useCallback(async () => {
+    if (!incomingCall) return;
+
+    try {
+      await answerCall(incomingCall, user.email, user.displayName || user.email.split('@')[0]);
+
+      // Navigate to the chat and the call's channel
+      if (splitView) {
+        setLeftPaneTab('special://chat');
+      } else {
+        setActiveTab('special://chat');
+      }
+      setNavigateToChannelId(incomingCall.channelId);
+    } catch (error) {
+      console.error('Failed to answer call:', error);
+    }
+  }, [incomingCall, user.email, user.displayName, splitView]);
+
+  // Handle declining an incoming call
+  const handleDeclineIncomingCall = useCallback(async () => {
+    if (!incomingCall) return;
+
+    try {
+      await declineCall(incomingCall, user.email);
+    } catch (error) {
+      console.error('Failed to decline call:', error);
+    }
+  }, [incomingCall, user.email]);
+
   // Subscribe to team recordings for badge count and whiteboard
   useEffect(() => {
     if (!selectedTeam?.id) {
@@ -938,13 +1041,27 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         if (snapshot.exists()) {
           const teamData = snapshot.data();
 
+          // Decode and normalize member keys (Firestore uses encoded keys like user_AT_example_DOT_com)
+          const decodedMembers: { [email: string]: TeamMember } = {};
+          if (teamData.members) {
+            Object.entries(teamData.members).forEach(([encodedEmail, member]: [string, any]) => {
+              const email = decodeEmailKey(encodedEmail);
+              const normalizedEmail = email.toLowerCase();
+              decodedMembers[normalizedEmail] = {
+                ...member,
+                email: member.email || email,
+                joinedAt: member.joinedAt?.toDate?.() || member.joinedAt,
+              };
+            });
+          }
+
           // Update the selected team with fresh member data
           setSelectedTeam((prevTeam) => {
             if (!prevTeam) return null;
 
             return {
               ...prevTeam,
-              members: teamData.members || prevTeam.members,
+              members: decodedMembers,
             };
           });
 
@@ -952,7 +1069,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
           setTeams((prevTeams) =>
             prevTeams.map((team) =>
               team.id === selectedTeam.id
-                ? { ...team, members: teamData.members || team.members }
+                ? { ...team, members: decodedMembers }
                 : team
             )
           );
@@ -4689,6 +4806,15 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
 
           {/* Recording saving indicator - shows even after call ends */}
           <RecordingSavingIndicator position="bottom-right" />
+
+          {/* Global Incoming Call Modal - shows regardless of which tab is active */}
+          {incomingCall && !globalCallState?.activeCall && (
+            <IncomingCallModal
+              call={incomingCall}
+              onAccept={handleAnswerIncomingCall}
+              onDecline={handleDeclineIncomingCall}
+            />
+          )}
         </div>
   );
 }

@@ -93,12 +93,12 @@
 }
 
 .chat-sidebar .member-item:hover {
-  background: rgba(79, 84, 92, 0.4);
+  background: linear-gradient(135deg, rgba(100, 200, 202, 0.15), rgba(178, 152, 220, 0.15));
   color: #dcddde;
 }
 
 .chat-sidebar .member-item.active {
-  background: rgba(79, 84, 92, 0.6);
+  background: linear-gradient(135deg, rgba(100, 200, 202, 0.25), rgba(178, 152, 220, 0.25));
   color: #fff;
 }
 

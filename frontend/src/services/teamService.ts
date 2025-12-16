@@ -92,7 +92,7 @@ function encodeEmailKey(email: string): string {
  * - Old lowercase encoding (_dot_ and _at_)
  * - New uppercase encoding (_DOT_ and _AT_)
  */
-function decodeEmailKey(key: string): string {
+export function decodeEmailKey(key: string): string {
   // If the key already looks like an email (contains @), return as-is (legacy data)
   if (key.includes('@')) {
     return key;

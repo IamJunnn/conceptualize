@@ -138,26 +138,27 @@ export default function TeamTodoItem({
           {/* Assignees */}
           {todo.assignees.length > 0 && (
             <div className="todo-assignees">
-              {todo.assignees.slice(0, 3).map(email => {
+              {todo.assignees.slice(0, 2).map((email, index) => {
                 // Find member by email (handles encoded Firebase keys)
                 const member = members[email] || Object.values(members).find(m => m.email?.toLowerCase() === email.toLowerCase());
                 const avatarUrl = member?.customAvatar || member?.photoURL;
+                const displayName = member?.displayName?.split(' ')[0] || email.split('@')[0];
                 return (
-                  <div
-                    key={email}
-                    className="assignee-badge"
-                    title={member?.displayName || email}
-                  >
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt="" className="assignee-avatar-img" />
-                    ) : (
-                      getInitialsFromEmail(email)
-                    )}
-                  </div>
+                  <span key={email} className="assignee-item">
+                    {index > 0 && <span className="assignee-separator">, </span>}
+                    <span className="assignee-badge">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="" className="assignee-avatar-img" />
+                      ) : (
+                        getInitialsFromEmail(email)
+                      )}
+                    </span>
+                    <span className="assignee-name">{displayName}</span>
+                  </span>
                 );
               })}
-              {todo.assignees.length > 3 && (
-                <span className="more-assignees">+{todo.assignees.length - 3}</span>
+              {todo.assignees.length > 2 && (
+                <span className="more-assignees">+{todo.assignees.length - 2} more</span>
               )}
             </div>
           )}

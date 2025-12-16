@@ -15,17 +15,24 @@ import './TeamTodoPanel.css';
 // Meeting filter types
 type MeetingFilter = 'upcoming' | 'past' | 'my-meetings';
 
+// Parse date string as local time (not UTC)
+// "2025-12-16" should be Dec 16 local time, not UTC
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 // Helper to check if a date is today
 function isToday(dateStr: string): boolean {
   const today = new Date();
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   return date.toDateString() === today.toDateString();
 }
 
 // Helper to check if a date is this week
 function isThisWeek(dateStr: string): boolean {
   const today = new Date();
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   const startOfWeek = new Date(today);
   startOfWeek.setDate(today.getDate() - today.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
@@ -37,7 +44,7 @@ function isThisWeek(dateStr: string): boolean {
 // Helper to check if a meeting is in the past
 function isMeetingPast(meeting: TeamTodo): boolean {
   if (!meeting.endDate && !meeting.startDate) return false;
-  const meetingDate = new Date(meeting.endDate || meeting.startDate!);
+  const meetingDate = parseLocalDate(meeting.endDate || meeting.startDate!);
   if (meeting.meetingDetails?.endTime) {
     const [hours, minutes] = meeting.meetingDetails.endTime.split(':').map(Number);
     meetingDate.setHours(hours, minutes, 0, 0);
@@ -52,11 +59,11 @@ function isMeetingNowOrSoon(meeting: TeamTodo): 'now' | 'soon' | null {
   if (!meeting.startDate || !meeting.meetingDetails?.startTime) return null;
 
   const now = new Date();
-  const meetingStart = new Date(meeting.startDate);
+  const meetingStart = parseLocalDate(meeting.startDate);
   const [startHours, startMinutes] = meeting.meetingDetails.startTime.split(':').map(Number);
   meetingStart.setHours(startHours, startMinutes, 0, 0);
 
-  const meetingEnd = new Date(meeting.startDate);
+  const meetingEnd = parseLocalDate(meeting.startDate);
   if (meeting.meetingDetails?.endTime) {
     const [endHours, endMinutes] = meeting.meetingDetails.endTime.split(':').map(Number);
     meetingEnd.setHours(endHours, endMinutes, 0, 0);
@@ -421,7 +428,7 @@ export default function TeamTodoPanel({
 
   // Format meeting date for display
   const formatMeetingDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);

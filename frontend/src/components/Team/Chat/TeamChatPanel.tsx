@@ -43,7 +43,6 @@ import ConfirmModal from '../../UI/ConfirmModal';
 import PinnedMessagesModal from './PinnedMessagesModal';
 import ForwardMessageModal from './ForwardMessageModal';
 import CallButton from './CallButton';
-import IncomingCallModal from './IncomingCallModal';
 import CallOverlay from './CallOverlay';
 import CompactCallWidget from './CompactCallWidget';
 import CallConflictModal from './CallConflictModal';
@@ -923,7 +922,7 @@ export default function TeamChatPanel({
   // Handle creating a new group
   const handleCreateGroup = async (selectedEmails: string[], groupName: string) => {
     try {
-      const currentUser = members[currentUserEmail];
+      const currentUser = members[currentUserEmail.toLowerCase()];
       const currentUserDisplayName = currentUser?.displayName || currentUserEmail.split('@')[0];
 
       const channelId = await createGroupChannel(
@@ -947,7 +946,7 @@ export default function TeamChatPanel({
   const handleAddMembers = async (newMemberEmails: string[]) => {
     if (!selectedGroup || !activeChannelId) return;
     try {
-      const currentUser = members[currentUserEmail];
+      const currentUser = members[currentUserEmail.toLowerCase()];
       const currentUserDisplayName = currentUser?.displayName || currentUserEmail.split('@')[0];
 
       await addMembersToGroup(
@@ -965,7 +964,7 @@ export default function TeamChatPanel({
 
   // Get display name for a member
   const getDisplayName = (email: string) => {
-    const member = members[email];
+    const member = members[email.toLowerCase()];
     return member?.displayName || email.split('@')[0];
   };
 
@@ -979,7 +978,7 @@ export default function TeamChatPanel({
   const handleFileUpload = async (file: File, caption?: string) => {
     if (!activeChannelId) return;
 
-    const currentUser = members[currentUserEmail];
+    const currentUser = members[currentUserEmail.toLowerCase()];
     setUploadError(null);
 
     try {
@@ -1018,7 +1017,7 @@ export default function TeamChatPanel({
         activeChannelId,
         { content: caption || '' },
         currentUserEmail,
-        currentUser?.displayName || currentUserEmail,
+        currentUser?.displayName || currentUserEmail.split('@')[0],
         currentUser?.customAvatar || currentUser?.photoURL,
         [attachment]
       );
@@ -1032,7 +1031,7 @@ export default function TeamChatPanel({
   const handleStartCall = async (type: CallType) => {
     if (!activeChannelId) return;
 
-    const currentUser = members[currentUserEmail];
+    const currentUser = members[currentUserEmail.toLowerCase()];
     const participants = selectedGroup
       ? selectedGroup.participants || []
       : selectedMemberEmail
@@ -1051,7 +1050,7 @@ export default function TeamChatPanel({
         participants,
         type,
         currentUserEmail,
-        currentUser?.displayName || currentUserEmail,
+        currentUser?.displayName || currentUserEmail.split('@')[0],
         currentUser?.photoURL
       );
       // Track which channel the call is in
@@ -1062,36 +1061,12 @@ export default function TeamChatPanel({
     }
   };
 
-  // Handle answering an incoming call
-  const handleAnswerCall = async () => {
-    if (!callState.incomingCall) return;
-
-    // If already in a call, show conflict modal
-    if (callState.activeCall) {
-      setShowCallConflict(true);
-      return;
-    }
-
-    const currentUser = members[currentUserEmail];
-    try {
-      await answerCall(
-        callState.incomingCall,
-        currentUserEmail,
-        currentUser?.displayName || currentUserEmail
-      );
-      // Track the call's channel
-      setCallChannelId(callState.incomingCall.channelId);
-    } catch (error) {
-      console.error('Failed to answer call:', error);
-    }
-  };
-
   // Handle accepting incoming call when already in a call (hang up current, answer new)
   const handleAcceptConflictCall = async () => {
     if (!callState.incomingCall) return;
     setShowCallConflict(false);
 
-    const currentUser = members[currentUserEmail];
+    const currentUser = members[currentUserEmail.toLowerCase()];
     try {
       // End current call first
       await endCall();
@@ -1122,22 +1097,11 @@ export default function TeamChatPanel({
     }
   };
 
-  // Handle declining an incoming call
-  const handleDeclineCall = async () => {
-    if (!callState.incomingCall) return;
-
-    try {
-      await declineCall(callState.incomingCall, currentUserEmail);
-    } catch (error) {
-      console.error('Failed to decline call:', error);
-    }
-  };
-
   // Handle poll creation
   const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
     if (!activeChannelId) return;
 
-    const currentUser = members[currentUserEmail];
+    const currentUser = members[currentUserEmail.toLowerCase()];
 
     // Create poll data structure
     const pollId = `poll_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -1163,7 +1127,7 @@ export default function TeamChatPanel({
       activeChannelId,
       { content: '' },
       currentUserEmail,
-      currentUser?.displayName || currentUserEmail,
+      currentUser?.displayName || currentUserEmail.split('@')[0],
       currentUser?.customAvatar || currentUser?.photoURL,
       undefined, // no attachments
       pollData   // poll data
@@ -1245,7 +1209,7 @@ export default function TeamChatPanel({
     message?: string
   ) => {
     try {
-      const currentUser = members[currentUserEmail];
+      const currentUser = members[currentUserEmail.toLowerCase()];
 
       // Construct the message content
       const content = message
@@ -1269,7 +1233,7 @@ export default function TeamChatPanel({
         targetChannelId,
         { content },
         currentUserEmail,
-        currentUser?.displayName || currentUserEmail,
+        currentUser?.displayName || currentUserEmail.split('@')[0],
         currentUser?.customAvatar || currentUser?.photoURL,
         [attachment]
       );
@@ -1332,7 +1296,7 @@ export default function TeamChatPanel({
   const handleInsertContent = async (result: InsertResult) => {
     if (!activeChannelId) return;
 
-    const currentUser = members[currentUserEmail];
+    const currentUser = members[currentUserEmail.toLowerCase()];
 
     try {
       if (result.mode === 'note-file' && result.selectedFile) {
@@ -1440,7 +1404,7 @@ export default function TeamChatPanel({
     additionalMessage?: string
   ) => {
     try {
-      const currentUser = members[currentUserEmail];
+      const currentUser = members[currentUserEmail.toLowerCase()];
 
       // Construct the forwarded message content (just the original content, not the prefix)
       let content = originalMessage.content;
@@ -1466,7 +1430,7 @@ export default function TeamChatPanel({
         targetChannelId,
         { content },
         currentUserEmail,
-        currentUser?.displayName || currentUserEmail,
+        currentUser?.displayName || currentUserEmail.split('@')[0],
         currentUser?.customAvatar || currentUser?.photoURL,
         forwardedAttachments,
         undefined, // poll
@@ -1955,7 +1919,7 @@ export default function TeamChatPanel({
               replyingTo={replyingTo}
               onCancelReply={handleCancelReply}
               onSendMessage={async (content, attachmentFiles) => {
-                const currentUser = members[currentUserEmail];
+                const currentUser = members[currentUserEmail.toLowerCase()];
                 setUploadError(null); // Clear any previous errors
 
                 // Upload attachments to Firebase Storage if present
@@ -2002,7 +1966,7 @@ export default function TeamChatPanel({
                     activeChannelId,
                     { content: messageContent, replyTo: replyingTo?.id },
                     currentUserEmail,
-                    currentUser?.displayName || currentUserEmail,
+                    currentUser?.displayName || currentUserEmail.split('@')[0],
                     currentUser?.customAvatar || currentUser?.photoURL,
                     uploadedAttachments.length > 0 ? uploadedAttachments : undefined
                   );
@@ -2109,14 +2073,7 @@ export default function TeamChatPanel({
         />
       )}
 
-      {/* Incoming Call Modal - show conflict modal if already in a call */}
-      {callState.incomingCall && !showCallConflict && !callState.activeCall && (
-        <IncomingCallModal
-          call={callState.incomingCall}
-          onAccept={handleAnswerCall}
-          onDecline={handleDeclineCall}
-        />
-      )}
+      {/* Incoming Call Modal is now handled globally in TeamMainUI */}
 
       {/* Call Conflict Modal - when receiving call while already in one */}
       {showCallConflict && callState.incomingCall && callState.activeCall && (
