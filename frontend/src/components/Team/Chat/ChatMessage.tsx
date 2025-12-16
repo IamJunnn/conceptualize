@@ -179,16 +179,24 @@ export default function ChatMessage({
                      callData.status === 'declined' ? PhoneOff :
                      isVideoCall ? Video : Phone;
 
+    // Get display name for call initiator from teamMembers
+    const initiatorEmail = callData.initiatorEmail?.toLowerCase() || '';
+    const initiatorMember = teamMembers?.[initiatorEmail];
+    const initiatorDisplayName = initiatorMember?.displayName ||
+      (callData.initiatorName?.includes('@')
+        ? callData.initiatorName.split('@')[0].charAt(0).toUpperCase() + callData.initiatorName.split('@')[0].slice(1)
+        : callData.initiatorName);
+
     // Build the call message text
     let callText = '';
     if (callData.status === 'started') {
-      callText = `${callData.initiatorName} started a ${isVideoCall ? 'video' : 'voice'} call`;
+      callText = `${initiatorDisplayName} started a ${isVideoCall ? 'video' : 'voice'} call`;
     } else if (callData.status === 'ended' && callData.duration !== undefined) {
-      callText = `${callData.initiatorName} started a ${isVideoCall ? 'video' : 'voice'} call that lasted ${formatCallDuration(callData.duration)}`;
+      callText = `${initiatorDisplayName} started a ${isVideoCall ? 'video' : 'voice'} call that lasted ${formatCallDuration(callData.duration)}`;
     } else if (callData.status === 'missed') {
-      callText = `Missed ${isVideoCall ? 'video' : 'voice'} call from ${callData.initiatorName}`;
+      callText = `Missed ${isVideoCall ? 'video' : 'voice'} call from ${initiatorDisplayName}`;
     } else if (callData.status === 'declined') {
-      callText = `${isVideoCall ? 'Video' : 'Voice'} call from ${callData.initiatorName} was declined`;
+      callText = `${isVideoCall ? 'Video' : 'Voice'} call from ${initiatorDisplayName} was declined`;
     }
 
     return (
@@ -205,9 +213,15 @@ export default function ChatMessage({
   }
 
   // Get live sender info from teamMembers (falls back to stored values)
-  const senderMember = teamMembers?.[message.senderEmail];
-  const senderDisplayName = senderMember?.displayName || message.senderName;
-  const senderPhotoURL = senderMember?.customAvatar || senderMember?.photoURL || message.senderPhotoURL;
+  // Normalize email to lowercase for lookup since members object keys are lowercase
+  const normalizedEmail = message.senderEmail.toLowerCase();
+  const senderMember = teamMembers?.[normalizedEmail];
+  // Fall back to stored senderName, but if it looks like an email, extract the username part
+  const fallbackName = message.senderName.includes('@')
+    ? message.senderName.split('@')[0].charAt(0).toUpperCase() + message.senderName.split('@')[0].slice(1)
+    : message.senderName;
+  const senderDisplayName = senderMember?.displayName || fallbackName;
+  const senderPhotoURL = senderMember?.customAvatar || senderMember?.photoURL;
   const senderInitials = senderDisplayName.substring(0, 2).toUpperCase();
 
   return (
@@ -246,7 +260,10 @@ export default function ChatMessage({
           >
             <Reply size={12} className="reply-context-icon" />
             <span className="reply-context-name">
-              {teamMembers?.[replyToMessage.senderEmail]?.displayName || replyToMessage.senderName}
+              {teamMembers?.[replyToMessage.senderEmail.toLowerCase()]?.displayName ||
+                (replyToMessage.senderName.includes('@')
+                  ? replyToMessage.senderName.split('@')[0].charAt(0).toUpperCase() + replyToMessage.senderName.split('@')[0].slice(1)
+                  : replyToMessage.senderName)}
             </span>
             <span className="reply-context-content">
               {replyToMessage.content.length > 60

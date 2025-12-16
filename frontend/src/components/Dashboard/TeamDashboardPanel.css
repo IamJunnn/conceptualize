@@ -1296,7 +1296,7 @@
   border-radius: 8px;
 }
 
-.message-avatar {
+.message-item .message-avatar {
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -1310,7 +1310,7 @@
   flex-shrink: 0;
 }
 
-.message-content {
+.message-item .message-content {
   flex: 1;
   min-width: 0;
   display: flex;
