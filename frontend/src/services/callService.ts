@@ -24,9 +24,10 @@ import {
   limit,
   Timestamp,
   Unsubscribe,
+  setDoc,
+  deleteDoc,
 } from 'firebase/firestore';
-import { invoke } from '@tauri-apps/api/core';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import {
   Call,
   CallFirestore,
@@ -159,37 +160,128 @@ function updateCallState(updates: Partial<CallState>): void {
 }
 
 // ============================================================================
-// LIVEKIT TOKEN GENERATION
+// LIVEKIT TOKEN GENERATION (Secure Server-Side via Firestore Trigger)
 // ============================================================================
 
-interface LiveKitTokenResult {
-  token: string;
-  url: string;
-}
+// Token request timeout in milliseconds
+const TOKEN_REQUEST_TIMEOUT = 15000; // 15 seconds
 
 /**
- * Generate LiveKit access token via Tauri backend
- * This bypasses all cloud IAM/permission issues by generating tokens locally
- * using credentials stored in the app config
+ * Generate LiveKit access token via Firestore Trigger
+ * This approach bypasses IAM/CORS issues because:
+ * - Firestore writes use Firebase SDK (no CORS)
+ * - Firestore triggers run server-side (no public access needed)
+ * - Admin SDK bypasses security rules when writing back
+ *
+ * Flow:
+ * 1. Client creates document in tokenRequests collection
+ * 2. processTokenRequest trigger fires server-side
+ * 3. Function generates token and updates document
+ * 4. Client reads the token from the updated document
  */
 async function getLiveKitToken(roomName: string, participantName: string, participantIdentity: string): Promise<string> {
-  try {
-    const result = await invoke<LiveKitTokenResult>('generate_livekit_token', {
-      roomName,
-      participantName,
-      participantIdentity,
-    });
+  console.log('🔐 [LiveKit] Requesting token via Firestore trigger for room:', roomName, 'participant:', participantName);
 
-    // Update LIVEKIT_URL from the result
-    if (result.url) {
-      LIVEKIT_URL = result.url;
-    }
-
-    return result.token;
-  } catch (error) {
-    console.error('Failed to generate LiveKit token:', error);
-    throw new Error(error instanceof Error ? error.message : String(error));
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('User must be logged in to make calls');
   }
+
+  const userEmail = currentUser.email;
+  if (!userEmail) {
+    throw new Error('User email not available');
+  }
+
+  // Generate unique request ID
+  const requestId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestRef = doc(db, 'tokenRequests', requestId);
+
+  console.log('🔐 [LiveKit] Creating token request:', requestId);
+
+  return new Promise(async (resolve, reject) => {
+    let unsubscribe: (() => void) | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    // Cleanup function
+    const cleanup = async () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+      // Delete the request document (cleanup)
+      try {
+        await deleteDoc(requestRef);
+        console.log('🔐 [LiveKit] Cleaned up token request:', requestId);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    };
+
+    // Set timeout
+    timeoutId = setTimeout(async () => {
+      console.error('🔐 [LiveKit] Token request timed out after', TOKEN_REQUEST_TIMEOUT, 'ms');
+      await cleanup();
+      reject(new Error('Token generation timed out. Please try again.'));
+    }, TOKEN_REQUEST_TIMEOUT);
+
+    try {
+      // Create the token request document FIRST
+      await setDoc(requestRef, {
+        roomName,
+        participantName,
+        participantIdentity,
+        requestedBy: userEmail,
+        status: 'pending',
+        createdAt: Timestamp.now(),
+      });
+
+      console.log('🔐 [LiveKit] Token request created, setting up listener...');
+
+      // THEN listen for changes to the request document
+      unsubscribe = onSnapshot(requestRef, async (snapshot) => {
+        if (!snapshot.exists()) {
+          console.log('🔐 [LiveKit] Document was deleted');
+          return;
+        }
+
+        const data = snapshot.data();
+        console.log('🔐 [LiveKit] Token request status:', data.status);
+
+        if (data.status === 'completed') {
+          // Success - got the token
+          console.log('🔐 [LiveKit] Token received successfully');
+
+          if (data.url) {
+            LIVEKIT_URL = data.url;
+            console.log('🔐 [LiveKit] URL updated to:', data.url);
+          }
+
+          await cleanup();
+          resolve(data.token);
+        } else if (data.status === 'error') {
+          // Error from the function
+          console.error('🔐 [LiveKit] Server returned error:', data.error);
+          await cleanup();
+          reject(new Error(data.error || 'Failed to generate token'));
+        }
+        // If status is still 'pending', keep waiting
+      }, async (error) => {
+        console.error('🔐 [LiveKit] Snapshot listener error:', error);
+        await cleanup();
+        reject(new Error('Failed to listen for token response'));
+      });
+
+      console.log('🔐 [LiveKit] Waiting for server response...');
+    } catch (error: any) {
+      console.error('🔐 [LiveKit] Failed to create token request:', error);
+      await cleanup();
+      reject(new Error(error.message || 'Failed to request token'));
+    }
+  });
 }
 
 // ============================================================================
@@ -206,7 +298,8 @@ export async function startCall(
   type: CallType,
   initiatorEmail: string,
   initiatorName: string,
-  initiatorPhotoURL?: string
+  initiatorPhotoURL?: string,
+  initiatorCustomAvatar?: string
 ): Promise<Call> {
   try {
     // Check if already in a call
@@ -220,7 +313,7 @@ export async function startCall(
     const roomName = generateRoomName(callId);
 
     // Create call document in Firestore
-    // Note: Firestore doesn't accept undefined values, so we conditionally include initiatorPhotoURL
+    // Note: Firestore doesn't accept undefined values, so we conditionally include optional fields
     const callData: Omit<CallFirestore, 'id'> = {
       teamId,
       channelId,
@@ -229,6 +322,7 @@ export async function startCall(
       initiatorEmail,
       initiatorName,
       ...(initiatorPhotoURL ? { initiatorPhotoURL } : {}),
+      ...(initiatorCustomAvatar ? { initiatorCustomAvatar } : {}),
       participants,
       connectedParticipants: [initiatorEmail],
       liveKitRoomName: roomName,
@@ -246,6 +340,7 @@ export async function startCall(
       initiatorEmail,
       initiatorName,
       initiatorPhotoURL,
+      initiatorCustomAvatar,
       participants,
       connectedParticipants: [initiatorEmail],
       liveKitRoomName: roomName,

@@ -9,7 +9,7 @@ import { CallType } from '../../../services/callTypes';
 import './CallButton.css';
 
 interface CallButtonProps {
-  onStartCall: (type: CallType) => Promise<void>;
+  onStartCall: (type: CallType) => void | Promise<void>;
   disabled?: boolean;
   isInCall?: boolean;
 }

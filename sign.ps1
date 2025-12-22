@@ -1,0 +1,3 @@
+$key = "dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5bnRhcW5sNEd2NFA4TWlPRnEzVDZ6eEpPSXMwampnSlBTS0M1VHBuUTNNVUFBQkFBQUFBQUFBQUFBQUlBQUFBQU9pMms0Nnd2OS9xUmFMQUlocjExdkVZR1dFUzhOS0tsR0M5Wm1xalVtYTNxdis1ZWp1NDZtaE9WV1lON1JGVDcyRTNxWUl4akZicEpmSDB4cWRyMnVuWnRWaUJWT0FHTXYzRkRiWThjUVluc1crcGpGNG5RUklRV1BLNllhNjF4NlRwbmlLaEJIdzg9Cg=="
+Write-Host "Signing with key..."
+npx tauri signer sign "C:\Users\Owner\Desktop\project\conceptualize\target\release\bundle\nsis\conceptualize_1.0.2_x64-setup.exe" --private-key $key -p "Conceptualize2024!"

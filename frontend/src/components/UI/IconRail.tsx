@@ -36,6 +36,7 @@ interface IconRailProps {
   notificationCount?: number; // Badge count for unread notifications
   unreadMessageCount?: number; // Badge count for unread chat messages
   newRecordingsCount?: number; // Badge count for new recordings
+  hasUpdate?: boolean; // Show update indicator on settings
 }
 
 const IconRail: React.FC<IconRailProps> = ({
@@ -51,7 +52,8 @@ const IconRail: React.FC<IconRailProps> = ({
   activeItem,
   notificationCount = 0,
   unreadMessageCount = 0,
-  newRecordingsCount = 0
+  newRecordingsCount = 0,
+  hasUpdate = false
 }) => {
   return (
     <div className="icon-rail">
@@ -147,9 +149,10 @@ const IconRail: React.FC<IconRailProps> = ({
         <button
           className={`icon-rail-btn ${activeItem === 'settings' ? 'active' : ''}`}
           onClick={onSettingsClick}
-          title="Settings"
+          title={hasUpdate ? "Settings (Update available)" : "Settings"}
         >
           <Settings size={22} />
+          {hasUpdate && <span className="update-dot" />}
         </button>
       </div>
     </div>

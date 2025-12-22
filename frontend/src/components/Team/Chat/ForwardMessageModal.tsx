@@ -63,8 +63,10 @@ export default function ForwardMessageModal({
   const getChannelInfo = (channel: Channel) => {
     if (channel.type === 'dm') {
       const otherUserEmail = channel.participants?.find(p => p.toLowerCase() !== currentUserEmail.toLowerCase());
-      // Look up member data for avatar and display name
-      const memberData = otherUserEmail ? (members?.[otherUserEmail] || members?.[otherUserEmail.toLowerCase()]) : undefined;
+      // Look up member data by searching through values (keys may be encoded)
+      const memberData = otherUserEmail
+        ? Object.values(members || {}).find(m => m.email?.toLowerCase() === otherUserEmail.toLowerCase())
+        : undefined;
       const displayName = memberData?.displayName || channel.name || (otherUserEmail ? otherUserEmail.split('@')[0] : 'Unknown');
       const avatarUrl = memberData?.customAvatar || memberData?.photoURL;
       return {

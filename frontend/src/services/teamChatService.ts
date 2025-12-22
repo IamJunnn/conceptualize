@@ -22,6 +22,7 @@ import {
   startAfter,
   DocumentSnapshot,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -1629,4 +1630,75 @@ function formatDuration(seconds: number): string {
     return `${secs}s`;
   }
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// ============================================================================
+// PINNED MESSAGES (Shared across all channel participants)
+// ============================================================================
+
+/**
+ * Pin a message (visible to all channel participants)
+ */
+export async function pinMessage(
+  teamId: string,
+  channelId: string,
+  messageId: string
+): Promise<void> {
+  try {
+    const channelRef = doc(db, 'teams', teamId, 'channels', channelId);
+    await updateDoc(channelRef, {
+      pinnedMessageIds: arrayUnion(messageId),
+      updatedAt: Timestamp.now(),
+    });
+    console.log('Pinned message:', messageId);
+  } catch (error) {
+    console.error('Error pinning message:', error);
+    throw error;
+  }
+}
+
+/**
+ * Unpin a message
+ */
+export async function unpinMessage(
+  teamId: string,
+  channelId: string,
+  messageId: string
+): Promise<void> {
+  try {
+    const channelRef = doc(db, 'teams', teamId, 'channels', channelId);
+    await updateDoc(channelRef, {
+      pinnedMessageIds: arrayRemove(messageId),
+      updatedAt: Timestamp.now(),
+    });
+    console.log('Unpinned message:', messageId);
+  } catch (error) {
+    console.error('Error unpinning message:', error);
+    throw error;
+  }
+}
+
+/**
+ * Subscribe to pinned message IDs for a channel
+ * Returns message IDs - caller should fetch full messages from the messages list
+ */
+export function subscribeToPinnedMessageIds(
+  teamId: string,
+  channelId: string,
+  callback: (pinnedIds: string[]) => void
+): Unsubscribe {
+  const channelRef = doc(db, 'teams', teamId, 'channels', channelId);
+
+  return onSnapshot(channelRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      const pinnedIds = data.pinnedMessageIds || [];
+      callback(pinnedIds);
+    } else {
+      callback([]);
+    }
+  }, (error) => {
+    console.error('Error subscribing to pinned messages:', error);
+    callback([]);
+  });
 }

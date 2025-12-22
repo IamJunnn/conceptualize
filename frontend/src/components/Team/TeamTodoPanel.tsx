@@ -366,6 +366,7 @@ export default function TeamTodoPanel({
       const currentUser = members[currentUserEmail];
       const userName = currentUser?.displayName || currentUserEmail.split('@')[0];
       const userPhotoURL = currentUser?.photoURL;
+      const userCustomAvatar = currentUser?.customAvatar;
 
       // Use a virtual meeting channel ID (no chat channel created)
       const meetingChannelId = `meeting_${meeting.id}`;
@@ -378,7 +379,8 @@ export default function TeamTodoPanel({
         'video', // Meetings default to video call
         currentUserEmail,
         userName,
-        userPhotoURL
+        userPhotoURL,
+        userCustomAvatar
       );
 
       // Notify parent to show the CallOverlay

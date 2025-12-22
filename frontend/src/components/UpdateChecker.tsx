@@ -1,7 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Download, X, Sparkles, Loader2 } from 'lucide-react';
+import { Download, X, Sparkles, Loader2, ExternalLink } from 'lucide-react';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import { open } from '@tauri-apps/plugin-shell';
+
+const MANUAL_DOWNLOAD_URL = 'https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.5_x64-setup.exe';
+const UPDATE_CHECK_URL = 'https://conceptualize-c9a41.web.app/updates/latest.json';
+
+// Compare semantic versions: returns true if v1 > v2
+function isNewerVersion(v1: string, v2: string): boolean {
+  const parts1 = v1.split('.').map(Number);
+  const parts2 = v2.split('.').map(Number);
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const p1 = parts1[i] || 0;
+    const p2 = parts2[i] || 0;
+    if (p1 > p2) return true;
+    if (p1 < p2) return false;
+  }
+  return false;
+}
 
 export function UpdateChecker() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
@@ -9,6 +26,7 @@ export function UpdateChecker() {
   const [, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [manualUpdateRequired, setManualUpdateRequired] = useState(false);
 
   const checkForUpdates = async () => {
     try {
@@ -23,8 +41,30 @@ export function UpdateChecker() {
           body: update.body || 'Bug fixes and performance improvements.'
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to check for updates:', error);
+
+      // If update check fails for any reason (including signature verification),
+      // check if there's actually a newer version available and prompt for manual download
+      try {
+        const response = await fetch(UPDATE_CHECK_URL);
+        const data = await response.json();
+        const currentVersion = await import('@tauri-apps/api/app').then(m => m.getVersion());
+
+        // Compare versions to see if update is available
+        if (data.version && data.version !== currentVersion && isNewerVersion(data.version, currentVersion)) {
+          console.log('Manual update available:', data.version, 'Current:', currentVersion);
+          setManualUpdateRequired(true);
+          setUpdateAvailable(true);
+          setUpdateInfo({
+            version: data.version,
+            date: data.pub_date || '',
+            body: data.notes || 'Bug fixes and performance improvements.'
+          });
+        }
+      } catch (fetchError) {
+        console.error('Failed to fetch update info:', fetchError);
+      }
     } finally {
       setChecking(false);
     }
@@ -60,6 +100,16 @@ export function UpdateChecker() {
       console.error('Failed to download and install update:', error);
       setDownloading(false);
       setProgress(0);
+    }
+  };
+
+  const openManualDownload = async () => {
+    try {
+      await open(MANUAL_DOWNLOAD_URL);
+    } catch (error) {
+      console.error('Failed to open download URL:', error);
+      // Fallback: try window.open
+      window.open(MANUAL_DOWNLOAD_URL, '_blank');
     }
   };
 
@@ -101,7 +151,10 @@ export function UpdateChecker() {
         {/* Content */}
         <div className="update-modal-content">
           <p className="update-message">
-            A new version of Conceptualize is available! Update now to get the latest features and improvements.
+            {manualUpdateRequired
+              ? 'A new version of Conceptualize is available! Please download and install manually to get the latest features.'
+              : 'A new version of Conceptualize is available! Update now to get the latest features and improvements.'
+            }
           </p>
 
           {updateInfo?.body && (
@@ -111,7 +164,13 @@ export function UpdateChecker() {
             </div>
           )}
 
-          {downloading && (
+          {manualUpdateRequired && (
+            <div className="update-manual-notice">
+              <p>This update requires a one-time manual download. Future updates will be automatic.</p>
+            </div>
+          )}
+
+          {downloading && !manualUpdateRequired && (
             <div className="update-progress">
               <div className="progress-bar">
                 <div
@@ -128,7 +187,23 @@ export function UpdateChecker() {
 
         {/* Actions */}
         <div className="update-modal-actions">
-          {!downloading ? (
+          {manualUpdateRequired ? (
+            <>
+              <button
+                className="update-later-btn"
+                onClick={() => setUpdateAvailable(false)}
+              >
+                Remind me later
+              </button>
+              <button
+                className="update-now-btn"
+                onClick={openManualDownload}
+              >
+                <ExternalLink size={16} />
+                Download Update
+              </button>
+            </>
+          ) : !downloading ? (
             <>
               <button
                 className="update-later-btn"
@@ -279,6 +354,21 @@ export function UpdateChecker() {
           color: #ccc;
           line-height: 1.5;
           white-space: pre-line;
+        }
+
+        .update-manual-notice {
+          background: rgba(255, 193, 7, 0.1);
+          border: 1px solid rgba(255, 193, 7, 0.3);
+          border-radius: 8px;
+          padding: 12px 14px;
+          margin-bottom: 16px;
+        }
+
+        .update-manual-notice p {
+          margin: 0;
+          font-size: 12px;
+          color: #ffc107;
+          line-height: 1.5;
         }
 
         .update-progress {

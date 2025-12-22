@@ -222,7 +222,11 @@ export default function ChatMessage({
     : message.senderName;
   const senderDisplayName = senderMember?.displayName || fallbackName;
   const senderPhotoURL = senderMember?.customAvatar || senderMember?.photoURL;
-  const senderInitials = senderDisplayName.substring(0, 2).toUpperCase();
+  // Get proper initials (e.g., "JunSeop Son" → "JS")
+  const nameParts = senderDisplayName.trim().split(/\s+/);
+  const senderInitials = nameParts.length >= 2
+    ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+    : senderDisplayName.substring(0, 2).toUpperCase();
 
   return (
     <div

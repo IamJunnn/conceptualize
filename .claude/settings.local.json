@@ -157,7 +157,18 @@
       "Bash(timeout 90 echo:*)",
       "Bash(gcloud projects get-iam-policy:*)",
       "Bash(timeout 25 echo:*)",
-      "Bash(gcloud functions add-invoker-policy-binding:*)"
+      "Bash(gcloud functions add-invoker-policy-binding:*)",
+      "Bash(TAURI_SIGNING_PRIVATE_KEY=\"dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5aGNUb1FQWCt0V1NYQ21mQ0YxNzhta01sQ0piU0JDYWptemowK2o1cXI3Z0FBQkFBQUFBQUFBQUFBQUlBQUFBQUxsc0JJL1QwdlFKZkNmcHN0VnhaanN1SnVMTC9vejZVcEMwbFhXMWxhb29NUHlrdzdNdG1ScGpFVVdxK05oWWxwYjdmdkl4dkNpSU95NGsrUjVNaVYwa1BpeElSY3cweVpPTkFyOWJ1emtHZXhTaVBTTlYxaExzYWFmZGhaQWdyNG5rK1owWUJTQUE9Cg==\" npx tauri signer sign conceptualize_1.0.1_x64-setup.exe)",
+      "Bash(gcloud services enable:*)",
+      "Bash(set TAURI_SIGNING_PRIVATE_KEY_PASSWORD=Conceptualize2024!)",
+      "Bash(set TAURI_SIGNING_PRIVATE_KEY=C:UsersOwner.tauriconceptualize-v2.key:*)",
+      "Bash(set TAURI_SIGNING_PRIVATE_KEY=dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5aGNUb1FQWCt0V1NYQ21mQ0YxNzhta01sQ0piU0JDYWptemowK2o1cXI3Z0FBQkFBQUFBQUFBQUFBQUlBQUFBQUxsc0JJL1QwdlFKZkNmcHN0VnhaanN1SnVMTC9vejZVcEMwbFhXMWxhb29NUHlrdzdNdG1ScGpFVVdxK05oWWxwYjdmdkl4dkNpSU95NGsrUjVNaVYwa1BpeElSY3cweVpPTkFyOWJ1emtHZXhTaVBTTlYxaExzYWFmZGhaQWdyNG5rK1owWUJTQUE9Cg==)",
+      "Bash(set \"TAURI_SIGNING_PRIVATE_KEY=dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5bnRhcW5sNEd2NFA4TWlPRnEzVDZ6eEpPSXMwampnSlBTS0M1VHBuUTNNVUFBQkFBQUFBQUFBQUFBQUlBQUFBQU9pMms0Nnd2OS9xUmFMQUlocjExdkVZR1dFUzhOS0tsR0M5Wm1xalVtYTNxdis1ZWp1NDZtaE9WV1lON1JGVDcyRTNxWUl4akZicEpmSDB4cWRyMnVuWnRWaUJWT0FHTXYzRkRiWThjUVluc1crcGpGNG5RUklRV1BLNllhNjF4NlRwbmlLaEJIdzg9Cg==\")",
+      "Bash(powershell:*)",
+      "Bash(timeout:*)",
+      "Bash(TAURI_SIGNING_PRIVATE_KEY=\"dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5bnRhcW5sNEd2NFA4TWlPRnEzVDZ6eEpPSXMwampnSlBTS0M1VHBuUTNNVUFBQkFBQUFBQUFBQUFBQUlBQUFBQU9pMms0Nnd2OS9xUmFMQUlocjExdkVZR1dFUzhOS0tsR0M5Wm1xalVtYTNxdis1ZWp1NDZtaE9WV1lON1JGVDcyRTNxWUl4akZicEpmSDB4cWRyMnVuWnRWaUJWT0FHTXYzRkRiWThjUVluc1crcGpGNG5RUklRV1BLNllhNjF4NlRwbmlLaEJIdzg9Cg==\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=\"Conceptualize2024!\" npm run build)",
+      "Bash(xxd:*)",
+      "Bash(gcloud functions describe:*)"
     ],
     "deny": [],
     "ask": []

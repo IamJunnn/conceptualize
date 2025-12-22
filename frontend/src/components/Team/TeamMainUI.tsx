@@ -256,6 +256,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   const [memberAccessLevel, setMemberAccessLevel] = useState<'full' | 'grace' | 'blocked'>('full');
   const [gracePeriodDays, setGracePeriodDays] = useState(0);
   const [graceBannerDismissed, setGraceBannerDismissed] = useState(false);
+  const [hasUpdate, setHasUpdate] = useState(false);
 
   const sidebarRef = useRef<any>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -853,9 +854,10 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
       return;
     }
 
+    // Use lowercase email for consistent Firestore queries
     const unsubscribe = subscribeToIncomingCalls(
       selectedTeam.id,
-      user.email,
+      user.email.toLowerCase(),
       () => {
         // Callback is optional - incomingCall state is managed globally via callState
       }
@@ -1218,11 +1220,20 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
               if (success) {
                 if (isDev) console.log('✅ Payment verified successfully! Subscription is now active.');
                 setSubscriptionStatus('active'); // Immediately update status
+
+                // Reload the page to ensure all components get fresh data
+                // This ensures SettingsPanel shows correct subscription status
+                const url = new URL(window.location.href);
+                url.searchParams.delete('session_id');
+                window.history.replaceState({}, '', url.toString());
+                if (isDev) console.log('🔄 Reloading page after successful payment verification...');
+                window.location.reload();
+                return; // Exit early since page will reload
               } else {
                 if (isDev) console.log('⚠️ Payment verification returned false');
               }
 
-              // Clear session_id from URL after verification attempt
+              // Clear session_id from URL after verification attempt (only if verification failed)
               const url = new URL(window.location.href);
               url.searchParams.delete('session_id');
               window.history.replaceState({}, '', url.toString());
@@ -3325,6 +3336,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                   return null;
                 })()
               }
+              hasUpdate={hasUpdate}
             />
 
             {/* Left Sidebar - File Tree */}
@@ -3668,6 +3680,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                         }}
                         isTabMode={true}
                         onCreateTeam={() => setShowCreateTeamModal(true)}
+                        onUpdateAvailable={setHasUpdate}
                       />
                     )}
                     {activeTab === 'special://notifications' && (
@@ -3940,6 +3953,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                           }}
                           isTabMode={true}
                           onCreateTeam={() => setShowCreateTeamModal(true)}
+                          onUpdateAvailable={setHasUpdate}
                         />
                       )}
                       {leftPaneTab.startsWith('special://whiteboard') && (
@@ -4158,6 +4172,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                           }}
                           isTabMode={true}
                           onCreateTeam={() => setShowCreateTeamModal(true)}
+                          onUpdateAvailable={setHasUpdate}
                         />
                       )}
                       {rightPaneTab.startsWith('special://whiteboard') && (
@@ -4414,6 +4429,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
               email: m.email,
               displayName: m.displayName,
               photoURL: m.photoURL,
+              customAvatar: m.customAvatar,
             })) : []}
             onGetOrCreateDM={async (memberEmail: string) => {
               if (!selectedTeam) throw new Error('No team selected');
@@ -4438,6 +4454,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
               email: m.email,
               displayName: m.displayName,
               photoURL: m.photoURL,
+              customAvatar: m.customAvatar,
             })) : []}
             onGetOrCreateDM={async (memberEmail: string) => {
               if (!selectedTeam) throw new Error('No team selected');

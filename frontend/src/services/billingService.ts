@@ -3,9 +3,9 @@
  * Handles Stripe integration for subscription management
  */
 
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, onSnapshot, Timestamp, collection } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from './firebase';
+import { db, functions, auth } from './firebase';
 import {
   STORAGE_LIMITS,
   calculateMonthlyPrice,
@@ -125,43 +125,83 @@ export async function getTeamBilling(teamId: string): Promise<TeamBilling | null
 
 /**
  * Create Stripe checkout session for team subscription
- * This calls a Firebase Cloud Function that creates the checkout session
+ * Uses Firestore trigger approach to bypass IAM/CORS issues with callable functions
+ *
+ * Flow:
+ * 1. Write checkout request to Firestore
+ * 2. Cloud Function (processCheckoutRequest) creates Stripe session
+ * 3. Function updates document with session URL
+ * 4. We listen for the update and return the URL
  */
 export async function createCheckoutSession(
   teamId: string,
   successUrl?: string,
   cancelUrl?: string
 ): Promise<string> {
-  try {
-    const memberCount = await getTeamMemberCount(teamId);
-    const billing = await getTeamBilling(teamId);
+  const memberCount = await getTeamMemberCount(teamId);
+  const billing = await getTeamBilling(teamId);
 
-    if (!billing) {
-      throw new Error('Team billing not initialized');
-    }
-
-    // Call Cloud Function to create checkout session
-    // Note: {CHECKOUT_SESSION_ID} is a Stripe placeholder that gets replaced with actual session ID
-    const createCheckout = httpsCallable(functions, 'createStripeCheckout');
-    const result = await createCheckout({
-      teamId,
-      memberCount,
-      priceId: STRIPE_PRICE_ID,
-      successUrl: successUrl || `${window.location.origin}/?team=${teamId}&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: cancelUrl || `${window.location.origin}/?team=${teamId}&canceled=true`,
-      customerEmail: billing.ownerEmail,
-      metadata: {
-        teamId,
-        memberCount: memberCount.toString(),
-      },
-    });
-
-    const { sessionUrl } = result.data as { sessionUrl: string };
-    return sessionUrl;
-  } catch (error) {
-    console.error('Error creating checkout session:', error);
-    throw error;
+  if (!billing) {
+    throw new Error('Team billing not initialized');
   }
+
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Create a unique request ID
+  const requestId = `${teamId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestRef = doc(db, 'checkoutRequests', requestId);
+
+  // Write the checkout request to Firestore
+  await setDoc(requestRef, {
+    teamId,
+    memberCount,
+    customerEmail: billing.ownerEmail,
+    successUrl: successUrl || `${window.location.origin}/?team=${teamId}&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: cancelUrl || `${window.location.origin}/?team=${teamId}&canceled=true`,
+    requestedBy: user.uid,
+    requestedAt: Timestamp.now(),
+    status: 'pending',
+    metadata: {
+      teamId,
+      memberCount: memberCount.toString(),
+    },
+  });
+
+  console.log('📝 Created checkout request:', requestId);
+
+  // Wait for the Cloud Function to process the request
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      unsubscribe();
+      reject(new Error('Checkout request timed out. Please try again.'));
+    }, 30000); // 30 second timeout
+
+    const unsubscribe = onSnapshot(requestRef, (snapshot) => {
+      const data = snapshot.data();
+
+      if (!data) return;
+
+      if (data.status === 'completed' && data.sessionUrl) {
+        clearTimeout(timeout);
+        unsubscribe();
+        console.log('✅ Checkout session created:', data.sessionId);
+        resolve(data.sessionUrl);
+      } else if (data.status === 'error') {
+        clearTimeout(timeout);
+        unsubscribe();
+        console.error('❌ Checkout request failed:', data.error);
+        reject(new Error(data.error || 'Failed to create checkout session'));
+      }
+    }, (error) => {
+      clearTimeout(timeout);
+      unsubscribe();
+      console.error('❌ Error listening to checkout request:', error);
+      reject(error);
+    });
+  });
 }
 
 /**
@@ -388,31 +428,74 @@ export async function syncSubscriptionStatus(teamId: string): Promise<{
 /**
  * Verify checkout session after redirect from Stripe
  * Call this on the success URL page
+ *
+ * Uses Firestore trigger approach to bypass IAM/CORS issues:
+ * 1. Write verification request to Firestore
+ * 2. Cloud Function trigger processes it and updates billing
+ * 3. Listen for response via onSnapshot
  */
 export async function verifyCheckoutSession(
   sessionId: string,
   teamId: string
 ): Promise<{ success: boolean; status?: SubscriptionStatus; error?: string }> {
-  try {
-    const verifyCheckout = httpsCallable(functions, 'verifyCheckoutSession');
-    const result = await verifyCheckout({ sessionId, teamId });
-    const data = result.data as {
-      success: boolean;
-      status?: string;
-      error?: string;
-    };
+  const user = auth.currentUser;
+  if (!user) {
+    return { success: false, error: 'User not authenticated' };
+  }
 
-    if (data.success) {
-      return {
-        success: true,
-        status: data.status as SubscriptionStatus,
-      };
-    } else {
-      return {
-        success: false,
-        error: data.error || 'Unknown error',
-      };
-    }
+  try {
+    // Generate unique request ID
+    const requestId = `${teamId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestRef = doc(db, 'verifyCheckoutRequests', requestId);
+
+    console.log('Creating verify checkout request:', { requestId, sessionId, teamId });
+
+    // Write the verification request to Firestore
+    await setDoc(requestRef, {
+      sessionId,
+      teamId,
+      requestedBy: user.uid,
+      requestedAt: Timestamp.now(),
+      status: 'pending',
+    });
+
+    // Listen for the Cloud Function to process the request
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        unsubscribe();
+        console.error('Verify checkout request timed out');
+        resolve({ success: false, error: 'Verification request timed out' });
+      }, 30000); // 30 second timeout
+
+      const unsubscribe = onSnapshot(requestRef, (snapshot) => {
+        const data = snapshot.data();
+        if (!data) return;
+
+        console.log('Verify checkout request update:', data);
+
+        if (data.status === 'completed') {
+          clearTimeout(timeout);
+          unsubscribe();
+          resolve({
+            success: true,
+            status: data.subscriptionStatus as SubscriptionStatus,
+          });
+        } else if (data.status === 'error') {
+          clearTimeout(timeout);
+          unsubscribe();
+          resolve({
+            success: false,
+            error: data.error || 'Verification failed',
+          });
+        }
+        // Still pending, keep listening
+      }, (error) => {
+        clearTimeout(timeout);
+        unsubscribe();
+        console.error('Snapshot error:', error);
+        resolve({ success: false, error: getErrorMessage(error) });
+      });
+    });
   } catch (error) {
     console.error('Error verifying checkout session:', error);
     return {

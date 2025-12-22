@@ -1,5 +1,6 @@
 import React from 'react';
-import { Bell, MessageCircle, AtSign, CheckSquare, X, Trash2, Users, UserPlus, CreditCard } from 'lucide-react';
+import { Bell, AtSign, CheckSquare, X, Trash2, Users, UserPlus, CreditCard } from 'lucide-react';
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import './NotificationsPanel.css';
 
 export interface Notification {
@@ -41,7 +42,7 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({
         return <AtSign size={18} />;
       case 'reply':
       case 'message':
-        return <MessageCircle size={18} />;
+        return <ChatBubbleLeftRightIcon style={{ width: '18px', height: '18px' }} />;
       case 'todo_reminder':
       case 'todo_assigned':
         return <CheckSquare size={18} />;

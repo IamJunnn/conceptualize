@@ -178,6 +178,9 @@ export interface Channel {
   lastMessageAt?: Date;
   lastMessagePreview?: string;
   messageCount: number;
+
+  // Pinned messages (shared across all channel participants)
+  pinnedMessageIds?: string[];
 }
 
 // Firestore version
