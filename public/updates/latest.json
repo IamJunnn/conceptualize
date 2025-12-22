@@ -1,0 +1,11 @@
+{
+  "version": "1.0.6",
+  "notes": "What's new in v1.0.6:\n- Fixed Stripe subscription checkout, verification, cancel and reactivate functions\n- Removed Insert button from whiteboard (Export only)\n- Increased whiteboard toolbar icon spacing\n- Fixed font/size dropdown visibility in light mode whiteboard\n- Various bug fixes and improvements",
+  "pub_date": "2025-12-22T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUemU5TGZnZksrYjJackRIdTRTWkdKcTJkRzl6TjBQL1QvNjhKYkhHKzJXQUo0d09aZE5vOEo3TVVuYzJhNzl4aXRhTUtJOTE2aU9pR3JRVldkY2Fid0hnT2ZNZEJTalE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzY2NDQzOTY4CWZpbGU6Y29uY2VwdHVhbGl6ZV8xLjAuNl94NjQtc2V0dXAuZXhlClgrY1p0UUk1Y2lUaExteWNCNG9kNzlmOTRncktzS3N2RUQxazNTZFM1MmNOdW5oQWZRMWNsbUpNNkRtUEV6bFJlMVZWeGo4NC84bVcrM3ByclF6Y0FRPT0K",
+      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.6_x64-setup.exe"
+    }
+  }
+}
