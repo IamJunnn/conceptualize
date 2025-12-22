@@ -10,6 +10,7 @@ export interface MentionableUser {
   email: string;
   displayName?: string;
   photoURL?: string;
+  customAvatar?: string; // DiceBear avatar (priority over photoURL)
   role?: string;
 }
 
@@ -72,9 +73,19 @@ export default function MentionSuggestions({
     return user.displayName || user.email.split('@')[0];
   };
 
+  // Get proper initials (e.g., "JunSeop Son" → "JS")
   const getInitials = (user: MentionableUser) => {
     const name = getDisplayName(user);
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
     return name.substring(0, 2).toUpperCase();
+  };
+
+  // Get avatar URL (prioritize customAvatar over photoURL)
+  const getAvatarUrl = (user: MentionableUser) => {
+    return user.customAvatar || user.photoURL;
   };
 
   return (
@@ -95,8 +106,8 @@ export default function MentionSuggestions({
             onMouseEnter={() => {}} // Hover handled by CSS
           >
             <div className="mention-avatar">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt={getDisplayName(user)} className="avatar-image" />
+              {getAvatarUrl(user) ? (
+                <img src={getAvatarUrl(user)} alt={getDisplayName(user)} className="avatar-image" />
               ) : (
                 getInitials(user)
               )}

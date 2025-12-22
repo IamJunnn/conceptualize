@@ -118,3 +118,25 @@
   border-radius: 8px;
   pointer-events: none;
 }
+
+/* Update available dot */
+.update-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: linear-gradient(135deg, #64c8ca, #4db8ba);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: update-pulse 2s ease-in-out infinite;
+}
+
+@keyframes update-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(100, 200, 202, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(100, 200, 202, 0);
+  }
+}

@@ -5,6 +5,7 @@ import { deleteTodo } from '../../services/teamTodoService';
 import { deleteCalendarEvent } from '../../services/googleCalendarService';
 import { startCall, getCallState } from '../../services/callService';
 import { X, Repeat, Video, Edit2, Trash2, Loader, MapPin } from 'lucide-react';
+import PermissionModal, { hasStoredPermission } from './Chat/PermissionModal';
 import './MeetingDetailsModal.css';
 
 interface MeetingDetailsModalProps {
@@ -59,6 +60,7 @@ export default function MeetingDetailsModal({
 }: MeetingDetailsModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
 
   const status = isMeetingNowOrSoon(meeting);
   const canJoin = (status === 'now' || status === 'soon') && meeting.meetingDetails?.hasVideoRoom !== false;
@@ -148,8 +150,8 @@ export default function MeetingDetailsModal({
     }
   };
 
-  // Handle join call
-  const handleJoinCall = async () => {
+  // Handle join call - show permission modal first (or skip if already granted)
+  const handleJoinCall = () => {
     // Check if already in a call
     const currentCallState = getCallState();
     if (currentCallState.activeCall) {
@@ -157,15 +159,31 @@ export default function MeetingDetailsModal({
       return;
     }
 
+    // Check if permission was previously granted (meetings are always video)
+    if (hasStoredPermission('video')) {
+      // Skip modal and join call directly
+      executeJoinCall();
+    } else {
+      setShowPermissionModal(true);
+    }
+  };
+
+  // Execute join after permission granted
+  const executeJoinCall = async () => {
+    setShowPermissionModal(false);
     setIsJoining(true);
     try {
-      const attendees = meeting.assignees.includes(currentUserEmail)
-        ? meeting.assignees
-        : [...meeting.assignees, currentUserEmail];
+      // Normalize emails to lowercase for consistent Firestore queries
+      const currentUserEmailLower = currentUserEmail.toLowerCase();
+      const attendeesLower = meeting.assignees.map(e => e.toLowerCase());
+      const attendees = attendeesLower.includes(currentUserEmailLower)
+        ? attendeesLower
+        : [...attendeesLower, currentUserEmailLower];
 
-      const currentUser = members[currentUserEmail];
+      const currentUser = members[currentUserEmail] || members[currentUserEmailLower];
       const userName = currentUser?.displayName || currentUserEmail.split('@')[0];
       const userPhotoURL = currentUser?.photoURL;
+      const userCustomAvatar = currentUser?.customAvatar;
 
       const meetingChannelId = `meeting_${meeting.id}`;
 
@@ -174,9 +192,10 @@ export default function MeetingDetailsModal({
         meetingChannelId,
         attendees,
         'video',
-        currentUserEmail,
+        currentUserEmailLower,
         userName,
-        userPhotoURL
+        userPhotoURL,
+        userCustomAvatar
       );
 
       onMeetingCallStarted?.();
@@ -340,6 +359,14 @@ export default function MeetingDetailsModal({
             </button>
           </div>
         )}
+
+        {/* Permission Modal */}
+        <PermissionModal
+          isOpen={showPermissionModal}
+          callType="video"
+          onAllow={executeJoinCall}
+          onDeny={() => setShowPermissionModal(false)}
+        />
       </div>
     </div>
   );

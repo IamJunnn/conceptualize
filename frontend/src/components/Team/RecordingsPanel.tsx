@@ -1051,6 +1051,7 @@ const RecordingsPanel: React.FC<RecordingsPanelProps> = ({
             email: m.email,
             displayName: m.displayName,
             photoURL: m.photoURL,
+            customAvatar: m.customAvatar,
           })) : []}
           onGetOrCreateDM={async (memberEmail: string) => {
             return await getOrCreateDMChannel(teamId, currentUserEmail, memberEmail);

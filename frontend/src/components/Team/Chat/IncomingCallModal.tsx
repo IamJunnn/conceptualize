@@ -14,6 +14,15 @@ interface IncomingCallModalProps {
   onDecline: () => void;
 }
 
+// Get proper initials from name (e.g., "JunSeop Son" → "JS")
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+}
+
 export default function IncomingCallModal({
   call,
   onAccept,
@@ -51,6 +60,9 @@ export default function IncomingCallModal({
 
   const isVideoCall = call.type === 'video';
 
+  // Priority: customAvatar (DiceBear) > photoURL (Google) > initials
+  const avatarUrl = call.initiatorCustomAvatar || call.initiatorPhotoURL;
+
   return (
     <div className="incoming-call-overlay">
       <div className="incoming-call-modal">
@@ -63,15 +75,15 @@ export default function IncomingCallModal({
 
         <div className="incoming-call-caller">
           <div className="caller-avatar">
-            {call.initiatorPhotoURL ? (
+            {avatarUrl ? (
               <img
-                src={call.initiatorPhotoURL}
+                src={avatarUrl}
                 alt={call.initiatorName}
                 className="caller-avatar-image"
               />
             ) : (
               <span className="caller-avatar-initials">
-                {call.initiatorName.substring(0, 2).toUpperCase()}
+                {getInitials(call.initiatorName)}
               </span>
             )}
           </div>

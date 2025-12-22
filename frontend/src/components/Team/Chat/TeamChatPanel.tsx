@@ -21,6 +21,9 @@ import {
   votePoll,
   markChannelAsRead,
   subscribeToUnreadCounts,
+  pinMessage,
+  unpinMessage,
+  subscribeToPinnedMessageIds,
 } from '../../../services/teamChatService';
 import { uploadChatAttachment } from '../../../services/firebaseStorageService';
 import { Channel, MessageAttachment, generateDMChannelId, Poll, PollOption, SharedFile, SharedRecording, SharedTodo, SharedWhiteboard } from '../../../services/teamChatTypes';
@@ -46,6 +49,7 @@ import CallButton from './CallButton';
 import CallOverlay from './CallOverlay';
 import CompactCallWidget from './CompactCallWidget';
 import CallConflictModal from './CallConflictModal';
+import PermissionModal, { hasStoredPermission } from './PermissionModal';
 import MessageSearchDropdown from './MessageSearchDropdown';
 import InsertContentModal, { InsertMode, InsertResult, FileTreeItem } from './InsertContentModal';
 import { ChatMessage } from '../../../services/teamChatTypes';
@@ -158,7 +162,7 @@ export default function TeamChatPanel({
   const [messageToPin, setMessageToPin] = useState<ChatMessage | null>(null);
   const [messageToForward, setMessageToForward] = useState<ChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
-  const [pinnedMessages, setPinnedMessages] = useState<ChatMessage[]>([]);
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<string[]>([]); // Shared pinned message IDs from Firestore
   const [searchQuery, setSearchQuery] = useState('');
 
   // Insert content modal state
@@ -196,38 +200,29 @@ export default function TeamChatPanel({
     getCallState().activeCall?.channelId || null
   ); // Track which channel the call is in
 
+  // Permission modal state
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [pendingCallType, setPendingCallType] = useState<CallType | null>(null);
+
   // LocalStorage key for persisting selected chat
   const getSelectedChatKey = () => `team_chat_selected_${teamId}`;
-  const getPinnedMessagesKey = () => activeChannelId ? `pinned_messages_${teamId}_${activeChannelId}` : null;
 
-  // Load pinned messages when channel changes
+  // Subscribe to pinned message IDs from Firestore (shared across all channel participants)
   useEffect(() => {
-    const key = getPinnedMessagesKey();
-    if (key) {
-      const saved = getLocalStorage<ChatMessage[]>(key, []);
-      if (saved.length > 0) {
-        // Convert date strings back to Date objects
-        const messages = saved.map((m: ChatMessage) => ({
-          ...m,
-          createdAt: new Date(m.createdAt),
-          updatedAt: m.updatedAt ? new Date(m.updatedAt) : undefined,
-        }));
-        setPinnedMessages(messages);
-      } else {
-        setPinnedMessages([]);
-      }
+    if (!activeChannelId || !teamId) {
+      setPinnedMessageIds([]);
+      return;
     }
+
+    const unsubscribe = subscribeToPinnedMessageIds(teamId, activeChannelId, (ids) => {
+      setPinnedMessageIds(ids);
+    });
+
+    return () => unsubscribe();
   }, [activeChannelId, teamId]);
 
-  // Save pinned messages when they change
-  useEffect(() => {
-    const key = getPinnedMessagesKey();
-    if (key && pinnedMessages.length > 0) {
-      setLocalStorage(key, pinnedMessages);
-    } else if (key) {
-      removeLocalStorage(key);
-    }
-  }, [pinnedMessages, activeChannelId, teamId]);
+  // Compute pinned messages from chat messages and pinned IDs
+  const pinnedMessages = chatMessages.filter(m => pinnedMessageIds.includes(m.id));
 
   // Subscribe to unread counts for all DM channels
   useEffect(() => {
@@ -288,6 +283,15 @@ export default function TeamChatPanel({
       unsubscribe();
     };
   }, []);
+
+  // Auto-expand call overlay when there's an active call on the current channel
+  // This handles the case where user accepts a call while already viewing that channel
+  useEffect(() => {
+    if (callState.activeCall && callState.activeCall.channelId === activeChannelId) {
+      setCallChannelId(activeChannelId);
+      setIsCallExpanded(true);
+    }
+  }, [callState.activeCall, activeChannelId]);
 
   // Notify parent of call state changes
   useEffect(() => {
@@ -371,9 +375,10 @@ export default function TeamChatPanel({
   useEffect(() => {
     if (!hasAccess || !teamId || !currentUserEmail) return;
 
+    // Use lowercase email for consistent Firestore queries
     const unsubscribe = subscribeToIncomingCalls(
       teamId,
-      currentUserEmail,
+      currentUserEmail.toLowerCase(),
       (_call) => {
         // Call state is automatically updated by the subscription
       }
@@ -968,9 +973,13 @@ export default function TeamChatPanel({
     return member?.displayName || email.split('@')[0];
   };
 
-  // Get initials for avatar
+  // Get initials for avatar (e.g., "JunSeop Son" → "JS")
   const getInitials = (email: string) => {
     const name = getDisplayName(email);
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
     return name.substring(0, 2).toUpperCase();
   };
 
@@ -1027,11 +1036,10 @@ export default function TeamChatPanel({
     }
   };
 
-  // Handle starting a call
-  const handleStartCall = async (type: CallType) => {
+  // Handle starting a call - show permission modal first (or skip if already granted)
+  const handleStartCall = (type: CallType) => {
     if (!activeChannelId) return;
 
-    const currentUser = members[currentUserEmail.toLowerCase()];
     const participants = selectedGroup
       ? selectedGroup.participants || []
       : selectedMemberEmail
@@ -1043,15 +1051,56 @@ export default function TeamChatPanel({
       return;
     }
 
+    // Check if permission was previously granted
+    if (hasStoredPermission(type)) {
+      // Skip modal and start call directly
+      setPendingCallType(type);
+      // Use setTimeout to ensure state is set before executeStartCall runs
+      setTimeout(() => {
+        executeStartCallDirect(type);
+      }, 0);
+    } else {
+      // Show permission modal first
+      setPendingCallType(type);
+      setShowPermissionModal(true);
+    }
+  };
+
+  // Execute the call after permission is granted (from modal)
+  const executeStartCall = async () => {
+    if (!activeChannelId || !pendingCallType) return;
+
+    setShowPermissionModal(false);
+    const callType = pendingCallType;
+    setPendingCallType(null);
+
+    await executeStartCallDirect(callType);
+  };
+
+  // Execute call directly with given type (used when permission is already stored)
+  const executeStartCallDirect = async (callType: CallType) => {
+    if (!activeChannelId) return;
+
+    const currentUser = members[currentUserEmail.toLowerCase()];
+    // Normalize emails to lowercase for consistent Firestore queries
+    const participants = selectedGroup
+      ? (selectedGroup.participants || []).map(p => p.toLowerCase())
+      : selectedMemberEmail
+        ? [currentUserEmail.toLowerCase(), selectedMemberEmail.toLowerCase()]
+        : [];
+
+    setPendingCallType(null);
+
     try {
       await startCall(
         teamId,
         activeChannelId,
         participants,
-        type,
-        currentUserEmail,
+        callType,
+        currentUserEmail.toLowerCase(),
         currentUser?.displayName || currentUserEmail.split('@')[0],
-        currentUser?.photoURL
+        currentUser?.photoURL,
+        currentUser?.customAvatar
       );
       // Track which channel the call is in
       setCallChannelId(activeChannelId);
@@ -1059,6 +1108,12 @@ export default function TeamChatPanel({
       console.error('Failed to start call:', error);
       alert('Failed to start call. Please check your connection and try again.');
     }
+  };
+
+  // Cancel the call if permission is denied
+  const handlePermissionDenied = () => {
+    setShowPermissionModal(false);
+    setPendingCallType(null);
   };
 
   // Handle accepting incoming call when already in a call (hang up current, answer new)
@@ -1152,7 +1207,7 @@ export default function TeamChatPanel({
   // Handle pin message request (show confirmation)
   const handlePinRequest = (message: ChatMessage) => {
     // Check if already pinned
-    if (pinnedMessages.some(m => m.id === message.id)) {
+    if (pinnedMessageIds.includes(message.id)) {
       // Already pinned, just open the pinned modal
       setShowPinnedModal(true);
       return;
@@ -1161,14 +1216,30 @@ export default function TeamChatPanel({
     setShowPinConfirm(true);
   };
 
-  // Confirm pin message
-  const handleConfirmPin = () => {
-    if (messageToPin) {
-      setPinnedMessages(prev => [...prev, messageToPin]);
-      setMessageToPin(null);
-      setShowPinConfirm(false);
-      // Optionally open the pinned modal to show success
-      setShowPinnedModal(true);
+  // Confirm pin message (saves to Firestore, shared with all participants)
+  const handleConfirmPin = async () => {
+    if (messageToPin && activeChannelId) {
+      try {
+        await pinMessage(teamId, activeChannelId, messageToPin.id);
+        setMessageToPin(null);
+        setShowPinConfirm(false);
+        // Optionally open the pinned modal to show success
+        setShowPinnedModal(true);
+      } catch (error) {
+        console.error('Failed to pin message:', error);
+        alert('Failed to pin message. Please try again.');
+      }
+    }
+  };
+
+  // Unpin message (removes from Firestore)
+  const handleUnpinMessage = async (messageId: string) => {
+    if (!activeChannelId) return;
+    try {
+      await unpinMessage(teamId, activeChannelId, messageId);
+    } catch (error) {
+      console.error('Failed to unpin message:', error);
+      alert('Failed to unpin message. Please try again.');
     }
   };
 
@@ -1446,9 +1517,9 @@ export default function TeamChatPanel({
     }
   };
 
-  // Unpin a message
+  // Unpin a message (calls Firestore - shared with all participants)
   const handleUnpin = (messageId: string) => {
-    setPinnedMessages(prev => prev.filter(m => m.id !== messageId));
+    handleUnpinMessage(messageId);
   };
 
   // Show paywall if no access
@@ -1543,6 +1614,7 @@ export default function TeamChatPanel({
           email,
           displayName: members[email]?.displayName,
           photoURL: members[email]?.photoURL,
+          customAvatar: members[email]?.customAvatar,
           role: members[email]?.role,
         }));
     } else if (selectedMemberEmail) {
@@ -1552,6 +1624,7 @@ export default function TeamChatPanel({
         email: selectedMemberEmail,
         displayName: member?.displayName,
         photoURL: member?.photoURL,
+        customAvatar: member?.customAvatar,
         role: member?.role,
       }];
     }
@@ -1867,7 +1940,7 @@ export default function TeamChatPanel({
                 channelName={selectedGroup ? selectedGroup.name : getDisplayName(selectedMemberEmail!)}
                 currentUserEmail={currentUserEmail}
                 currentUserDisplayName={members[currentUserEmail]?.displayName || currentUserEmail.split('@')[0]}
-                pinnedMessageIds={pinnedMessages.map(m => m.id)}
+                pinnedMessageIds={pinnedMessageIds}
                 onEditMessage={async (messageId, content) => {
                   await editMessage(teamId, activeChannelId, messageId, content);
                 }}
@@ -2074,6 +2147,14 @@ export default function TeamChatPanel({
       )}
 
       {/* Incoming Call Modal is now handled globally in TeamMainUI */}
+
+      {/* Permission Modal - shown before starting a call */}
+      <PermissionModal
+        isOpen={showPermissionModal}
+        callType={pendingCallType === 'video' ? 'video' : 'voice'}
+        onAllow={executeStartCall}
+        onDeny={handlePermissionDenied}
+      />
 
       {/* Call Conflict Modal - when receiving call while already in one */}
       {showCallConflict && callState.incomingCall && callState.activeCall && (

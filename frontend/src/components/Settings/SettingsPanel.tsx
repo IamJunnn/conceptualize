@@ -4,6 +4,10 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { getAppMode, setAppMode } from '../../services/appModeService';
 import { updateUserAvatar, updateUserDisplayName } from '../../services/authServiceTauri';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { open } from '@tauri-apps/plugin-shell';
 import { Team, getUserTeams, isInternalProEmail } from '../../services/teamService';
 import { getPromoStatusFromBilling } from '../../services/promoService';
 import { getTeamStorageUsage } from '../../services/storageTrackingService';
@@ -26,8 +30,14 @@ import {
   HardDrive,
   Sparkles,
   AlertCircle,
-  Check
+  Check,
+  RefreshCw,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, setDoc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { db, auth } from '../../services/firebase';
 import AvatarPicker from './AvatarPicker';
 import UpgradeModal from '../Billing/UpgradeModal';
 import type { StorageUsage } from '../../services/billingTypes';
@@ -42,6 +52,9 @@ interface TeamSubscriptionInfo {
   storageUsed: number;
   storageLimit: number;
   memberCount: number;
+  // Cancellation info
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodEnd?: Date;
 }
 
 interface SettingsPanelProps {
@@ -53,6 +66,7 @@ interface SettingsPanelProps {
   selectedTeam?: any;
   isTabMode?: boolean; // When true, renders as inline content instead of modal
   onCreateTeam?: () => void; // Open the create team modal
+  onUpdateAvailable?: (available: boolean) => void; // Notify parent when update is available
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -63,7 +77,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onSwitchTeam,
   selectedTeam,
   isTabMode = false,
-  onCreateTeam
+  onCreateTeam,
+  onUpdateAvailable
 }) => {
   const { user, signOut, refreshUser } = useAuth();
 
@@ -72,6 +87,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   const [appMode, setAppModeState] = useState<'local' | 'team' | null>(null);
   const [currentFolder, setCurrentFolder] = useState<string>('');
+  const [appVersion, setAppVersion] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [isUpdatingAvatar, setIsUpdatingAvatar] = useState(false);
@@ -83,6 +99,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const [teamSubscriptions, setTeamSubscriptions] = useState<TeamSubscriptionInfo[]>([]);
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
   const [upgradeModalTeam, setUpgradeModalTeam] = useState<TeamSubscriptionInfo | null>(null);
+
+  // Update check state
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersion, setLatestVersion] = useState<string>('');
+  const [updateNotes, setUpdateNotes] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [manualUpdateRequired, setManualUpdateRequired] = useState(false);
+
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Cancel subscription state
+  const [showCancelConfirm, setShowCancelConfirm] = useState<TeamSubscriptionInfo | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isReactivating, setIsReactivating] = useState<string | null>(null); // team ID being reactivated
 
   // Get team-specific role if in team mode
   // Use lowercase email for lookup since members are stored with lowercase keys
@@ -101,9 +136,110 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
       const folder = await invoke<string | null>('get_root_folder');
       if (folder) setCurrentFolder(folder);
+
+      // Load app version
+      try {
+        const version = await getVersion();
+        setAppVersion(version);
+      } catch (error) {
+        console.error('Error getting app version:', error);
+        setAppVersion('Unknown');
+      }
     };
     loadSettings();
   }, []);
+
+  // Helper: Compare semantic versions (returns true if v1 > v2)
+  const isNewerVersion = (v1: string, v2: string): boolean => {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+      if (p1 > p2) return true;
+      if (p1 < p2) return false;
+    }
+    return false;
+  };
+
+  // Check for updates
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      try {
+        const update = await check();
+        if (update) {
+          setUpdateAvailable(true);
+          setLatestVersion(update.version);
+          setUpdateNotes(update.body || '');
+          setManualUpdateRequired(false);
+        }
+      } catch (error) {
+        console.error('Update check failed:', error);
+        // Fallback: fetch latest.json directly
+        try {
+          const response = await fetch('https://conceptualize-c9a41.web.app/updates/latest.json');
+          const data = await response.json();
+          if (data.version && appVersion && isNewerVersion(data.version, appVersion)) {
+            setUpdateAvailable(true);
+            setLatestVersion(data.version);
+            setUpdateNotes(data.notes || '');
+            setManualUpdateRequired(true);
+          }
+        } catch (fetchError) {
+          console.error('Failed to fetch update info:', fetchError);
+        }
+      }
+    };
+
+    if (appVersion) {
+      checkForUpdates();
+    }
+  }, [appVersion]);
+
+  // Notify parent when update availability changes
+  useEffect(() => {
+    onUpdateAvailable?.(updateAvailable);
+  }, [updateAvailable, onUpdateAvailable]);
+
+  // Handle update download and install
+  const handleUpdate = async () => {
+    if (manualUpdateRequired) {
+      // Open download URL for manual update
+      try {
+        await open(`https://conceptualize-c9a41.web.app/downloads/conceptualize_${latestVersion}_x64-setup.exe`);
+      } catch (error) {
+        window.open(`https://conceptualize-c9a41.web.app/downloads/conceptualize_${latestVersion}_x64-setup.exe`, '_blank');
+      }
+      return;
+    }
+
+    setIsUpdating(true);
+    setUpdateProgress(0);
+    try {
+      const update = await check();
+      if (update) {
+        let downloaded = 0;
+        let total = 0;
+        await update.downloadAndInstall((event: { event: string; data?: { contentLength?: number; chunkLength?: number } }) => {
+          if (event.event === 'Started' && event.data?.contentLength) {
+            total = event.data.contentLength;
+          } else if (event.event === 'Progress' && event.data?.chunkLength) {
+            downloaded += event.data.chunkLength;
+            if (total > 0) {
+              setUpdateProgress(Math.round((downloaded / total) * 100));
+            }
+          } else if (event.event === 'Finished') {
+            setUpdateProgress(100);
+          }
+        });
+        await relaunch();
+      }
+    } catch (error) {
+      console.error('Update failed:', error);
+      setIsUpdating(false);
+      setUpdateProgress(0);
+    }
+  };
 
   // Load subscription data when subscription tab is opened
   useEffect(() => {
@@ -153,6 +289,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
           const memberCount = team.memberEmails?.length || Object.keys(team.members || {}).length;
 
+          // Get cancellation info from billing
+          const cancelAtPeriodEnd = team.billing?.subscription?.cancelAtPeriodEnd || false;
+          const currentPeriodEndTimestamp = team.billing?.subscription?.currentPeriodEnd;
+          const currentPeriodEnd = currentPeriodEndTimestamp
+            ? new Date(currentPeriodEndTimestamp * 1000)
+            : undefined;
+
           return {
             team,
             isOwner,
@@ -160,7 +303,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             promoInfo: promoInfo || undefined,
             storageUsed,
             storageLimit,
-            memberCount
+            memberCount,
+            cancelAtPeriodEnd,
+            currentPeriodEnd
           } as TeamSubscriptionInfo;
         });
 
@@ -265,6 +410,143 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      const functions = getFunctions();
+      const deleteUserAccount = httpsCallable(functions, 'deleteUserAccount');
+      await deleteUserAccount({});
+
+      // Account deleted successfully - redirect to login
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      setDeleteError(error.message || 'Failed to delete account. Please try again.');
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!showCancelConfirm) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser?.email) {
+      alert('User not authenticated');
+      return;
+    }
+
+    setIsCancelling(true);
+    try {
+      // Use Firestore trigger approach to bypass IAM/CORS issues
+      const teamId = showCancelConfirm.team.id;
+      const requestId = `${teamId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const requestRef = doc(db, 'cancelSubscriptionRequests', requestId);
+
+      // Write the cancellation request to Firestore
+      await setDoc(requestRef, {
+        teamId,
+        userEmail: currentUser.email,
+        requestedBy: currentUser.uid,
+        requestedAt: Timestamp.now(),
+        status: 'pending',
+      });
+
+      // Wait for the Cloud Function to process the request
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          unsubscribe();
+          reject(new Error('Cancellation request timed out'));
+        }, 30000);
+
+        const unsubscribe = onSnapshot(requestRef, (snapshot) => {
+          const data = snapshot.data();
+          if (!data) return;
+
+          if (data.status === 'completed') {
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve();
+          } else if (data.status === 'error') {
+            clearTimeout(timeout);
+            unsubscribe();
+            reject(new Error(data.error || 'Cancellation failed'));
+          }
+        });
+      });
+
+      // Refresh subscriptions to show updated status
+      setShowCancelConfirm(null);
+      setIsLoadingSubscriptions(true);
+      // Reload to refresh team data
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error cancelling subscription:', error);
+      alert(error.message || 'Failed to cancel subscription. Please try again.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleReactivateSubscription = async (teamId: string) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser?.email) {
+      alert('User not authenticated');
+      return;
+    }
+
+    setIsReactivating(teamId);
+    try {
+      // Use Firestore trigger approach to bypass IAM/CORS issues
+      const requestId = `${teamId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const requestRef = doc(db, 'reactivateSubscriptionRequests', requestId);
+
+      // Write the reactivation request to Firestore
+      await setDoc(requestRef, {
+        teamId,
+        userEmail: currentUser.email,
+        requestedBy: currentUser.uid,
+        requestedAt: Timestamp.now(),
+        status: 'pending',
+      });
+
+      // Wait for the Cloud Function to process the request
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          unsubscribe();
+          reject(new Error('Reactivation request timed out'));
+        }, 30000);
+
+        const unsubscribe = onSnapshot(requestRef, (snapshot) => {
+          const data = snapshot.data();
+          if (!data) return;
+
+          if (data.status === 'completed') {
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve();
+          } else if (data.status === 'error') {
+            clearTimeout(timeout);
+            unsubscribe();
+            reject(new Error(data.error || 'Reactivation failed'));
+          }
+        });
+      });
+
+      // Refresh subscriptions to show updated status
+      setIsLoadingSubscriptions(true);
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error reactivating subscription:', error);
+      alert(error.message || 'Failed to reactivate subscription. Please try again.');
+    } finally {
+      setIsReactivating(null);
+    }
+  };
+
   const handleOpenInExplorer = async () => {
     try {
       await invoke('reveal_in_explorer', { filePath: currentFolder });
@@ -315,6 +597,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             onClick={() => setActiveTab('general')}
           >
             General
+            {updateAvailable && <span className="tab-update-dot" />}
           </button>
           <button
             className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
@@ -438,6 +721,56 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {appMode === 'local' ? 'Switch to Team' : 'Switch to Local'}
                 </button>
               </div>
+
+              {/* App Version */}
+              <div className="section-divider" />
+              <div className="setting-item app-version-item">
+                <div className="setting-label">
+                  <span className="setting-title">App Version</span>
+                  <span className="setting-description">Conceptualize Desktop</span>
+                </div>
+                <span className="version-badge">v{appVersion}</span>
+              </div>
+              {/* Update Available Notification */}
+              {updateAvailable && (
+                <div className="update-available-card">
+                  <div className="update-available-content">
+                    <Sparkles size={18} className="update-sparkle" />
+                    <div className="update-available-text">
+                      <span className="update-available-title">
+                        Conceptualize v{latestVersion} is available!
+                      </span>
+                      {updateNotes && (
+                        <span className="update-available-notes">{updateNotes.split('\n')[0]}</span>
+                      )}
+                    </div>
+                  </div>
+                  {isUpdating ? (
+                    <div className="update-progress-container">
+                      <div className="update-progress-bar">
+                        <div className="update-progress-fill" style={{ width: `${updateProgress}%` }} />
+                      </div>
+                      <span className="update-progress-text">
+                        {updateProgress < 100 ? `${updateProgress}%` : 'Installing...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <button className="update-now-button" onClick={handleUpdate}>
+                      {manualUpdateRequired ? (
+                        <>
+                          <Download size={14} />
+                          Download
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={14} />
+                          Update
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
 
             </div>
           )}
@@ -569,6 +902,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       Sign Out
                     </button>
                   </div>
+
+                  {/* Delete Account */}
+                  <div className="section-divider" />
+                  <div className="delete-account-section">
+                    <h4>
+                      <Trash2 size={18} />
+                      Danger Zone
+                    </h4>
+                    <p className="delete-account-warning">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                    <button
+                      className="delete-account-button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 size={16} />
+                      Delete My Account
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div className="no-account-message">
@@ -654,10 +1006,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           </div>
                         )}
                         {sub.subscriptionStatus === 'subscribed' && (
-                          <div className="subscription-price-info">
-                            <CreditCard size={14} />
-                            <span>$3/user/month</span>
-                          </div>
+                          <>
+                            <div className="subscription-price-info">
+                              <CreditCard size={14} />
+                              <span>$3/user/month</span>
+                            </div>
+                            {sub.cancelAtPeriodEnd && sub.currentPeriodEnd && (
+                              <div className="subscription-cancel-pending">
+                                <Clock size={14} />
+                                <span>
+                                  Cancels on {sub.currentPeriodEnd.toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {/* Storage */}
@@ -689,12 +1055,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           )}
                           {sub.subscriptionStatus === 'subscribed' && (
                             <>
-                              <button className="subscription-manage-btn">
-                                Manage Subscription
-                              </button>
-                              <button className="subscription-cancel-btn">
-                                Cancel
-                              </button>
+                              {sub.cancelAtPeriodEnd ? (
+                                <button
+                                  className="subscription-reactivate-btn"
+                                  onClick={() => handleReactivateSubscription(sub.team.id)}
+                                  disabled={isReactivating === sub.team.id}
+                                >
+                                  <RefreshCw size={14} className={isReactivating === sub.team.id ? 'spinning' : ''} />
+                                  {isReactivating === sub.team.id ? 'Reactivating...' : 'Undo Cancellation'}
+                                </button>
+                              ) : (
+                                <button
+                                  className="subscription-cancel-btn"
+                                  onClick={() => setShowCancelConfirm(sub)}
+                                >
+                                  Cancel Subscription
+                                </button>
+                              )}
                             </>
                           )}
                           {sub.subscriptionStatus === 'free' && (
@@ -758,6 +1135,111 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             }}
           />
         )}
+
+        {/* Delete Account Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="delete-confirm-overlay" onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
+            <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="delete-confirm-header">
+                <AlertTriangle size={24} className="delete-warning-icon" />
+                <h3>Delete Account</h3>
+              </div>
+              <div className="delete-confirm-content">
+                <p className="delete-confirm-warning">
+                  This will permanently delete your account and all associated data including:
+                </p>
+                <ul className="delete-confirm-list">
+                  <li>All teams you own and their data</li>
+                  <li>Your membership in other teams</li>
+                  <li>All uploaded files and avatars</li>
+                  <li>Your profile and settings</li>
+                </ul>
+                <p className="delete-confirm-final">
+                  <strong>This action cannot be undone.</strong>
+                </p>
+                <div className="delete-confirm-input">
+                  <label>Type <strong>DELETE</strong> to confirm:</label>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    disabled={isDeleting}
+                    autoFocus
+                  />
+                </div>
+                {deleteError && (
+                  <p className="delete-error">{deleteError}</p>
+                )}
+              </div>
+              <div className="delete-confirm-actions">
+                <button
+                  className="delete-cancel-btn"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteConfirmText('');
+                    setDeleteError(null);
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="delete-confirm-btn"
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete My Account'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel Subscription Confirmation Modal */}
+        {showCancelConfirm && (
+          <div className="cancel-confirm-overlay" onClick={() => !isCancelling && setShowCancelConfirm(null)}>
+            <div className="cancel-confirm-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cancel-confirm-header">
+                <AlertTriangle size={24} className="cancel-warning-icon" />
+                <h3>Cancel Subscription</h3>
+              </div>
+              <div className="cancel-confirm-content">
+                <p className="cancel-confirm-team">
+                  Cancel Pro subscription for <strong>{showCancelConfirm.team.name}</strong>?
+                </p>
+                <p className="cancel-confirm-warning">
+                  Your subscription will remain active until the end of your current billing period. After that:
+                </p>
+                <ul className="cancel-confirm-list">
+                  <li>Team chat will be disabled</li>
+                  <li>Voice/video calls will be disabled</li>
+                  <li>Recordings will be inaccessible</li>
+                  <li>Storage will be limited to 2GB</li>
+                </ul>
+                <p className="cancel-confirm-note">
+                  You can reactivate your subscription at any time before the period ends.
+                </p>
+              </div>
+              <div className="cancel-confirm-actions">
+                <button
+                  className="cancel-keep-btn"
+                  onClick={() => setShowCancelConfirm(null)}
+                  disabled={isCancelling}
+                >
+                  Keep Subscription
+                </button>
+                <button
+                  className="cancel-confirm-btn"
+                  onClick={handleCancelSubscription}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -781,6 +1263,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             onClick={() => setActiveTab('general')}
           >
             General
+            {updateAvailable && <span className="tab-update-dot" />}
           </button>
           <button
             className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
@@ -904,6 +1387,56 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {appMode === 'local' ? 'Switch to Team' : 'Switch to Local'}
                 </button>
               </div>
+
+              {/* App Version */}
+              <div className="section-divider" />
+              <div className="setting-item app-version-item">
+                <div className="setting-label">
+                  <span className="setting-title">App Version</span>
+                  <span className="setting-description">Conceptualize Desktop</span>
+                </div>
+                <span className="version-badge">v{appVersion}</span>
+              </div>
+              {/* Update Available Notification */}
+              {updateAvailable && (
+                <div className="update-available-card">
+                  <div className="update-available-content">
+                    <Sparkles size={18} className="update-sparkle" />
+                    <div className="update-available-text">
+                      <span className="update-available-title">
+                        Conceptualize v{latestVersion} is available!
+                      </span>
+                      {updateNotes && (
+                        <span className="update-available-notes">{updateNotes.split('\n')[0]}</span>
+                      )}
+                    </div>
+                  </div>
+                  {isUpdating ? (
+                    <div className="update-progress-container">
+                      <div className="update-progress-bar">
+                        <div className="update-progress-fill" style={{ width: `${updateProgress}%` }} />
+                      </div>
+                      <span className="update-progress-text">
+                        {updateProgress < 100 ? `${updateProgress}%` : 'Installing...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <button className="update-now-button" onClick={handleUpdate}>
+                      {manualUpdateRequired ? (
+                        <>
+                          <Download size={14} />
+                          Download
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={14} />
+                          Update
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
 
             </div>
           )}
@@ -1035,6 +1568,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       Sign Out
                     </button>
                   </div>
+
+                  {/* Delete Account */}
+                  <div className="section-divider" />
+                  <div className="delete-account-section">
+                    <h4>
+                      <Trash2 size={18} />
+                      Danger Zone
+                    </h4>
+                    <p className="delete-account-warning">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                    <button
+                      className="delete-account-button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 size={16} />
+                      Delete My Account
+                    </button>
+                  </div>
                 </>
               ) : (
                 <div className="no-account-message">
@@ -1120,10 +1672,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           </div>
                         )}
                         {sub.subscriptionStatus === 'subscribed' && (
-                          <div className="subscription-price-info">
-                            <CreditCard size={14} />
-                            <span>$3/user/month</span>
-                          </div>
+                          <>
+                            <div className="subscription-price-info">
+                              <CreditCard size={14} />
+                              <span>$3/user/month</span>
+                            </div>
+                            {sub.cancelAtPeriodEnd && sub.currentPeriodEnd && (
+                              <div className="subscription-cancel-pending">
+                                <Clock size={14} />
+                                <span>
+                                  Cancels on {sub.currentPeriodEnd.toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {/* Storage */}
@@ -1155,12 +1721,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           )}
                           {sub.subscriptionStatus === 'subscribed' && (
                             <>
-                              <button className="subscription-manage-btn">
-                                Manage Subscription
-                              </button>
-                              <button className="subscription-cancel-btn">
-                                Cancel
-                              </button>
+                              {sub.cancelAtPeriodEnd ? (
+                                <button
+                                  className="subscription-reactivate-btn"
+                                  onClick={() => handleReactivateSubscription(sub.team.id)}
+                                  disabled={isReactivating === sub.team.id}
+                                >
+                                  <RefreshCw size={14} className={isReactivating === sub.team.id ? 'spinning' : ''} />
+                                  {isReactivating === sub.team.id ? 'Reactivating...' : 'Undo Cancellation'}
+                                </button>
+                              ) : (
+                                <button
+                                  className="subscription-cancel-btn"
+                                  onClick={() => setShowCancelConfirm(sub)}
+                                >
+                                  Cancel Subscription
+                                </button>
+                              )}
                             </>
                           )}
                           {sub.subscriptionStatus === 'free' && (
@@ -1224,6 +1801,111 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             setTimeout(() => window.location.reload(), 500);
           }}
         />
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="delete-confirm-overlay" onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
+          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="delete-confirm-header">
+              <AlertTriangle size={24} className="delete-warning-icon" />
+              <h3>Delete Account</h3>
+            </div>
+            <div className="delete-confirm-content">
+              <p className="delete-confirm-warning">
+                This will permanently delete your account and all associated data including:
+              </p>
+              <ul className="delete-confirm-list">
+                <li>All teams you own and their data</li>
+                <li>Your membership in other teams</li>
+                <li>All uploaded files and avatars</li>
+                <li>Your profile and settings</li>
+              </ul>
+              <p className="delete-confirm-final">
+                <strong>This action cannot be undone.</strong>
+              </p>
+              <div className="delete-confirm-input">
+                <label>Type <strong>DELETE</strong> to confirm:</label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  disabled={isDeleting}
+                  autoFocus
+                />
+              </div>
+              {deleteError && (
+                <p className="delete-error">{deleteError}</p>
+              )}
+            </div>
+            <div className="delete-confirm-actions">
+              <button
+                className="delete-cancel-btn"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText('');
+                  setDeleteError(null);
+                }}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="delete-confirm-btn"
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete My Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Subscription Confirmation Modal */}
+      {showCancelConfirm && (
+        <div className="cancel-confirm-overlay" onClick={() => !isCancelling && setShowCancelConfirm(null)}>
+          <div className="cancel-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="cancel-confirm-header">
+              <AlertTriangle size={24} className="cancel-warning-icon" />
+              <h3>Cancel Subscription</h3>
+            </div>
+            <div className="cancel-confirm-content">
+              <p className="cancel-confirm-team">
+                Cancel Pro subscription for <strong>{showCancelConfirm.team.name}</strong>?
+              </p>
+              <p className="cancel-confirm-warning">
+                Your subscription will remain active until the end of your current billing period. After that:
+              </p>
+              <ul className="cancel-confirm-list">
+                <li>Team chat will be disabled</li>
+                <li>Voice/video calls will be disabled</li>
+                <li>Recordings will be inaccessible</li>
+                <li>Storage will be limited to 2GB</li>
+              </ul>
+              <p className="cancel-confirm-note">
+                You can reactivate your subscription at any time before the period ends.
+              </p>
+            </div>
+            <div className="cancel-confirm-actions">
+              <button
+                className="cancel-keep-btn"
+                onClick={() => setShowCancelConfirm(null)}
+                disabled={isCancelling}
+              >
+                Keep Subscription
+              </button>
+              <button
+                className="cancel-confirm-btn"
+                onClick={handleCancelSubscription}
+                disabled={isCancelling}
+              >
+                {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

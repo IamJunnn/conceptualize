@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "conceptualize",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "identifier": "com.conceptualize.app",
   "build": {
     "frontendDist": "../dist",
@@ -50,7 +50,7 @@
       }
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEyNjYxMEZGNjlCMUUzODMKUldTRDQ3RnAveEJtb29tOHpmNXk3WkQ4UDA5RmRUcy9jeUMwQVhpeFZLdzI3MWMxMWtoVlQ5RWYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZGQkVGMjgxREZEMjdCRjMKUldUemU5TGZnZksrYjBka3p0Tks1aFlpYXdIZERJNEtMKzN2T0pnUUJqY2txUVppYUNsNGNtRGkK",
       "endpoints": [
         "https://conceptualize-c9a41.web.app/updates/latest.json"
       ]

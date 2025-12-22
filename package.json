@@ -1,6 +1,6 @@
 {
   "name": "conceptualize",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Conceptualize - An intelligent knowledge-shaping tool",
   "scripts": {
     "dev": "tauri dev",

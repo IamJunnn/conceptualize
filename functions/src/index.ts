@@ -119,13 +119,15 @@ export const generateLiveKitToken = functionsV1
  * Trigger generates token and updates document with:
  *   - token, url, status: 'completed'
  */
-export const processTokenRequest = functionsV1.firestore
+export const processTokenRequest = functionsV1
+  .firestore
   .document('tokenRequests/{requestId}')
   .onCreate(async (snapshot, context) => {
     const { requestId } = context.params;
     const requestData = snapshot.data();
-    // Use snapshot.ref directly - this is the Admin SDK reference that bypasses security rules
-    const requestRef = snapshot.ref;
+    // Use Admin SDK Firestore directly to bypass security rules
+    const adminDb = admin.firestore();
+    const requestRef = adminDb.collection('tokenRequests').doc(requestId);
 
     console.log(`Processing token request ${requestId}:`, requestData);
 
@@ -260,6 +262,413 @@ export const createStripeCheckout = functionsV1.https.onCall(async (data, contex
     throw new functionsV1.https.HttpsError('internal', error.message);
   }
 });
+
+/**
+ * Process Stripe checkout requests via Firestore trigger
+ * This bypasses IAM/CORS issues because:
+ * - Firestore writes use the Firebase SDK (no CORS)
+ * - Firestore triggers run server-side (no public access needed)
+ *
+ * Client writes to 'checkoutRequests/{requestId}' with:
+ *   - teamId, memberCount, customerEmail, successUrl, cancelUrl, requestedBy
+ * Trigger creates checkout session and updates document with:
+ *   - sessionUrl, status: 'completed'
+ */
+export const processCheckoutRequest = functionsV1
+  .firestore
+  .document('checkoutRequests/{requestId}')
+  .onCreate(async (snapshot, context) => {
+    const { requestId } = context.params;
+    const requestData = snapshot.data();
+    const adminDb = admin.firestore();
+    const requestRef = adminDb.collection('checkoutRequests').doc(requestId);
+
+    console.log(`Processing checkout request ${requestId}:`, requestData);
+
+    try {
+      const { teamId, memberCount, customerEmail, successUrl, cancelUrl, metadata, requestedBy } = requestData;
+
+      // Validate required fields
+      if (!teamId || !memberCount || !requestedBy) {
+        await requestRef.set({
+          status: 'error',
+          error: 'teamId, memberCount, and requestedBy are required',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Validate Stripe credentials
+      if (!process.env.STRIPE_SECRET_KEY || !PRICE_ID) {
+        await requestRef.set({
+          status: 'error',
+          error: 'Stripe credentials not configured',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Check if customer already exists
+      const teamDoc = await adminDb.collection('teams').doc(teamId).get();
+      let customerId = teamDoc.data()?.billing?.subscription?.stripeCustomerId;
+
+      if (!customerId) {
+        // Create new Stripe customer
+        const customer = await stripe.customers.create({
+          email: customerEmail,
+          metadata: {
+            teamId,
+            firebaseUid: requestedBy,
+          },
+        });
+        customerId = customer.id;
+      }
+
+      // Create checkout session
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        mode: 'subscription',
+        line_items: [
+          {
+            price: PRICE_ID,
+            quantity: memberCount,
+          },
+        ],
+        success_url: successUrl || 'https://conceptualize.app/billing/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: cancelUrl || 'https://conceptualize.app/billing/canceled',
+        metadata: {
+          teamId,
+          memberCount: memberCount.toString(),
+          ...metadata,
+        },
+        subscription_data: {
+          metadata: {
+            teamId,
+            memberCount: memberCount.toString(),
+          },
+        },
+      });
+
+      // Update the request document with the session URL
+      await requestRef.set({
+        status: 'completed',
+        sessionUrl: session.url,
+        sessionId: session.id,
+        customerId,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      console.log(`✅ Checkout session created for team ${teamId}: ${session.id}`);
+    } catch (error: any) {
+      console.error('Error processing checkout request:', error);
+
+      // Update with error status
+      try {
+        await requestRef.set({
+          status: 'error',
+          error: error.message || 'Failed to create checkout session',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (updateError) {
+        console.error('Failed to update error status:', updateError);
+      }
+    }
+  });
+
+/**
+ * Process checkout verification requests via Firestore trigger
+ * This bypasses IAM/CORS issues similar to processCheckoutRequest
+ *
+ * Client writes to 'verifyCheckoutRequests/{requestId}' with:
+ *   - sessionId, teamId, requestedBy
+ * Trigger verifies with Stripe and updates Firestore billing
+ */
+export const processVerifyCheckoutRequest = functionsV1
+  .firestore
+  .document('verifyCheckoutRequests/{requestId}')
+  .onCreate(async (snapshot, context) => {
+    const { requestId } = context.params;
+    const requestData = snapshot.data();
+    const adminDb = admin.firestore();
+    const requestRef = adminDb.collection('verifyCheckoutRequests').doc(requestId);
+
+    console.log(`Processing verify checkout request ${requestId}:`, requestData);
+
+    try {
+      const { sessionId, teamId } = requestData;
+
+      // Validate required fields
+      if (!sessionId || !teamId) {
+        await requestRef.set({
+          status: 'error',
+          error: 'sessionId and teamId are required',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Retrieve the checkout session from Stripe
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ['subscription'],
+      });
+
+      // Verify the session was successful
+      if (session.payment_status !== 'paid') {
+        await requestRef.set({
+          status: 'error',
+          error: 'Payment not completed',
+          paymentStatus: session.payment_status,
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Get the subscription
+      const subscription = session.subscription as Stripe.Subscription;
+
+      if (!subscription) {
+        await requestRef.set({
+          status: 'error',
+          error: 'No subscription found',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Update team billing info in Firestore
+      await adminDb.collection('teams').doc(teamId).update({
+        'billing.subscription.status': 'active',
+        'billing.subscription.stripeCustomerId': session.customer,
+        'billing.subscription.stripeSubscriptionId': subscription.id,
+        'billing.subscription.currentPeriodStart': subscription.current_period_start * 1000,
+        'billing.subscription.currentPeriodEnd': subscription.current_period_end * 1000,
+        'billing.subscription.cancelAtPeriodEnd': false,
+        'billing.lastSyncedAt': new Date(),
+      });
+
+      // Update the request document with success
+      await requestRef.set({
+        status: 'completed',
+        success: true,
+        subscriptionStatus: 'active',
+        subscriptionId: subscription.id,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      console.log(`✅ Checkout verified for team ${teamId}, subscription ${subscription.id}`);
+    } catch (error: any) {
+      console.error('Error processing verify checkout request:', error);
+
+      // Update with error status
+      try {
+        await requestRef.set({
+          status: 'error',
+          error: error.message || 'Failed to verify checkout session',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (updateError) {
+        console.error('Failed to update error status:', updateError);
+      }
+    }
+  });
+
+/**
+ * Process subscription cancellation requests via Firestore trigger
+ * This bypasses IAM/CORS issues with callable functions
+ *
+ * Client writes to 'cancelSubscriptionRequests/{requestId}' with:
+ *   - teamId, requestedBy, userEmail
+ * Trigger cancels subscription in Stripe and updates Firestore
+ */
+export const processCancelSubscriptionRequest = functionsV1
+  .firestore
+  .document('cancelSubscriptionRequests/{requestId}')
+  .onCreate(async (snapshot, context) => {
+    const { requestId } = context.params;
+    const requestData = snapshot.data();
+    const adminDb = admin.firestore();
+    const requestRef = adminDb.collection('cancelSubscriptionRequests').doc(requestId);
+
+    console.log(`Processing cancel subscription request ${requestId}:`, requestData);
+
+    try {
+      const { teamId, userEmail } = requestData;
+
+      // Validate required fields
+      if (!teamId || !userEmail) {
+        await requestRef.set({
+          status: 'error',
+          error: 'teamId and userEmail are required',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Get team and verify ownership
+      const teamDoc = await adminDb.collection('teams').doc(teamId).get();
+      if (!teamDoc.exists) {
+        await requestRef.set({
+          status: 'error',
+          error: 'Team not found',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      const teamData = teamDoc.data();
+      if (teamData?.createdBy?.toLowerCase() !== userEmail.toLowerCase()) {
+        await requestRef.set({
+          status: 'error',
+          error: 'Only team owner can cancel subscription',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Get subscription ID
+      const subscriptionId = teamData?.billing?.subscription?.stripeSubscriptionId;
+      if (!subscriptionId) {
+        await requestRef.set({
+          status: 'error',
+          error: 'No active subscription found',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Cancel at period end in Stripe
+      const subscription = await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: true,
+      });
+
+      // Update Firestore with cancellation info
+      await adminDb.collection('teams').doc(teamId).update({
+        'billing.subscription.cancelAtPeriodEnd': true,
+        'billing.subscription.currentPeriodEnd': subscription.current_period_end * 1000,
+      });
+
+      // Update the request document with success
+      await requestRef.set({
+        status: 'completed',
+        success: true,
+        cancelDate: new Date(subscription.current_period_end * 1000).toISOString(),
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      console.log(`✅ Subscription ${subscriptionId} set to cancel at period end for team ${teamId}`);
+    } catch (error: any) {
+      console.error('Error processing cancel subscription request:', error);
+
+      try {
+        await requestRef.set({
+          status: 'error',
+          error: error.message || 'Failed to cancel subscription',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (updateError) {
+        console.error('Failed to update error status:', updateError);
+      }
+    }
+  });
+
+/**
+ * Process subscription reactivation requests via Firestore trigger
+ * This bypasses IAM/CORS issues with callable functions
+ *
+ * Client writes to 'reactivateSubscriptionRequests/{requestId}' with:
+ *   - teamId, requestedBy, userEmail
+ * Trigger reactivates subscription in Stripe and updates Firestore
+ */
+export const processReactivateSubscriptionRequest = functionsV1
+  .firestore
+  .document('reactivateSubscriptionRequests/{requestId}')
+  .onCreate(async (snapshot, context) => {
+    const { requestId } = context.params;
+    const requestData = snapshot.data();
+    const adminDb = admin.firestore();
+    const requestRef = adminDb.collection('reactivateSubscriptionRequests').doc(requestId);
+
+    console.log(`Processing reactivate subscription request ${requestId}:`, requestData);
+
+    try {
+      const { teamId, userEmail } = requestData;
+
+      // Validate required fields
+      if (!teamId || !userEmail) {
+        await requestRef.set({
+          status: 'error',
+          error: 'teamId and userEmail are required',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Get team and verify ownership
+      const teamDoc = await adminDb.collection('teams').doc(teamId).get();
+      if (!teamDoc.exists) {
+        await requestRef.set({
+          status: 'error',
+          error: 'Team not found',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      const teamData = teamDoc.data();
+      if (teamData?.createdBy?.toLowerCase() !== userEmail.toLowerCase()) {
+        await requestRef.set({
+          status: 'error',
+          error: 'Only team owner can reactivate subscription',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Get subscription ID
+      const subscriptionId = teamData?.billing?.subscription?.stripeSubscriptionId;
+      if (!subscriptionId) {
+        await requestRef.set({
+          status: 'error',
+          error: 'No subscription found',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return;
+      }
+
+      // Remove cancel_at_period_end in Stripe
+      await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: false,
+      });
+
+      // Update Firestore
+      await adminDb.collection('teams').doc(teamId).update({
+        'billing.subscription.cancelAtPeriodEnd': false,
+        'billing.subscription.currentPeriodEnd': FieldValue.delete(),
+      });
+
+      // Update the request document with success
+      await requestRef.set({
+        status: 'completed',
+        success: true,
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      console.log(`✅ Subscription ${subscriptionId} reactivated for team ${teamId}`);
+    } catch (error: any) {
+      console.error('Error processing reactivate subscription request:', error);
+
+      try {
+        await requestRef.set({
+          status: 'error',
+          error: error.message || 'Failed to reactivate subscription',
+          processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (updateError) {
+        console.error('Failed to update error status:', updateError);
+      }
+    }
+  });
 
 /**
  * Create a Stripe Customer Portal session for managing subscription
@@ -1080,6 +1489,101 @@ export const getActiveEgress = functionsV1.https.onCall(async (data, context) =>
 
 // Import 2nd gen functions for public access support
 import { onRequest } from 'firebase-functions/v2/https';
+
+/**
+ * HTTP endpoint for LiveKit token generation (V1 with explicit CORS)
+ * Using V1 because it doesn't require IAM invoker policy
+ * Security is handled by verifying Firebase ID token
+ */
+export const generateLiveKitTokenHttp = functionsV1.https.onRequest(async (req, res) => {
+  // Handle CORS preflight
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  console.log('[generateLiveKitTokenHttp] Request received');
+
+  try {
+    // Verify Firebase ID token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[generateLiveKitTokenHttp] Missing or invalid authorization header');
+      res.status(401).json({ success: false, error: 'Missing or invalid authorization header' });
+      return;
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+      console.log('[generateLiveKitTokenHttp] Token verified for user:', decodedToken.email);
+    } catch (authError) {
+      console.error('[generateLiveKitTokenHttp] Token verification failed:', authError);
+      res.status(401).json({ success: false, error: 'Invalid token' });
+      return;
+    }
+
+    const { roomName, participantName, participantIdentity } = req.body;
+
+    if (!roomName || !participantName || !participantIdentity) {
+      console.log('[generateLiveKitTokenHttp] Missing required fields');
+      res.status(400).json({
+        success: false,
+        error: 'roomName, participantName, and participantIdentity are required'
+      });
+      return;
+    }
+
+    // Get LiveKit credentials from environment
+    const apiKey = process.env.LIVEKIT_API_KEY || LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET || LIVEKIT_API_SECRET;
+    const livekitUrl = process.env.LIVEKIT_URL || LIVEKIT_URL;
+
+    if (!apiKey || !apiSecret) {
+      console.error('[generateLiveKitTokenHttp] LiveKit credentials not configured');
+      res.status(500).json({ success: false, error: 'LiveKit API credentials not configured' });
+      return;
+    }
+
+    console.log('[generateLiveKitTokenHttp] Generating token for room:', roomName, 'participant:', participantName);
+
+    // Create access token with video grant
+    const token = new AccessToken(apiKey, apiSecret, {
+      identity: participantIdentity,
+      name: participantName,
+      ttl: 3600, // 1 hour
+    });
+
+    token.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    const jwt = await token.toJwt();
+    const wsUrl = livekitUrl.replace('https://', 'wss://');
+
+    console.log('[generateLiveKitTokenHttp] ✅ Token generated successfully');
+
+    res.json({
+      success: true,
+      token: jwt,
+      url: wsUrl,
+    });
+  } catch (error: any) {
+    console.error('[generateLiveKitTokenHttp] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * HTTP endpoint to get active egress (2nd Gen with public access)
@@ -2069,3 +2573,318 @@ export const checkPromoExpiration = functionsV1.pubsub
       throw error;
     }
   });
+
+/**
+ * Delete user account and all associated data
+ * This permanently deletes:
+ * - Firebase Auth account
+ * - All teams the user owns
+ * - User membership from teams they don't own
+ * - User's files from Firebase Storage
+ * - User profile data
+ */
+export const deleteUserAccount = functionsV1
+  .runWith({
+    timeoutSeconds: 300, // 5 minutes for cleanup
+    memory: '512MB',
+  })
+  .https.onCall(async (data, context) => {
+    // Verify authentication
+    if (!context.auth) {
+      throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const userEmail = context.auth.token.email?.toLowerCase();
+    const userId = context.auth.uid;
+
+    if (!userEmail || !userId) {
+      throw new functionsV1.https.HttpsError('invalid-argument', 'User email and ID are required');
+    }
+
+    console.log(`🗑️ Starting account deletion for ${userEmail} (${userId})`);
+
+    const db = admin.firestore();
+    const storage = admin.storage().bucket();
+
+    try {
+      // 1. Find all teams the user owns and delete them
+      const ownedTeamsSnapshot = await db.collection('teams')
+        .where('createdBy', '==', userEmail)
+        .get();
+
+      console.log(`Found ${ownedTeamsSnapshot.size} teams owned by user`);
+
+      for (const teamDoc of ownedTeamsSnapshot.docs) {
+        const teamId = teamDoc.id;
+        console.log(`Deleting team: ${teamId}`);
+
+        // Delete team subcollections
+        const subcollections = ['channels', 'notifications', 'todos', 'whiteboards'];
+        for (const subcollection of subcollections) {
+          const subDocs = await db.collection('teams').doc(teamId).collection(subcollection).get();
+          const batch = db.batch();
+          subDocs.forEach(doc => batch.delete(doc.ref));
+          if (subDocs.size > 0) {
+            await batch.commit();
+            console.log(`  Deleted ${subDocs.size} docs from ${subcollection}`);
+          }
+        }
+
+        // Delete team recordings
+        const recordingsSnapshot = await db.collection('teams').doc(teamId).collection('recordings').get();
+        if (recordingsSnapshot.size > 0) {
+          const batch = db.batch();
+          recordingsSnapshot.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`  Deleted ${recordingsSnapshot.size} recordings`);
+        }
+
+        // Delete team files from storage
+        try {
+          const [files] = await storage.getFiles({ prefix: `teams/${teamId}/` });
+          for (const file of files) {
+            await file.delete();
+          }
+          console.log(`  Deleted ${files.length} files from storage`);
+        } catch (storageError) {
+          console.error(`  Error deleting storage files for team ${teamId}:`, storageError);
+        }
+
+        // Delete team invites
+        const invitesSnapshot = await db.collection('team_invites')
+          .where('teamId', '==', teamId)
+          .get();
+        if (invitesSnapshot.size > 0) {
+          const batch = db.batch();
+          invitesSnapshot.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          console.log(`  Deleted ${invitesSnapshot.size} invites`);
+        }
+
+        // Delete promo redemptions for this team
+        const promoSnapshot = await db.collection('promoRedemptions')
+          .where('teamId', '==', teamId)
+          .get();
+        if (promoSnapshot.size > 0) {
+          const batch = db.batch();
+          promoSnapshot.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+        }
+
+        // Cancel Stripe subscription if exists
+        const teamData = teamDoc.data();
+        const subscriptionId = teamData?.billing?.subscription?.stripeSubscriptionId;
+        if (subscriptionId) {
+          try {
+            await stripe.subscriptions.cancel(subscriptionId);
+            console.log(`  Cancelled Stripe subscription ${subscriptionId}`);
+          } catch (stripeError) {
+            console.error(`  Error cancelling subscription:`, stripeError);
+          }
+        }
+
+        // Delete the team document
+        await teamDoc.ref.delete();
+        console.log(`  ✅ Team ${teamId} deleted`);
+      }
+
+      // 2. Remove user from teams they don't own
+      const allTeamsSnapshot = await db.collection('teams').get();
+      const memberEmailKey = userEmail.replace('.', '_DOT_').replace('@', '_AT_');
+
+      for (const teamDoc of allTeamsSnapshot.docs) {
+        const teamData = teamDoc.data();
+        const memberEmails = teamData.memberEmails || [];
+
+        if (memberEmails.includes(userEmail) && teamData.createdBy !== userEmail) {
+          console.log(`Removing user from team: ${teamDoc.id}`);
+
+          await teamDoc.ref.update({
+            [`members.${memberEmailKey}`]: FieldValue.delete(),
+            memberEmails: FieldValue.arrayRemove(userEmail),
+          });
+
+          // Update billing member count
+          const newCount = memberEmails.length - 1;
+          await teamDoc.ref.update({
+            'billing.memberCount': newCount,
+            'billing.monthlyPriceCents': newCount * 300,
+          });
+        }
+      }
+
+      // 3. Delete user's avatar from storage
+      try {
+        const [avatarFiles] = await storage.getFiles({ prefix: `avatars/${userId}/` });
+        for (const file of avatarFiles) {
+          await file.delete();
+        }
+        console.log(`Deleted ${avatarFiles.length} avatar files`);
+      } catch (avatarError) {
+        console.error('Error deleting avatar files:', avatarError);
+      }
+
+      // 4. Delete user document from Firestore (if exists)
+      try {
+        await db.collection('users').doc(userId).delete();
+        console.log('Deleted user document');
+      } catch (userDocError) {
+        console.error('Error deleting user document:', userDocError);
+      }
+
+      // 5. Delete Firebase Auth account
+      try {
+        await admin.auth().deleteUser(userId);
+        console.log('Deleted Firebase Auth account');
+      } catch (authError) {
+        console.error('Error deleting auth account:', authError);
+        throw new functionsV1.https.HttpsError('internal', 'Failed to delete authentication account');
+      }
+
+      console.log(`✅ Account deletion complete for ${userEmail}`);
+
+      return {
+        success: true,
+        message: 'Account and all associated data have been permanently deleted',
+      };
+    } catch (error: any) {
+      console.error('Error deleting user account:', error);
+      if (error instanceof functionsV1.https.HttpsError) {
+        throw error;
+      }
+      throw new functionsV1.https.HttpsError('internal', error.message);
+    }
+  });
+
+/**
+ * Cancel a team's Pro subscription
+ * Sets cancel_at_period_end in Stripe so user keeps access until period ends
+ */
+export const cancelSubscription = functionsV1.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { teamId } = data;
+  if (!teamId) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'Team ID is required');
+  }
+
+  const userEmail = context.auth.token.email?.toLowerCase();
+  if (!userEmail) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'User email is required');
+  }
+
+  const db = admin.firestore();
+
+  try {
+    // Get team and verify ownership
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      throw new functionsV1.https.HttpsError('not-found', 'Team not found');
+    }
+
+    const teamData = teamDoc.data();
+    if (teamData?.createdBy?.toLowerCase() !== userEmail) {
+      throw new functionsV1.https.HttpsError('permission-denied', 'Only team owner can cancel subscription');
+    }
+
+    // Get subscription ID
+    const subscriptionId = teamData?.billing?.subscription?.stripeSubscriptionId;
+    if (!subscriptionId) {
+      throw new functionsV1.https.HttpsError('failed-precondition', 'No active subscription found');
+    }
+
+    // Cancel at period end in Stripe
+    const subscription = await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    // Update Firestore with cancellation info
+    await db.collection('teams').doc(teamId).update({
+      'billing.subscription.cancelAtPeriodEnd': true,
+      'billing.subscription.currentPeriodEnd': new Date(subscription.current_period_end * 1000),
+    });
+
+    console.log(`✅ Subscription ${subscriptionId} set to cancel at period end for team ${teamId}`);
+
+    return {
+      success: true,
+      cancelDate: new Date(subscription.current_period_end * 1000).toISOString(),
+      message: 'Subscription will be cancelled at the end of the billing period',
+    };
+  } catch (error: any) {
+    console.error('Error cancelling subscription:', error);
+    if (error instanceof functionsV1.https.HttpsError) {
+      throw error;
+    }
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});
+
+/**
+ * Reactivate a cancelled subscription (before period ends)
+ * Removes cancel_at_period_end flag in Stripe
+ */
+export const reactivateSubscription = functionsV1.https.onCall(async (data, context) => {
+  // Verify authentication
+  if (!context.auth) {
+    throw new functionsV1.https.HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const { teamId } = data;
+  if (!teamId) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'Team ID is required');
+  }
+
+  const userEmail = context.auth.token.email?.toLowerCase();
+  if (!userEmail) {
+    throw new functionsV1.https.HttpsError('invalid-argument', 'User email is required');
+  }
+
+  const db = admin.firestore();
+
+  try {
+    // Get team and verify ownership
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      throw new functionsV1.https.HttpsError('not-found', 'Team not found');
+    }
+
+    const teamData = teamDoc.data();
+    if (teamData?.createdBy?.toLowerCase() !== userEmail) {
+      throw new functionsV1.https.HttpsError('permission-denied', 'Only team owner can reactivate subscription');
+    }
+
+    // Get subscription ID
+    const subscriptionId = teamData?.billing?.subscription?.stripeSubscriptionId;
+    if (!subscriptionId) {
+      throw new functionsV1.https.HttpsError('failed-precondition', 'No subscription found');
+    }
+
+    // Remove cancel_at_period_end in Stripe
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: false,
+    });
+
+    // Update Firestore
+    await db.collection('teams').doc(teamId).update({
+      'billing.subscription.cancelAtPeriodEnd': false,
+      'billing.subscription.currentPeriodEnd': FieldValue.delete(),
+    });
+
+    console.log(`✅ Subscription ${subscriptionId} reactivated for team ${teamId}`);
+
+    return {
+      success: true,
+      message: 'Subscription has been reactivated',
+    };
+  } catch (error: any) {
+    console.error('Error reactivating subscription:', error);
+    if (error instanceof functionsV1.https.HttpsError) {
+      throw error;
+    }
+    throw new functionsV1.https.HttpsError('internal', error.message);
+  }
+});

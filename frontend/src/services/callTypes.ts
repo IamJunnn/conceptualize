@@ -25,6 +25,7 @@ export interface Call {
   initiatorEmail: string;
   initiatorName: string;
   initiatorPhotoURL?: string;
+  initiatorCustomAvatar?: string; // DiceBear avatar (priority over photoURL)
 
   // Participants (emails of everyone invited)
   participants: string[];

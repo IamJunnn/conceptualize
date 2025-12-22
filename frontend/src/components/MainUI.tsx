@@ -147,6 +147,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   const [sidebarWidth, setSidebarWidth] = useState(250) // Pixels
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
   const [sessionLoaded, setSessionLoaded] = useState(false) // Track if session was restored
+  const [hasUpdate, setHasUpdate] = useState(false) // Track if update is available
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -1196,6 +1197,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             activeTab === 'special://whiteboard' ? 'whiteboard' :
             showSettings ? 'settings' : null
           }
+          hasUpdate={hasUpdate}
         />
 
         {/* Left Sidebar - Explorer */}
@@ -1572,6 +1574,7 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               setShowSettings(false);
               window.location.reload();
             }}
+            onUpdateAvailable={setHasUpdate}
           />
         </Suspense>
       )}
