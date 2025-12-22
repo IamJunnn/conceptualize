@@ -341,81 +341,6 @@ const CustomToolbar: React.FC<CustomToolbarProps> = ({
 
   return (
     <div className="custom-toolbar-container">
-      {/* Insert dropdown button */}
-      <div style={{ position: 'relative' }} ref={insertMenuRef}>
-        <button
-          className={`custom-toolbar-btn ${showInsertMenu ? 'active' : ''}`}
-          onClick={() => setShowInsertMenu(!showInsertMenu)}
-        >
-          <Plus />
-          Insert
-          <ChevronDown className="chevron" />
-        </button>
-
-        {showInsertMenu && (
-          <div className="insert-dropdown">
-            {/* App Content Section */}
-            <div className="insert-dropdown-section">
-              <div className="insert-dropdown-section-label">App Content</div>
-              {onInsertNoteFile && (
-                <button className="insert-dropdown-item" onClick={() => { onInsertNoteFile(); setShowInsertMenu(false); }}>
-                  <FileText />
-                  Note or file from app
-                </button>
-              )}
-              {onInsertTask && (
-                <button className="insert-dropdown-item" onClick={() => { onInsertTask(); setShowInsertMenu(false); }}>
-                  <CheckSquare />
-                  Tasks from app
-                </button>
-              )}
-              {onInsertMeeting && (
-                <button className="insert-dropdown-item" onClick={() => { onInsertMeeting(); setShowInsertMenu(false); }}>
-                  <Calendar />
-                  Meeting from app
-                </button>
-              )}
-              {onInsertRecording && (
-                <button className="insert-dropdown-item" onClick={() => { onInsertRecording(); setShowInsertMenu(false); }}>
-                  <MonitorPlay />
-                  Recording from app
-                </button>
-              )}
-            </div>
-
-            {/* Media Section */}
-            <div className="insert-dropdown-section">
-              <div className="insert-dropdown-section-label">Media</div>
-              <button className="insert-dropdown-item" onClick={handleInsertImage}>
-                <Image />
-                Image
-              </button>
-              <button className="insert-dropdown-item" onClick={handleInsertLink}>
-                <Link />
-                Link
-              </button>
-              <button className="insert-dropdown-item" onClick={handleInsertYoutube}>
-                <Youtube />
-                YouTube
-              </button>
-            </div>
-
-            {/* Collaboration Section */}
-            {onInsertMention && (
-              <div className="insert-dropdown-section">
-                <div className="insert-dropdown-section-label">Collaboration</div>
-                <button className="insert-dropdown-item" onClick={() => { onInsertMention(); setShowInsertMenu(false); }}>
-                  <AtSign />
-                  @Mention
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="toolbar-divider" />
-
       {/* Export dropdown button */}
       <div style={{ position: 'relative' }} ref={exportMenuRef}>
         <button
@@ -1445,7 +1370,6 @@ const WhiteboardPanel: React.FC<WhiteboardPanelProps> = ({
           border-radius: 4px;
           cursor: pointer;
           font-size: 12px;
-          color: #fff;
           white-space: nowrap;
         }
         .custom-font-dropdown > button {
@@ -1548,6 +1472,10 @@ const WhiteboardPanel: React.FC<WhiteboardPanelProps> = ({
         return editingId ? editor.getShape(editingId) : null;
       };
 
+      // Detect if we're in light mode
+      const isLightMode = document.querySelector('.tl-theme__light') !== null;
+      const textColor = isLightMode ? '#333' : '#fff';
+
       // Font dropdown
       const fontDropdown = document.createElement('div');
       fontDropdown.className = 'custom-font-dropdown';
@@ -1570,7 +1498,7 @@ const WhiteboardPanel: React.FC<WhiteboardPanelProps> = ({
       fontButton.style.setProperty('border-radius', '4px', 'important');
       fontButton.style.setProperty('cursor', 'pointer', 'important');
       fontButton.style.setProperty('font-size', '12px', 'important');
-      fontButton.style.setProperty('color', '#fff', 'important');
+      fontButton.style.setProperty('color', textColor, 'important');
       const updateFontButton = () => {
         const shape = getEditingShape();
         const customFont = shape?.meta?.customFont as string | undefined;
@@ -1705,7 +1633,7 @@ const WhiteboardPanel: React.FC<WhiteboardPanelProps> = ({
       sizeButton.style.setProperty('border-radius', '4px', 'important');
       sizeButton.style.setProperty('cursor', 'pointer', 'important');
       sizeButton.style.setProperty('font-size', '12px', 'important');
-      sizeButton.style.setProperty('color', '#fff', 'important');
+      sizeButton.style.setProperty('color', textColor, 'important');
       const sizes = [
         { name: 'Small', value: 's' },
         { name: 'Medium', value: 'm' },

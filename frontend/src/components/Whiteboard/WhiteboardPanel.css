@@ -318,7 +318,14 @@
   border: none !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
   padding: 6px !important;
-  gap: 4px !important;
+  gap: 9px !important;
+}
+
+/* Toolbar row - increase spacing between icons */
+.whiteboard-canvas .tlui-row,
+.whiteboard-canvas .tlui-main-toolbar__tools .tlui-row,
+.tlui-main-toolbar__tools .tlui-row {
+  gap: 10px !important;
 }
 
 /* Main toolbar container - light mode */
