@@ -4,7 +4,7 @@ import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { open } from '@tauri-apps/plugin-shell';
 
-const MANUAL_DOWNLOAD_URL = 'https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.5_x64-setup.exe';
+const MANUAL_DOWNLOAD_URL = 'https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.6_x64-setup.exe';
 const UPDATE_CHECK_URL = 'https://conceptualize-c9a41.web.app/updates/latest.json';
 
 // Compare semantic versions: returns true if v1 > v2
