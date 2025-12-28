@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
+import { getPlatformEventConfig, getIsMac } from '../../utils/platform';
 import { User } from '../../services/authServiceTauri';
 import { getUserTeams, Team, getPendingInvites, acceptTeamInvite, updateMemberProfile, getMemberAccessLevel, getGracePeriodDaysRemaining, TeamMember, isInternalProEmail, decodeEmailKey } from '../../services/teamService';
 import TitleBar from '../UI/TitleBar';
@@ -72,6 +73,9 @@ import './TeamMainUI.css';
 
 // Development mode flag
 const isDev = import.meta.env.DEV;
+
+// Platform-specific event configuration
+const platformConfig = getPlatformEventConfig();
 
 interface TeamMainUIProps {
   user: User;
@@ -1630,8 +1634,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
       const dx = Math.abs(e.clientX - dragStartPos.x);
       const dy = Math.abs(e.clientY - dragStartPos.y);
 
-      // Set dragging flag once threshold is exceeded
-      if ((dx > 5 || dy > 5) && !isDraggingRef.current) {
+      // Set dragging flag once platform-specific threshold is exceeded
+      if ((dx > platformConfig.dragDistanceThreshold || dy > platformConfig.dragDistanceThreshold) && !isDraggingRef.current) {
         if (isDev) console.log('🚀 [TEAM] DRAG START (tab):', draggedTab.fileName);
         setIsDragging(true);
       }
@@ -3170,10 +3174,12 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   if (loading) {
     return (
       <div className="team-main-ui">
-        <TitleBar
-          onSearchResultClick={() => {}}
-          rootPath=""
-        />
+        {!getIsMac() && (
+          <TitleBar
+            onSearchResultClick={() => {}}
+            rootPath=""
+          />
+        )}
         <div className="loading-state">
           <p>Loading your teams...</p>
         </div>
@@ -3184,10 +3190,12 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   if (teams.length === 0) {
     return (
       <div className="team-main-ui">
-        <TitleBar
-          onSearchResultClick={() => {}}
-          rootPath=""
-        />
+        {!getIsMac() && (
+          <TitleBar
+            onSearchResultClick={() => {}}
+            rootPath=""
+          />
+        )}
 
         {showCreateTeamModal && (
           <CreateTeamModal
@@ -3230,10 +3238,12 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   if (!selectedTeam || !storageBackend) {
     return (
       <div className="team-main-ui">
-        <TitleBar
-          onSearchResultClick={() => {}}
-          rootPath=""
-        />
+        {!getIsMac() && (
+          <TitleBar
+            onSearchResultClick={() => {}}
+            rootPath=""
+          />
+        )}
         <div className="loading-state">
           <p>Initializing team workspace...</p>
         </div>
@@ -3243,14 +3253,16 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
 
   return (
         <div className="team-main-ui">
-          <TitleBar
-            onSearchResultClick={(filePath: string, fileName: string) => {
-              // Search result click - open the file
-              handleSelectFile(filePath, fileName);
-            }}
-            onGuideOpen={handleGuideOpen}
-            rootPath={selectedTeam.driveFolderId}
-          />
+          {!getIsMac() && (
+            <TitleBar
+              onSearchResultClick={(filePath: string, fileName: string) => {
+                // Search result click - open the file
+                handleSelectFile(filePath, fileName);
+              }}
+              onGuideOpen={handleGuideOpen}
+              rootPath={selectedTeam.driveFolderId}
+            />
+          )}
 
           <div className="main-ui-content">
             {/* Icon Rail - Navigation */}

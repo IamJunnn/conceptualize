@@ -2,12 +2,16 @@ import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPl
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
 import { isImportantNote } from '../../utils/importantNotes';
 import { getLocalStorage, setLocalStorage } from '../../hooks/useLocalStorage';
+import { getPlatformEventConfig } from '../../utils/platform';
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './UnifiedSidebar.css';
 
 // Development mode flag
 const isDev = import.meta.env.DEV;
+
+// Platform-specific event configuration
+const platformConfig = getPlatformEventConfig();
 
 // Whiteboard metadata type (matching whiteboardTypes.ts)
 interface WhiteboardMeta {
@@ -64,6 +68,7 @@ interface TreeNodeProps {
     isDragging: boolean;
     draggedPath: string | null;
     dragStartPos: { x: number; y: number } | null;
+    dragStartTime: number | null;
     hoveredFolder: string | null;
     draggedNode: FileTreeNode | null;
   };
@@ -71,6 +76,7 @@ interface TreeNodeProps {
     isDragging: boolean;
     draggedPath: string | null;
     dragStartPos: { x: number; y: number } | null;
+    dragStartTime: number | null;
     hoveredFolder: string | null;
     draggedNode: FileTreeNode | null;
   }>>;
@@ -134,6 +140,9 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
   const [isHovered, setIsHovered] = React.useState(false);
   const [, forceUpdate] = React.useReducer(x => x + 1, 0);
 
+  // Mac trackpad fix: Use ref to track mousedown position for synchronous click detection
+  const mouseDownPosRef = React.useRef<{ x: number; y: number; time: number } | null>(null);
+
   // Refs for direct DOM manipulation (avoid re-renders during drag)
   const nodeRef = React.useRef<HTMLDivElement>(null);
   const childrenRef = React.useRef<HTMLDivElement>(null);
@@ -164,8 +173,8 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
     }
   }, [isAddingChild]);
 
-  // Check if this node is being dragged
-  const isDragging = dragState.isDragging && dragState.draggedPath === node.path;
+  // Check if this node is being dragged (used for visual styling only)
+  const isBeingDragged = dragState.isDragging && dragState.draggedPath === node.path;
 
   // Save folder state to localStorage when it changes
   const saveFolderState = (path: string, state: boolean) => {
@@ -181,22 +190,42 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
   }, [onContextMenu, node.path, node.type, node.name, node.id]);
 
   const handleClick = React.useCallback((e: React.MouseEvent) => {
-    // Don't handle click if we just finished dragging
-    if (isDragging) {
-      e.preventDefault();
-      return;
+    // Mac trackpad fix: Use synchronous ref-based detection instead of async React state
+    // Check if this click is actually the end of a drag operation
+    const mouseDownPos = mouseDownPosRef.current;
+
+    if (mouseDownPos) {
+      const dx = Math.abs(e.clientX - mouseDownPos.x);
+      const dy = Math.abs(e.clientY - mouseDownPos.y);
+      const timeSinceMouseDown = Date.now() - mouseDownPos.time;
+
+      // If significant movement occurred, this was a drag, not a click
+      // Use platform-specific thresholds
+      const wasDrag = (dx > platformConfig.dragDistanceThreshold || dy > platformConfig.dragDistanceThreshold)
+        && timeSinceMouseDown > platformConfig.dragTimeThreshold;
+
+      if (wasDrag) {
+        if (isDev) console.log('🚫 CLICK blocked (was drag):', { dx, dy, timeMs: timeSinceMouseDown });
+        mouseDownPosRef.current = null;
+        return;
+      }
     }
 
+    // Clear the ref
+    mouseDownPosRef.current = null;
+
     if (node.type === 'folder') {
+      if (isDev) console.log('📂 CLICK: toggle folder', node.path);
       setIsOpen((prev: boolean) => {
         const newState = !prev;
         saveFolderState(node.path, newState);
         return newState;
       });
     } else {
+      if (isDev) console.log('📄 CLICK: select file', node.path);
       onSelectFile(node.path, node.name);
     }
-  }, [isDragging, node.type, node.path, node.name, onSelectFile]);
+  }, [node.type, node.path, node.name, onSelectFile]);
 
   const handleChevronClick = React.useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -220,10 +249,15 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
       return;
     }
 
+    // Mac trackpad fix: Record mousedown position in ref for synchronous click detection
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY, time: Date.now() };
+
+    // Set drag state for potential drag operation
     setDragState({
       isDragging: false,
       draggedPath: node.path,
       dragStartPos: { x: e.clientX, y: e.clientY },
+      dragStartTime: Date.now(),
       hoveredFolder: null,
       draggedNode: node
     });
@@ -328,7 +362,7 @@ const TreeNode: React.FC<TreeNodeProps> = React.memo(({ node, onSelectFile, leve
     <div className="tree-node-container">
       <div
         ref={nodeRef}
-        className={`tree-node ${isHovered ? 'hovered' : ''} ${isDragging ? 'dragging' : ''} ${isHighlighted ? 'highlighted' : ''}`}
+        className={`tree-node ${isHovered ? 'hovered' : ''} ${isBeingDragged ? 'dragging' : ''} ${isHighlighted ? 'highlighted' : ''}`}
         style={{ paddingLeft: `${level * 12 + 4}px` }}
         data-file-path={node.path}
         onClick={handleClick}
@@ -571,18 +605,32 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     isDragging: boolean;
     draggedPath: string | null;
     dragStartPos: { x: number; y: number } | null;
+    dragStartTime: number | null;
     hoveredFolder: string | null; // Track which folder we're hovering over
     draggedNode: FileTreeNode | null; // Store the node being dragged
   }>({
     isDragging: false,
     draggedPath: null,
     dragStartPos: null,
+    dragStartTime: null,
     hoveredFolder: null,
     draggedNode: null
   });
 
   // Use ref to track hovered folder without causing re-renders during drag
   const hoveredFolderRef = React.useRef<string | null>(null);
+
+  // Ref to track dragState for event handlers (prevents re-registering listeners)
+  const dragStateRef = React.useRef(dragState);
+  React.useEffect(() => {
+    dragStateRef.current = dragState;
+  }, [dragState]);
+
+  // Ref for onMoveItem to avoid re-registering listeners
+  const onMoveItemRef = React.useRef(onMoveItem);
+  React.useEffect(() => {
+    onMoveItemRef.current = onMoveItem;
+  }, [onMoveItem]);
 
   // Ref for drag preview cursor position (using ref to avoid re-renders)
   const cursorPosRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -846,27 +894,35 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   }));
 
   // Global mouse event listeners for drag (single set for entire sidebar)
+  // Using refs to avoid re-registering listeners on every state change
   React.useEffect(() => {
     let rafId: number | null = null;
     let lastUpdateTime = 0;
     const THROTTLE_MS = 16; // ~60fps
 
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!dragState.dragStartPos || !dragState.draggedPath) {
+      const currentDragState = dragStateRef.current;
+      if (!currentDragState.dragStartPos || !currentDragState.draggedPath) {
         return;
       }
 
-      const dx = Math.abs(e.clientX - dragState.dragStartPos.x);
-      const dy = Math.abs(e.clientY - dragState.dragStartPos.y);
+      const dx = Math.abs(e.clientX - currentDragState.dragStartPos.x);
+      const dy = Math.abs(e.clientY - currentDragState.dragStartPos.y);
+      const timeSinceMouseDown = currentDragState.dragStartTime ? Date.now() - currentDragState.dragStartTime : 0;
 
-      // Only set dragging once when threshold is exceeded
-      if ((dx > 5 || dy > 5) && !dragState.isDragging) {
-        if (isDev) console.log('🚀 DRAG START:', dragState.draggedPath);
+      // Mac trackpad fix: Require BOTH distance AND time before starting drag
+      // This prevents tap-to-click micro-movements from triggering drag
+      // Use platform-specific thresholds
+      const distanceThresholdMet = dx > platformConfig.dragDistanceThreshold || dy > platformConfig.dragDistanceThreshold;
+      const timeThresholdMet = timeSinceMouseDown > platformConfig.dragTimeThreshold;
+
+      if (distanceThresholdMet && timeThresholdMet && !currentDragState.isDragging) {
+        if (isDev) console.log('🚀 DRAG START:', currentDragState.draggedPath);
         setDragState(prev => ({ ...prev, isDragging: true }));
       }
 
       // Throttle cursor position updates using requestAnimationFrame
-      if (dragState.isDragging || (dx > 5 || dy > 5)) {
+      if (currentDragState.isDragging || (distanceThresholdMet && timeThresholdMet)) {
         const now = Date.now();
         if (now - lastUpdateTime < THROTTLE_MS && rafId !== null) {
           return; // Skip this update
@@ -888,32 +944,36 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       }
     };
 
+    // Helper to reset drag state (used by multiple handlers)
+    const resetDragState = () => {
+      setDragState({
+        isDragging: false,
+        draggedPath: null,
+        dragStartPos: null,
+        dragStartTime: null,
+        hoveredFolder: null,
+        draggedNode: null
+      });
+      hoveredFolderRef.current = null;
+      cursorPosRef.current = null;
+      document.querySelectorAll('.drag-over, .folder-children-drag-over').forEach(el => {
+        el.classList.remove('drag-over', 'folder-children-drag-over');
+      });
+    };
+
     const handleGlobalMouseUp = async () => {
-      if (dragState.dragStartPos || dragState.draggedPath) {
-        if (isDev) console.log('🏁 DRAG END (global)');
+      const currentDragState = dragStateRef.current;
+      const currentOnMoveItem = onMoveItemRef.current;
+
+      if (currentDragState.dragStartPos || currentDragState.draggedPath) {
 
         // Store the drop info before resetting state - use ref for hoveredFolder
         const destPath = hoveredFolderRef.current;
-        const shouldMove = destPath && dragState.draggedPath && onMoveItem;
-        const sourcePath = dragState.draggedPath;
+        const shouldMove = destPath && currentDragState.draggedPath && currentOnMoveItem;
+        const sourcePath = currentDragState.draggedPath;
 
         // Reset drag state IMMEDIATELY for responsive UI
-        setDragState({
-          isDragging: false,
-          draggedPath: null,
-          dragStartPos: null,
-          hoveredFolder: null,
-          draggedNode: null
-        });
-
-        // Reset refs
-        hoveredFolderRef.current = null;
-        cursorPosRef.current = null;
-
-        // Clear all drag-over highlights via DOM
-        document.querySelectorAll('.drag-over, .folder-children-drag-over').forEach(el => {
-          el.classList.remove('drag-over', 'folder-children-drag-over');
-        });
+        resetDragState();
 
         // Perform the move operation in the background (non-blocking)
         if (shouldMove && sourcePath && destPath) {
@@ -931,7 +991,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           if (normalizedSource !== normalizedDest && !normalizedDest.startsWith(normalizedSource + '/')) {
             if (isDev) console.log('   ✅ Valid drop - moving item');
             // Execute move asynchronously without blocking UI
-            onMoveItem(sourcePath, destPath).catch((error) => {
+            currentOnMoveItem(sourcePath, destPath).catch((error) => {
               console.error('Error moving item:', error);
             });
           } else {
@@ -941,8 +1001,50 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       }
     };
 
+    // Mac trackpad fix: Reset drag state when window loses focus
+    // This handles cases where mouseup doesn't fire (e.g., three-finger gestures, app switching)
+    // IMPORTANT: On macOS with custom decorations, blur fires during normal clicks!
+    // Only reset if we're ACTUALLY dragging (not just mousedown), to avoid breaking normal clicks
+    const handleWindowBlur = () => {
+      const currentDragState = dragStateRef.current;
+      // Only reset if we're actually dragging and truly lost focus
+      if (currentDragState.isDragging && !document.hasFocus()) {
+        resetDragState();
+      }
+    };
+
+    // Mac trackpad fix: Reset drag state when tab becomes hidden
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        const currentDragState = dragStateRef.current;
+        if (currentDragState.dragStartPos || currentDragState.draggedPath) {
+          resetDragState();
+        }
+      }
+    };
+
+    // Mac trackpad fix: Handle interrupted pointer interactions
+    const handlePointerCancel = () => {
+      const currentDragState = dragStateRef.current;
+      if (currentDragState.dragStartPos || currentDragState.draggedPath) {
+        resetDragState();
+      }
+    };
+
+    // Touch cancel also resets drag state
+    const handleTouchCancel = () => {
+      const currentDragState = dragStateRef.current;
+      if (currentDragState.dragStartPos || currentDragState.draggedPath) {
+        resetDragState();
+      }
+    };
+
     document.addEventListener('mousemove', handleGlobalMouseMove);
     document.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('blur', handleWindowBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('pointercancel', handlePointerCancel);
+    document.addEventListener('touchcancel', handleTouchCancel);
 
     return () => {
       if (rafId !== null) {
@@ -950,8 +1052,12 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       }
       document.removeEventListener('mousemove', handleGlobalMouseMove);
       document.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('blur', handleWindowBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('pointercancel', handlePointerCancel);
+      document.removeEventListener('touchcancel', handleTouchCancel);
     };
-  }, [dragState, onMoveItem]);
+  }, []); // Empty deps - uses refs for current values
 
   const handleCreateNew = (type: 'new-note' | 'new-folder') => {
     onStartEditing(rootPath, type);

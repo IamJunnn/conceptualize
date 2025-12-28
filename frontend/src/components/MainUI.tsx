@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspens
 import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { writeFile } from '@tauri-apps/plugin-fs'
+import { getPlatformEventConfig, getIsMac } from '../utils/platform'
 import { UnifiedSidebar } from '../renderer/components/UnifiedSidebar'
 import TitleBar from './UI/TitleBar'
 import IconRail from './UI/IconRail'
@@ -51,6 +52,9 @@ const LoadingFallback = () => (
     Loading...
   </div>
 )
+
+// Platform-specific event configuration
+const platformConfig = getPlatformEventConfig();
 
 interface MainUIProps {
   rootPath: string
@@ -634,8 +638,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       const dx = Math.abs(e.clientX - dragStartPos.x);
       const dy = Math.abs(e.clientY - dragStartPos.y);
 
-      // Set dragging flag once threshold is exceeded
-      if ((dx > 5 || dy > 5) && !isDraggingRef.current) {
+      // Set dragging flag once platform-specific threshold is exceeded
+      if ((dx > platformConfig.dragDistanceThreshold || dy > platformConfig.dragDistanceThreshold) && !isDraggingRef.current) {
         if (isDev) console.log('🚀 DRAG START (tab):', draggedTab.fileName);
         setIsDragging(true);
       }
@@ -1164,12 +1168,14 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
 
   return (
     <div className="main-ui">
-      {/* Custom Title Bar */}
-      <TitleBar
-        onSearchResultClick={handleSearchResultClick}
-        onGuideOpen={handleGuideOpen}
-        rootPath={rootPath}
-      />
+      {/* Custom Title Bar - hidden on Mac (uses native decorations) */}
+      {!getIsMac() && (
+        <TitleBar
+          onSearchResultClick={handleSearchResultClick}
+          onGuideOpen={handleGuideOpen}
+          rootPath={rootPath}
+        />
+      )}
 
       <div className="main-ui-content">
         {/* Icon Rail - Navigation */}

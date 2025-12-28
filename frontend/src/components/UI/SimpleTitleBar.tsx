@@ -37,10 +37,11 @@ function SimpleTitleBar() {
         Conceptualize
       </div>
 
+      {/* Window Controls - using onPointerUp for better Mac trackpad support */}
       <div className="simple-title-bar-controls">
         <button
           className="simple-title-bar-button minimize"
-          onClick={handleMinimize}
+          onPointerUp={(e) => { e.stopPropagation(); handleMinimize(); }}
           title="Minimize"
         >
           <svg width="12" height="12" viewBox="0 0 12 12">
@@ -50,7 +51,7 @@ function SimpleTitleBar() {
 
         <button
           className="simple-title-bar-button maximize"
-          onClick={handleMaximize}
+          onPointerUp={(e) => { e.stopPropagation(); handleMaximize(); }}
           title={isMaximized ? 'Restore' : 'Maximize'}
         >
           {isMaximized ? (
@@ -67,7 +68,7 @@ function SimpleTitleBar() {
 
         <button
           className="simple-title-bar-button close"
-          onClick={handleClose}
+          onPointerUp={(e) => { e.stopPropagation(); handleClose(); }}
           title="Close"
         >
           <svg width="12" height="12" viewBox="0 0 12 12">

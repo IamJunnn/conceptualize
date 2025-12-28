@@ -258,14 +258,22 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
         onDoubleClick={handleMaximize}
       ></div>
 
-      {/* Window Controls */}
+      {/* Window Controls - using onPointerUp for better Mac trackpad support */}
       <div className="titlebar-controls">
-        <button className="titlebar-button minimize" onClick={handleMinimize} title="Minimize">
+        <button
+          className="titlebar-button minimize"
+          onPointerUp={(e) => { e.stopPropagation(); handleMinimize(); }}
+          title="Minimize"
+        >
           <svg width="14" height="14" viewBox="0 0 14 14">
             <rect x="2" y="6" width="10" height="2" fill="currentColor" />
           </svg>
         </button>
-        <button className="titlebar-button maximize" onClick={handleMaximize} title={isMaximized ? "Restore" : "Maximize"}>
+        <button
+          className="titlebar-button maximize"
+          onPointerUp={(e) => { e.stopPropagation(); handleMaximize(); }}
+          title={isMaximized ? "Restore" : "Maximize"}
+        >
           {isMaximized ? (
             // Restore icon - two separate windows
             <svg width="14" height="14" viewBox="0 0 14 14">
@@ -282,7 +290,11 @@ function TitleBar({ onSearchResultClick, onGuideOpen, rootPath }: TitleBarProps)
           )}
         </button>
 
-        <button className="titlebar-button close" onClick={handleClose} title="Close">
+        <button
+          className="titlebar-button close"
+          onPointerUp={(e) => { e.stopPropagation(); handleClose(); }}
+          title="Close"
+        >
           <svg width="14" height="14" viewBox="0 0 14 14">
             <path d="M2 2 L12 12 M12 2 L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
