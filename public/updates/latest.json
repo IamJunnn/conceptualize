@@ -1,11 +1,15 @@
 {
-  "version": "1.0.6",
-  "notes": "What's new in v1.0.6:\n- Fixed Stripe subscription checkout, verification, cancel and reactivate functions\n- Removed Insert button from whiteboard (Export only)\n- Increased whiteboard toolbar icon spacing\n- Fixed font/size dropdown visibility in light mode whiteboard\n- Various bug fixes and improvements",
-  "pub_date": "2025-12-22T00:00:00Z",
+  "version": "1.0.8",
+  "notes": "What's new in v1.0.8:\n- Team Schedule: Custom color picker with saved colors\n- Save up to 8 custom colors per user\n- Hover to delete saved custom colors\n- Improved color picker positioning\n- UI refinements for Team Availability panel",
+  "pub_date": "2025-12-31T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUemU5TGZnZksrYjJackRIdTRTWkdKcTJkRzl6TjBQL1QvNjhKYkhHKzJXQUo0d09aZE5vOEo3TVVuYzJhNzl4aXRhTUtJOTE2aU9pR3JRVldkY2Fid0hnT2ZNZEJTalE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzY2NDQzOTY4CWZpbGU6Y29uY2VwdHVhbGl6ZV8xLjAuNl94NjQtc2V0dXAuZXhlClgrY1p0UUk1Y2lUaExteWNCNG9kNzlmOTRncktzS3N2RUQxazNTZFM1MmNOdW5oQWZRMWNsbUpNNkRtUEV6bFJlMVZWeGo4NC84bVcrM3ByclF6Y0FRPT0K",
-      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.6_x64-setup.exe"
+      "signature": "",
+      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.8_x64-setup.exe"
+    },
+    "darwin-aarch64": {
+      "signature": "",
+      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.8_aarch64.dmg"
     }
   }
 }

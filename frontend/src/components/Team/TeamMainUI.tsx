@@ -3619,6 +3619,9 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                         teamId={selectedTeam.id}
                         members={selectedTeam.members}
                         currentUserEmail={user.email}
+                        currentUserId={user.uid}
+                        currentUserDisplayName={user.displayName || user.email.split('@')[0]}
+                        userTeams={teams.map(t => ({ id: t.id, name: t.name }))}
                         initialFilter={timelineFilter}
                         initialMeetingId={timelineMeetingId}
                       />
@@ -3920,6 +3923,9 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                           teamId={selectedTeam.id}
                           members={selectedTeam.members}
                           currentUserEmail={user.email}
+                          currentUserId={user.uid}
+                          currentUserDisplayName={user.displayName || user.email.split('@')[0]}
+                          userTeams={teams.map(t => ({ id: t.id, name: t.name }))}
                           initialFilter={timelineFilter}
                           initialMeetingId={timelineMeetingId}
                         />
@@ -4139,6 +4145,9 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                           teamId={selectedTeam.id}
                           members={selectedTeam.members}
                           currentUserEmail={user.email}
+                          currentUserId={user.uid}
+                          currentUserDisplayName={user.displayName || user.email.split('@')[0]}
+                          userTeams={teams.map(t => ({ id: t.id, name: t.name }))}
                           initialFilter={timelineFilter}
                           initialMeetingId={timelineMeetingId}
                         />

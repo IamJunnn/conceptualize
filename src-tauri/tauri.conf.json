@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "conceptualize",
-  "version": "1.0.6",
-  "identifier": "com.conceptualize.app",
+  "version": "1.0.8",
+  "identifier": "com.conceptualize.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -40,7 +40,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "Developer ID Application: JunSeop Son (96AL947RQ2)"
+    }
   },
   "plugins": {
     "deep-link": {

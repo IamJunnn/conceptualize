@@ -8,14 +8,18 @@ import DateChangeConfirmModal from '../Timeline/DateChangeConfirmModal';
 import RecurringEventModal, { RecurringEditScope } from '../Timeline/RecurringEventModal';
 import AddTeamTodoModal from './AddTeamTodoModal';
 import MeetingDetailsModal from './MeetingDetailsModal';
-import { Plus, ClipboardList, Calendar } from 'lucide-react';
+import TeamAvailabilityPanel from './TeamAvailabilityPanel';
+import { Plus, ClipboardList, Calendar, Users } from 'lucide-react';
 import './TeamTimelinePanel.css';
 
 interface TeamTimelinePanelProps {
   teamId: string;
   members: { [email: string]: TeamMember };
   currentUserEmail: string;
-  initialFilter?: 'all' | 'tasks' | 'meetings';
+  currentUserId?: string;
+  currentUserDisplayName?: string;
+  userTeams?: Array<{ id: string; name: string }>;
+  initialFilter?: 'all' | 'tasks' | 'meetings' | 'availability';
   initialMeetingId?: string;
 }
 
@@ -47,15 +51,18 @@ export default function TeamTimelinePanel({
   teamId,
   members,
   currentUserEmail,
+  currentUserId,
+  currentUserDisplayName,
+  userTeams,
   initialFilter,
   initialMeetingId,
 }: TeamTimelinePanelProps) {
   const [todos, setTodos] = useState<TeamTodo[]>([]);
-  const [activeTab, setActiveTab] = useState<'all' | 'tasks' | 'meetings'>(() => {
+  const [activeTab, setActiveTab] = useState<'all' | 'tasks' | 'meetings' | 'availability'>(() => {
     // Use initialFilter if provided, otherwise check localStorage, then default to 'all'
     if (initialFilter) return initialFilter;
     const saved = localStorage.getItem(`teamSchedule_activeTab_${teamId}`);
-    return (saved as 'all' | 'tasks' | 'meetings') || 'all';
+    return (saved as 'all' | 'tasks' | 'meetings' | 'availability') || 'all';
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -372,24 +379,44 @@ export default function TeamTimelinePanel({
               <span>Meetings</span>
               <span className="tab-count">{meetingsCount}</span>
             </button>
+            <button
+              className={`header-tab ${activeTab === 'availability' ? 'active' : ''}`}
+              onClick={() => setActiveTab('availability')}
+            >
+              <Users size={16} />
+              <span>Team Availability</span>
+            </button>
           </div>
         </div>
-        <button
-          className="add-task-btn"
-          onClick={() => handleAddNew()}
-          title={activeTab === 'meetings' ? 'Schedule Meeting' : 'Add Task'}
-        >
-          <Plus size={18} />
-        </button>
+        {activeTab !== 'availability' && (
+          <button
+            className="add-task-btn"
+            onClick={() => handleAddNew()}
+            title={activeTab === 'meetings' ? 'Schedule Meeting' : 'Add Task'}
+          >
+            <Plus size={18} />
+          </button>
+        )}
       </div>
 
-      <GanttTimeline
-        lists={filteredGanttLists}
-        members={members}
-        onTodoClick={handleTodoClick}
-        onAddTask={handleAddNew}
-        onDateDragEnd={handleDateDragEnd}
-      />
+      {activeTab === 'availability' ? (
+        <TeamAvailabilityPanel
+          teamId={teamId}
+          members={members}
+          currentUserEmail={currentUserEmail}
+          currentUserId={currentUserId || ''}
+          currentUserDisplayName={currentUserDisplayName || currentUserEmail.split('@')[0]}
+          userTeams={userTeams}
+        />
+      ) : (
+        <GanttTimeline
+          lists={filteredGanttLists}
+          members={members}
+          onTodoClick={handleTodoClick}
+          onAddTask={handleAddNew}
+          onDateDragEnd={handleDateDragEnd}
+        />
+      )}
 
       {/* Add/Edit Task or Meeting Modal */}
       {showAddModal && (
