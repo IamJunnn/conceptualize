@@ -1,0 +1,839 @@
+/* ScheduleGrid.css - Weekly schedule grid styling */
+
+.schedule-grid-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-primary, #1a1a1a);
+}
+
+.schedule-grid {
+  display: flex;
+  min-width: 800px;
+  user-select: none;
+}
+
+/* Time labels column */
+.schedule-grid-times {
+  width: 70px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color, #333);
+}
+
+.schedule-grid-header-cell {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  border-bottom: 1px solid var(--border-color, #333);
+  background: var(--bg-secondary, #242424);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.schedule-grid-time-label {
+  height: 60px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-right: 8px;
+  padding-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted, #666);
+  border-bottom: 1px solid var(--border-subtle, #2a2a2a);
+}
+
+/* Day columns */
+.schedule-grid-day-column {
+  flex: 1;
+  min-width: 100px;
+  border-right: 1px solid var(--border-color, #333);
+}
+
+.schedule-grid-day-column:last-child {
+  border-right: none;
+}
+
+.day-name {
+  font-weight: 600;
+  text-align: center;
+}
+
+.day-menu-btn {
+  position: absolute;
+  right: 4px;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-muted, #666);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.schedule-grid-header-cell:hover .day-menu-btn {
+  opacity: 1;
+}
+
+.day-menu-btn:hover {
+  color: var(--text-primary, #fff);
+}
+
+/* Hour grid */
+.schedule-grid-hours {
+  position: relative;
+  /* Height is set dynamically via inline style based on the configured time range */
+}
+
+.schedule-grid-hour-cell {
+  height: 60px;
+  border-bottom: 1px solid var(--border-subtle, #2a2a2a);
+  transition: background-color 0.2s;
+}
+
+.schedule-grid-day-column:hover .schedule-grid-hour-cell {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.02));
+}
+
+/* Time blocks */
+.schedule-block {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.1s, box-shadow 0.1s;
+  z-index: 1;
+}
+
+.schedule-block:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+.schedule-block.editing {
+  box-shadow: 0 0 0 2px var(--accent-color, #64c8ca);
+}
+
+.schedule-block-content {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.schedule-block-activity {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-block-time {
+  font-size: 10px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.schedule-block-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  border: none;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.schedule-block:hover .schedule-block-delete {
+  opacity: 1;
+}
+
+.schedule-block-delete:hover {
+  background: rgba(239, 68, 68, 0.8);
+}
+
+/* More indicator for overlapping blocks */
+.schedule-block-more {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Drag preview */
+.schedule-drag-preview {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  background: var(--accent-color, #64c8ca);
+  opacity: 0.4;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Context menu */
+.schedule-context-menu {
+  position: fixed;
+  background: var(--bg-secondary, #242424);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  z-index: 1000;
+  min-width: 180px;
+}
+
+.schedule-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.schedule-context-menu button:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+}
+
+.schedule-context-menu button.danger {
+  color: #ef4444;
+}
+
+.schedule-context-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* Block edit modal */
+.block-edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.block-edit-modal {
+  background: var(--bg-secondary, #242424);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.block-edit-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.block-edit-modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.block-edit-modal-header .close-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-muted, #666);
+  border-radius: 4px;
+}
+
+.block-edit-modal-header .close-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #fff);
+}
+
+.block-edit-modal form {
+  padding: 20px;
+}
+
+/* Force sentence case for all labels in the modal */
+.block-edit-modal label {
+  text-transform: none !important;
+}
+
+/* Days selection section (multi-day mode) */
+.block-edit-days-section {
+  margin-bottom: 16px;
+}
+
+.block-edit-days-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #888);
+  text-transform: none;
+}
+
+.block-edit-days-grid {
+  display: flex;
+  gap: 4px;
+}
+
+.day-select-btn {
+  flex: 1;
+  padding: 8px 4px;
+  background: var(--bg-tertiary, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  color: var(--text-secondary, #888);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.day-select-btn:hover {
+  border-color: var(--border-hover, #444);
+  color: var(--text-primary, #fff);
+}
+
+.day-select-btn.selected {
+  background: var(--accent-color, #64c8ca);
+  border-color: var(--accent-color, #64c8ca);
+  color: #000;
+}
+
+/* Time section with editable inputs */
+.block-edit-time-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-tertiary, #1a1a1a);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.block-edit-day {
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  font-size: 14px;
+  min-width: 40px;
+}
+
+.block-edit-time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.time-select {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg-primary, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 6px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+}
+
+.time-select:hover {
+  border-color: var(--border-hover, #444);
+}
+
+.time-select:focus {
+  outline: none;
+  border-color: var(--accent-color, #64c8ca);
+}
+
+.time-separator {
+  color: var(--text-muted, #666);
+  font-size: 13px;
+}
+
+/* Legacy time info (read-only display) */
+.block-edit-time-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary, #1a1a1a);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-secondary, #888);
+}
+
+.block-edit-time-info span:first-child {
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #888);
+  text-transform: none;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-primary, #1a1a1a);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  color: var(--text-primary, #fff);
+  font-size: 14px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--accent-color, #64c8ca);
+}
+
+.form-group input::placeholder {
+  color: var(--text-muted, #666);
+}
+
+/* Color picker */
+.color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.2s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px var(--bg-secondary, #242424);
+}
+
+/* Custom color picker button */
+.custom-color-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary, #1a1a1a);
+  border: 2px dashed var(--border-color, #444);
+  color: var(--text-muted, #666);
+}
+
+.custom-color-btn:hover {
+  border-color: var(--text-secondary, #888);
+  color: var(--text-secondary, #888);
+}
+
+.custom-color-btn.selected {
+  border-style: solid;
+  border-color: #fff;
+}
+
+/* Custom color picker wrapper - positions picker below button */
+.custom-color-picker-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.color-input-positioned {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Custom color wrapper with delete button */
+.custom-color-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.custom-color-wrapper .color-delete-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1px solid var(--bg-secondary, #242424);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.custom-color-wrapper:hover .color-delete-btn {
+  opacity: 1;
+}
+
+.custom-color-wrapper .color-delete-btn:hover {
+  background: #dc2626;
+}
+
+/* Modal actions */
+.block-edit-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #333);
+}
+
+.block-edit-modal-actions .right-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.block-edit-modal-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.block-edit-modal-actions .delete-btn {
+  background: none;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+}
+
+.block-edit-modal-actions .delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.block-edit-modal-actions .cancel-btn {
+  background: none;
+  border: 1px solid var(--border-color, #333);
+  color: var(--text-secondary, #888);
+}
+
+.block-edit-modal-actions .cancel-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #fff);
+}
+
+.block-edit-modal-actions .save-btn {
+  background: var(--accent-color, #64c8ca);
+  border: none;
+  color: #000;
+}
+
+.block-edit-modal-actions .save-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.block-edit-modal-actions .save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+/* Medium screens (< 1200px) */
+@media (max-width: 1200px) {
+  .schedule-grid {
+    min-width: 600px;
+  }
+
+  .schedule-grid-times {
+    width: 60px;
+  }
+
+  .schedule-grid-time-label {
+    font-size: 10px;
+    padding-right: 6px;
+  }
+
+  .schedule-grid-day-column {
+    min-width: 80px;
+  }
+
+  .schedule-grid-header-cell {
+    font-size: 11px;
+    height: 36px;
+  }
+
+  .schedule-block-activity {
+    font-size: 11px;
+  }
+
+  .schedule-block-time {
+    font-size: 9px;
+  }
+
+  .schedule-block-content {
+    padding: 4px 6px;
+  }
+}
+
+/* Small screens (< 900px) */
+@media (max-width: 900px) {
+  .schedule-grid {
+    min-width: 500px;
+  }
+
+  .schedule-grid-times {
+    width: 50px;
+  }
+
+  .schedule-grid-time-label {
+    height: 50px;
+    font-size: 9px;
+  }
+
+  .schedule-grid-day-column {
+    min-width: 60px;
+  }
+
+  .schedule-grid-header-cell {
+    font-size: 10px;
+    height: 32px;
+    gap: 2px;
+  }
+
+  .day-menu-btn {
+    padding: 1px;
+  }
+
+  .day-menu-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .schedule-grid-hour-cell {
+    height: 50px;
+  }
+
+  .schedule-block {
+    left: 2px;
+    right: 2px;
+    border-radius: 4px;
+  }
+
+  .schedule-block-content {
+    padding: 3px 4px;
+  }
+
+  .schedule-block-activity {
+    font-size: 10px;
+  }
+
+  .schedule-block-time {
+    font-size: 8px;
+  }
+
+  .schedule-block-delete {
+    padding: 2px;
+    top: 2px;
+    right: 2px;
+  }
+
+  .schedule-block-delete svg {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Modal adjustments */
+  .block-edit-modal {
+    max-width: 350px;
+    margin: 16px;
+  }
+
+  .block-edit-modal-header {
+    padding: 12px 16px;
+  }
+
+  .block-edit-modal form {
+    padding: 16px;
+  }
+
+  .block-edit-time-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .block-edit-time-inputs {
+    width: 100%;
+  }
+
+  .time-select {
+    font-size: 12px;
+    padding: 6px 8px;
+    padding-right: 24px;
+  }
+
+  .form-group input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .color-swatch {
+    width: 28px;
+    height: 28px;
+  }
+
+  .block-edit-modal-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .block-edit-modal-actions button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
+
+/* Extra small screens (< 700px) */
+@media (max-width: 700px) {
+  .schedule-grid {
+    min-width: 400px;
+  }
+
+  .schedule-grid-times {
+    width: 45px;
+  }
+
+  .schedule-grid-time-label {
+    height: 40px;
+    font-size: 8px;
+    padding-right: 4px;
+  }
+
+  .schedule-grid-day-column {
+    min-width: 50px;
+  }
+
+  .schedule-grid-header-cell {
+    font-size: 9px;
+    height: 28px;
+  }
+
+  /* Hide menu button on very small screens */
+  .day-menu-btn {
+    display: none;
+  }
+
+  .schedule-grid-hour-cell {
+    height: 40px;
+  }
+
+  .schedule-block-activity {
+    font-size: 9px;
+  }
+
+  .schedule-block-time {
+    display: none;
+  }
+
+  /* Full-screen modal on mobile */
+  .block-edit-modal-overlay {
+    padding: 0;
+  }
+
+  .block-edit-modal {
+    max-width: none;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .block-edit-modal form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .block-edit-modal-actions {
+    margin-top: auto;
+  }
+
+  /* Context menu adjustments */
+  .schedule-context-menu {
+    min-width: 160px;
+  }
+
+  .schedule-context-menu button {
+    padding: 10px;
+    font-size: 12px;
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "conceptualize",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Conceptualize - An intelligent knowledge-shaping tool",
   "scripts": {
     "dev": "tauri dev",
@@ -31,6 +31,9 @@
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.4.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@heroicons/react": "^2.2.0",
     "@livekit/components-react": "^2.9.16",
     "@livekit/track-processors": "^0.7.0",

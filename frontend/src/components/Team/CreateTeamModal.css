@@ -42,11 +42,6 @@
   color: #b0b0b0;
   font-size: 14px;
   font-weight: 500;
-  text-transform: uppercase;
-}
-
-.form-group label.members-label {
-  text-transform: none;
 }
 
 .form-group input,
