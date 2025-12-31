@@ -50,6 +50,30 @@ service cloud.firestore {
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Work schedules collection (for team availability feature)
+    match /workSchedules/{scheduleId} {
+      // Users can read their own schedule OR schedules that are shared with any team
+      // (client filters by team membership via query)
+      allow read: if isAuthenticated() && (
+        request.auth.uid == scheduleId ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.sharedWithTeams.size() > 0
+      );
+
+      // Users can only create/update their own schedule
+      allow create: if isAuthenticated() &&
+        request.auth.uid == scheduleId &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow update: if isAuthenticated() &&
+        request.auth.uid == scheduleId &&
+        resource.data.userId == request.auth.uid;
+
+      // Users can only delete their own schedule
+      allow delete: if isAuthenticated() &&
+        request.auth.uid == scheduleId;
+    }
+
     // Teams collection
     match /teams/{teamId} {
       // For reads, check directly against the document's memberEmails array
