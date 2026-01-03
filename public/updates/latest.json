@@ -1,15 +1,15 @@
 {
-  "version": "1.0.8",
-  "notes": "What's new in v1.0.8:\n- Team Schedule: Custom color picker with saved colors\n- Save up to 8 custom colors per user\n- Hover to delete saved custom colors\n- Improved color picker positioning\n- UI refinements for Team Availability panel",
-  "pub_date": "2025-12-31T00:00:00Z",
+  "version": "1.0.9",
+  "notes": "What's new in v1.0.9:\n- Improved message notification system with cross-device sync\n- Unread counts now update instantly when viewing chats\n- Settings Teams tab shows all connected accounts with teams\n- Switch between accounts and teams from Settings",
+  "pub_date": "2026-01-02T00:00:00Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "",
-      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.8_x64-setup.exe"
+      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.9_x64-setup.exe"
     },
     "darwin-aarch64": {
-      "signature": "",
-      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.8_aarch64.dmg"
+      "signature": "untrusted comment: signature from minisign secret key\nRURAKkD/OwKw6Nz5ZTACsqWm6WY4MtKGYPQNwyAgKxZl0WDSkKTGKZDLE4Xxlc7CZsYLmMtH3ZSYzYD2dbtTrY1uW+X+Lf5EIQw=\ntrusted comment: timestamp:1767399215\tfile:conceptualize_1.0.9_aarch64.app.tar.gz\thashed\nv4yY4vDm+rBz+Ej/GI+a4Kjt4tv/a1QMAjyuW5brJyGmgB1rDJgDTYce+hWdQDU5LmhkvGXVdwEWa3WyhdKuDA==",
+      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.9_aarch64.app.tar.gz"
     }
   }
 }
