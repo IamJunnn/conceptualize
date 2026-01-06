@@ -5,11 +5,11 @@
   "platforms": {
     "windows-x86_64": {
       "signature": "",
-      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.9_x64-setup.exe"
+      "url": ""
     },
     "darwin-aarch64": {
-      "signature": "untrusted comment: signature from minisign secret key\nRURAKkD/OwKw6Nz5ZTACsqWm6WY4MtKGYPQNwyAgKxZl0WDSkKTGKZDLE4Xxlc7CZsYLmMtH3ZSYzYD2dbtTrY1uW+X+Lf5EIQw=\ntrusted comment: timestamp:1767399215\tfile:conceptualize_1.0.9_aarch64.app.tar.gz\thashed\nv4yY4vDm+rBz+Ej/GI+a4Kjt4tv/a1QMAjyuW5brJyGmgB1rDJgDTYce+hWdQDU5LmhkvGXVdwEWa3WyhdKuDA==",
-      "url": "https://conceptualize-c9a41.web.app/downloads/conceptualize_1.0.9_aarch64.app.tar.gz"
+      "signature": "",
+      "url": ""
     }
   }
 }
