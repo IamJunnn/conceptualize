@@ -586,6 +586,73 @@ export async function getUserTeams(userEmail: string): Promise<Team[]> {
 }
 
 /**
+ * Get all teams for a user (includes teams where user is owner via createdBy)
+ * This handles cases where memberEmails might not include the owner
+ */
+export async function getAllTeamsForUser(userEmail: string): Promise<Team[]> {
+  const normalizedEmail = userEmail.toLowerCase();
+  const teamsMap = new Map<string, Team>();
+
+  const processDoc = (docSnap: any) => {
+    if (teamsMap.has(docSnap.id)) return;
+
+    const data = docSnap.data();
+    const members: { [email: string]: TeamMember } = {};
+    if (data.members) {
+      Object.entries(data.members).forEach(([encodedEmail, member]: [string, any]) => {
+        const email = decodeEmailKey(encodedEmail).toLowerCase();
+        members[email] = {
+          ...member,
+          joinedAt: member.joinedAt?.toDate(),
+        };
+      });
+    }
+
+    teamsMap.set(docSnap.id, {
+      id: docSnap.id,
+      name: data.name,
+      description: data.description || '',
+      createdBy: data.createdBy,
+      createdAt: data.createdAt?.toDate(),
+      driveFolderId: data.driveFolderId || docSnap.id,
+      memberEmails: (data.memberEmails || []).map((e: string) => e.toLowerCase()),
+      members,
+    } as Team);
+  };
+
+  // Query 1: Teams where user is a member (this should always work)
+  try {
+    const memberQuery = query(
+      collection(db, 'teams'),
+      where('memberEmails', 'array-contains', normalizedEmail)
+    );
+    const memberSnapshot = await getDocs(memberQuery);
+    memberSnapshot.docs.forEach(processDoc);
+    console.log(`✅ Found ${memberSnapshot.docs.length} teams via memberEmails for ${userEmail}`);
+  } catch (error) {
+    console.error('Failed memberEmails query:', error);
+  }
+
+  // Query 2: Teams where user is owner (createdBy) - may fail due to Firestore rules
+  try {
+    const ownerQuery = query(
+      collection(db, 'teams'),
+      where('createdBy', '==', normalizedEmail)
+    );
+    const ownerSnapshot = await getDocs(ownerQuery);
+    ownerSnapshot.docs.forEach(processDoc);
+    console.log(`✅ Found ${ownerSnapshot.docs.length} teams via createdBy for ${userEmail}`);
+  } catch (error) {
+    // This query may fail due to Firestore rules - that's ok, memberEmails should cover most cases
+    console.log('createdBy query not permitted (this is expected)');
+  }
+
+  const teams = Array.from(teamsMap.values());
+  console.log(`✅ Found ${teams.length} total teams for ${userEmail}`);
+  return teams;
+}
+
+/**
  * Get pending invites for a user
  * Handles backwards compatibility with invites created before lowercase normalization
  */

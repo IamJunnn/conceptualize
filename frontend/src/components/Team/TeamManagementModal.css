@@ -202,6 +202,50 @@
   }
 }
 
+.member-email.clickable,
+.invitation-email.clickable {
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.member-email.clickable:hover {
+  color: #64c8ca;
+  background: rgba(100, 200, 202, 0.1);
+}
+
+.invitation-email.clickable:hover {
+  color: #c44fc4;
+  background: rgba(196, 79, 196, 0.1);
+}
+
+.member-email.clickable.copied,
+.invitation-email.clickable.copied {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .member-email.clickable:hover {
+    color: #64c8ca;
+    background: rgba(100, 200, 202, 0.15);
+  }
+
+  .invitation-email.clickable:hover {
+    color: #e879f9;
+    background: rgba(232, 121, 249, 0.15);
+  }
+
+  .member-email.clickable.copied,
+  .invitation-email.clickable.copied {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.15);
+  }
+}
+
 .member-meta {
   font-size: 12px;
   color: #9ca3af;

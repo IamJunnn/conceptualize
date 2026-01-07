@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithGoogle } from '../../services/authServiceTauri';
+import { signInWithGoogle, signUpWithEmail, signInWithEmail, sendPasswordResetEmail } from '../../services/authServiceTauri';
 import SimpleTitleBar from '../UI/SimpleTitleBar';
 import './LoginScreen.css';
 
@@ -8,17 +8,40 @@ interface LoginScreenProps {
   onBack?: () => void;
 }
 
+type AuthMode = 'signin' | 'signup' | 'reset';
+
 const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSignUp, setIsSignUp] = useState(true); // Default to sign-up mode
+  const [success, setSuccess] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>('signup');
+
+  // Form fields
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+
+  const resetForm = () => {
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setDisplayName('');
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleModeChange = (mode: AuthMode) => {
+    resetForm();
+    setAuthMode(mode);
+  };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
-      // This will open system browser, wait for callback, and complete sign-in
       await signInWithGoogle();
       setLoading(false);
       onLoginSuccess();
@@ -32,6 +55,90 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
       } else {
         setError('Failed to sign in. Please try again.');
       }
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    // Validation
+    if (!email || !password || !displayName) {
+      setError('Please fill in all fields.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await signUpWithEmail(email, password, displayName);
+      setLoading(false);
+      setSuccess('Account created! Please check your email to verify your account.');
+      // Still allow login, but show verification reminder
+      setTimeout(() => {
+        onLoginSuccess();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Sign up error:', err);
+      setError(err.message || 'Failed to create account. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!email || !password) {
+      setError('Please enter your email and password.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await signInWithEmail(email, password);
+      setLoading(false);
+      onLoginSuccess();
+    } catch (err: any) {
+      console.error('Sign in error:', err);
+      setError(err.message || 'Failed to sign in. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!email) {
+      setError('Please enter your email address.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await sendPasswordResetEmail(email);
+      setLoading(false);
+      setSuccess('If an account exists with this email, you will receive a password reset link.');
+    } catch (err: any) {
+      console.error('Password reset error:', err);
+      setError(err.message || 'Failed to send reset email. Please try again.');
       setLoading(false);
     }
   };
@@ -50,18 +157,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
         )}
 
         <div className="login-header">
-          <img src="/logo.svg" alt="Conceptualize" className="login-logo" />
           <h1>Conceptualize</h1>
           <p className="login-subtitle">Collaborative Knowledge Management</p>
         </div>
 
         <div className="login-content">
-          <h2>{isSignUp ? 'Get Started' : 'Welcome Back'}</h2>
+          <h2>
+            {authMode === 'signup' && 'Create Account'}
+            {authMode === 'signin' && 'Welcome Back'}
+            {authMode === 'reset' && 'Reset Password'}
+          </h2>
           <p className="login-description">
-            {isSignUp
-              ? 'Create your account with Google to start collaborating with your team.'
-              : 'Sign in with your Google account to access Conceptualize.'
-            }
+            {authMode === 'signup' && 'Sign up to start collaborating with your team.'}
+            {authMode === 'signin' && 'Sign in to access Conceptualize.'}
+            {authMode === 'reset' && 'Enter your email to receive a password reset link.'}
           </p>
 
           {error && (
@@ -76,64 +185,198 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onBack }) => 
             </div>
           )}
 
-          <button
-            className="google-signin-button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="button-loading">
-                <div className="spinner"></div>
-                <span>Signing in...</span>
+          {success && (
+            <div className="login-success">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path
+                  d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-2 15l-5-5 1.41-1.41L8 12.17l7.59-7.59L17 6l-9 9z"
+                  fill="currentColor"
+                />
+              </svg>
+              <span>{success}</span>
+            </div>
+          )}
+
+          {/* Email/Password Form */}
+          {authMode !== 'reset' && (
+            <form onSubmit={authMode === 'signup' ? handleEmailSignUp : handleEmailSignIn} className="auth-form">
+              {authMode === 'signup' && (
+                <div className="form-group">
+                  <label htmlFor="displayName">Display Name</label>
+                  <input
+                    type="text"
+                    id="displayName"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Your name"
+                    disabled={loading}
+                    autoComplete="name"
+                  />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="email">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={loading}
+                  autoComplete="email"
+                />
               </div>
-            ) : (
-              <>
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                  <path
-                    fill="#4285F4"
-                    d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
+
+              <div className="form-group">
+                <label htmlFor="password">Password</label>
+                <input
+                  type="password"
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={authMode === 'signup' ? 'At least 6 characters' : 'Enter your password'}
+                  disabled={loading}
+                  autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                />
+              </div>
+
+              {authMode === 'signup' && (
+                <div className="form-group">
+                  <label htmlFor="confirmPassword">Confirm Password</label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    disabled={loading}
+                    autoComplete="new-password"
                   />
-                  <path
-                    fill="#34A853"
-                    d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.17.282-1.709V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.335z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                  />
-                </svg>
-                <span>{isSignUp ? 'Sign up with Google' : 'Sign in with Google'}</span>
-              </>
-            )}
-          </button>
+                </div>
+              )}
+
+              <button type="submit" className="email-auth-button" disabled={loading}>
+                {loading ? (
+                  <div className="button-loading">
+                    <div className="spinner"></div>
+                    <span>{authMode === 'signup' ? 'Creating account...' : 'Signing in...'}</span>
+                  </div>
+                ) : (
+                  <span>{authMode === 'signup' ? 'Create Account' : 'Sign In'}</span>
+                )}
+              </button>
+
+              {authMode === 'signin' && (
+                <button
+                  type="button"
+                  className="forgot-password-link"
+                  onClick={() => handleModeChange('reset')}
+                >
+                  Forgot your password?
+                </button>
+              )}
+            </form>
+          )}
+
+          {/* Password Reset Form */}
+          {authMode === 'reset' && (
+            <form onSubmit={handlePasswordReset} className="auth-form">
+              <div className="form-group">
+                <label htmlFor="resetEmail">Email</label>
+                <input
+                  type="email"
+                  id="resetEmail"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={loading}
+                  autoComplete="email"
+                />
+              </div>
+
+              <button type="submit" className="email-auth-button" disabled={loading}>
+                {loading ? (
+                  <div className="button-loading">
+                    <div className="spinner"></div>
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  <span>Send Reset Link</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="back-to-signin-link"
+                onClick={() => handleModeChange('signin')}
+              >
+                Back to Sign In
+              </button>
+            </form>
+          )}
+
+          {authMode !== 'reset' && (
+            <>
+              <div className="auth-divider">
+                <span>or</span>
+              </div>
+
+              <button
+                className="google-signin-button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+              >
+                {loading ? (
+                  <div className="button-loading">
+                    <div className="spinner"></div>
+                    <span>Signing in...</span>
+                  </div>
+                ) : (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                      <path
+                        fill="#4285F4"
+                        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707 0-.593.102-1.17.282-1.709V4.958H.957C.347 6.173 0 7.548 0 9c0 1.452.348 2.827.957 4.042l3.007-2.335z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+                      />
+                    </svg>
+                    <span>Continue with Google</span>
+                  </>
+                )}
+              </button>
+            </>
+          )}
 
           <div className="auth-toggle">
-            {isSignUp ? (
+            {authMode === 'signup' && (
               <p>
                 Already have an account?{' '}
-                <button onClick={() => setIsSignUp(false)} className="toggle-link">
+                <button onClick={() => handleModeChange('signin')} className="toggle-link">
                   Sign in here
                 </button>
               </p>
-            ) : (
+            )}
+            {(authMode === 'signin' || authMode === 'reset') && (
               <p>
                 Don't have an account?{' '}
-                <button onClick={() => setIsSignUp(true)} className="toggle-link">
+                <button onClick={() => handleModeChange('signup')} className="toggle-link">
                   Sign up here
                 </button>
               </p>
             )}
           </div>
-
-          <p className="login-footer">
-            Sign up with any Google account to get started.
-            <br />
-            Your account will be created automatically.
-          </p>
         </div>
       </div>
     </div>

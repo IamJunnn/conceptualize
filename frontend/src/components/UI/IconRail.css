@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 48px;
-  min-width: 48px;
+  width: 72px;
+  min-width: 72px;
   background-color: #1e1e1e;
   border-right: 1px solid #333;
   padding: 8px 0;
@@ -13,7 +13,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .icon-rail-bottom {
@@ -27,8 +27,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
   background: transparent;
   border: none;
   border-radius: 8px;
@@ -36,6 +34,38 @@
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
+}
+
+/* Icon-only buttons (notifications, settings) */
+.icon-rail-btn.icon-only {
+  width: 40px;
+  height: 40px;
+}
+
+/* Buttons with labels */
+.icon-rail-btn.with-label {
+  flex-direction: column;
+  width: 64px;
+  height: auto;
+  padding: 8px 4px 6px;
+  gap: 2px;
+}
+
+.icon-rail-label {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-rail-btn svg {
@@ -53,7 +83,12 @@
   background-color: transparent;
 }
 
-.icon-rail-btn.active::before {
+.icon-rail-btn.active .icon-rail-label {
+  color: #64c8ca;
+}
+
+/* Active indicator for icon-only buttons */
+.icon-rail-btn.icon-only.active::before {
   content: '';
   position: absolute;
   left: 0;
@@ -65,8 +100,21 @@
   border-radius: 0 2px 2px 0;
 }
 
-/* Tooltip styling */
-.icon-rail-btn::after {
+/* Active indicator for buttons with labels */
+.icon-rail-btn.with-label.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: #64c8ca;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Tooltip styling - only for icon-only buttons */
+.icon-rail-btn.icon-only::after {
   content: attr(title);
   position: absolute;
   left: calc(100% + 8px);
@@ -87,9 +135,26 @@
   pointer-events: none;
 }
 
-.icon-rail-btn:hover::after {
+.icon-rail-btn.icon-only:hover::after {
   opacity: 1;
   visibility: visible;
+}
+
+/* Sidebar toggle button */
+.icon-rail-btn.sidebar-toggle {
+  margin-bottom: 4px;
+  position: relative;
+}
+
+.icon-rail-btn.sidebar-toggle::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 1px;
+  background: #333;
 }
 
 /* Separator line above settings */
@@ -104,8 +169,8 @@
 /* Notification badge */
 .notification-badge {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: -2px;
+  right: -2px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -117,6 +182,12 @@
   text-align: center;
   border-radius: 8px;
   pointer-events: none;
+}
+
+/* Badge positioning for icon-only buttons */
+.icon-rail-btn.icon-only .notification-badge {
+  top: 4px;
+  right: 4px;
 }
 
 /* Update available dot */

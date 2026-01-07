@@ -24,6 +24,13 @@ import {
   deleteLocalWhiteboard,
 } from '../services/localWhiteboardService'
 import { WhiteboardMeta } from '../services/whiteboardTypes'
+import { CRMBoard } from '../services/crmTypes'
+import {
+  subscribeToUserBoards,
+  createBoard,
+  renameBoard,
+  deleteBoard,
+} from '../services/crmService'
 import './MainUI.css'
 
 // Lazy load heavy components for better initial load performance
@@ -35,6 +42,7 @@ const DashboardPanel = lazy(() => import('./Dashboard/DashboardPanel'))
 const AdminDashboard = lazy(() => import('./Workspace/AdminDashboard'))
 const LeaderDashboard = lazy(() => import('./Workspace/LeaderDashboard'))
 const LocalWhiteboardPanel = lazy(() => import('./Whiteboard/LocalWhiteboardPanel'))
+const CRMPanel = lazy(() => import('./CRM/CRMPanel'))
 
 // Development mode flag
 const isDev = import.meta.env.DEV
@@ -121,6 +129,16 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     whiteboard: LocalWhiteboard;
   } | null>(null)
 
+  // CRM state for sidebar
+  const [crmBoards, setCRMBoards] = useState<CRMBoard[]>([])
+  const [activeCRMBoardId, setActiveCRMBoardId] = useState<string | null>(null)
+  const [renamingCRMBoardId, setRenamingCRMBoardId] = useState<string | null>(null)
+  const [crmBoardContextMenu, setCRMBoardContextMenu] = useState<{
+    x: number;
+    y: number;
+    board: CRMBoard;
+  } | null>(null)
+
   // Helper function to extract all paths from file tree
   // Memoize getAllPaths to avoid recomputing on every render
   const allPaths = useMemo(() => {
@@ -150,6 +168,8 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
   // Resizable sidebar
   const [sidebarWidth, setSidebarWidth] = useState(250) // Pixels
   const [isResizingSidebar, setIsResizingSidebar] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false) // Track if sidebar is collapsed
+  const [lastSidebarWidth, setLastSidebarWidth] = useState(250) // Remember width before collapse
   const [sessionLoaded, setSessionLoaded] = useState(false) // Track if session was restored
   const [hasUpdate, setHasUpdate] = useState(false) // Track if update is available
 
@@ -411,11 +431,24 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       setLocalWhiteboards(prev =>
         prev.map(wb => wb.id === id ? { ...wb, name: newName.trim() } : wb)
       )
+      // Also update tab name if this whiteboard is currently open
+      if (activeWhiteboardId === id) {
+        const trimmedName = newName.trim()
+        setOpenFiles(prev => prev.map(f =>
+          f.path === 'special://whiteboard' ? { ...f, name: trimmedName } : f
+        ))
+        setLeftPaneFiles(prev => prev.map(f =>
+          f.path === 'special://whiteboard' ? { ...f, name: trimmedName } : f
+        ))
+        setRightPaneFiles(prev => prev.map(f =>
+          f.path === 'special://whiteboard' ? { ...f, name: trimmedName } : f
+        ))
+      }
       setRenamingWhiteboardId(null)
     } catch (error) {
       console.error('Failed to rename whiteboard:', error)
     }
-  }, [rootPath])
+  }, [rootPath, activeWhiteboardId])
 
   const handleWhiteboardDelete = useCallback(async (id: string) => {
     try {
@@ -444,6 +477,107 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       thumbnail: wb.thumbnail,
     }))
   }, [localWhiteboards])
+
+  // CRM board subscription and auto-create if none exist
+  useEffect(() => {
+    if (!user) return
+
+    let hasAutoCreated = false
+
+    const unsubscribe = subscribeToUserBoards(
+      user.uid,
+      undefined, // No team in local mode
+      async (boards) => {
+        setCRMBoards(boards)
+
+        // Auto-create a board if none exist
+        if (boards.length === 0 && !hasAutoCreated) {
+          hasAutoCreated = true
+          try {
+            const newBoard = await createBoard(
+              'Untitled',
+              'personal',
+              user.uid,
+              user.email || ''
+            )
+            setActiveCRMBoardId(newBoard.id)
+          } catch (err) {
+            console.error('Failed to auto-create CRM board:', err)
+          }
+        } else if (!activeCRMBoardId && boards.length > 0) {
+          // Auto-select first board if none selected
+          setActiveCRMBoardId(boards[0].id)
+        }
+      },
+      (err) => {
+        console.error('Failed to load CRM boards:', err)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [user])
+
+  // CRM handlers
+  const handleCreateCRMBoard = useCallback(async () => {
+    if (!user) return
+    try {
+      const newBoard = await createBoard(
+        `New CRM ${crmBoards.length + 1}`,
+        'personal',
+        user.uid,
+        user.email || ''
+      )
+      setActiveCRMBoardId(newBoard.id)
+      // Navigate to CRM tab
+      handleSelectFile('special://crm', 'CRM')
+    } catch (error) {
+      console.error('Failed to create CRM board:', error)
+    }
+  }, [user, crmBoards.length])
+
+  const handleSelectCRMBoard = useCallback((boardId: string) => {
+    setActiveCRMBoardId(boardId)
+    handleSelectFile('special://crm', 'CRM')
+  }, [])
+
+  const handleCRMBoardContextMenu = useCallback((e: React.MouseEvent, board: { id: string; name: string }) => {
+    e.preventDefault()
+    const fullBoard = crmBoards.find(b => b.id === board.id)
+    if (fullBoard) {
+      setCRMBoardContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        board: fullBoard,
+      })
+    }
+  }, [crmBoards])
+
+  const handleCRMBoardRename = useCallback(async (id: string, newName: string) => {
+    try {
+      await renameBoard(id, newName.trim())
+      setRenamingCRMBoardId(null)
+    } catch (error) {
+      console.error('Failed to rename CRM board:', error)
+    }
+  }, [])
+
+  const handleCRMBoardDelete = useCallback(async (id: string) => {
+    try {
+      await deleteBoard(id)
+      if (activeCRMBoardId === id) {
+        const remaining = crmBoards.filter(b => b.id !== id)
+        setActiveCRMBoardId(remaining.length > 0 ? remaining[0].id : null)
+      }
+      setCRMBoardContextMenu(null)
+    } catch (error) {
+      console.error('Failed to delete CRM board:', error)
+    }
+  }, [activeCRMBoardId, crmBoards])
+
+  // Convert CRM boards for sidebar
+  const crmBoardsForSidebar = useMemo(() => {
+    return crmBoards.map(b => ({ id: b.id, name: b.name }))
+  }, [crmBoards])
 
   // Refs for keyboard shortcuts to avoid re-registering event listener
   const activeTabRef = useRef(activeTab)
@@ -597,9 +731,19 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingSidebar) {
         const newWidth = e.clientX
-        // Clamp between 100px and 500px
-        const clampedWidth = Math.min(Math.max(newWidth, 100), 500)
-        setSidebarWidth(clampedWidth)
+        // If dragged below collapse threshold, collapse the sidebar
+        if (newWidth < 150) {
+          setIsSidebarCollapsed(true)
+          setSidebarWidth(0)
+        } else {
+          // Normal resize: clamp between 180px and 500px
+          const clampedWidth = Math.min(Math.max(newWidth, 180), 500)
+          setSidebarWidth(clampedWidth)
+          setLastSidebarWidth(clampedWidth) // Remember for re-expand
+          if (isSidebarCollapsed) {
+            setIsSidebarCollapsed(false)
+          }
+        }
       }
     }
 
@@ -622,10 +766,24 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-  }, [isResizingSidebar])
+  }, [isResizingSidebar, isSidebarCollapsed])
 
   const handleSidebarDividerMouseDown = () => {
     setIsResizingSidebar(true)
+  }
+
+  // Toggle sidebar collapsed state
+  const handleSidebarToggle = () => {
+    if (isSidebarCollapsed) {
+      // Expand: restore previous width
+      setSidebarWidth(lastSidebarWidth || 250)
+      setIsSidebarCollapsed(false)
+    } else {
+      // Collapse: save current width and hide
+      setLastSidebarWidth(sidebarWidth)
+      setSidebarWidth(0)
+      setIsSidebarCollapsed(true)
+    }
   }
 
   // Global mouse listeners for tab dragging
@@ -691,6 +849,10 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
         const existingFile = prev.find(f => f.path === filePath)
         if (existingFile) {
           setActiveTab(filePath)
+          // Update name for whiteboard tabs to sync with sidebar
+          if (filePath === 'special://whiteboard' && existingFile.name !== fileName) {
+            return prev.map(f => f.path === filePath ? { ...f, name: fileName } : f)
+          }
           return prev
         } else {
           setActiveTab(filePath)
@@ -706,6 +868,10 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           const existingFile = prev.find(f => f.path === filePath)
           if (existingFile) {
             setLeftPaneTab(filePath)
+            // Update name for whiteboard tabs to sync with sidebar
+            if (filePath === 'special://whiteboard' && existingFile.name !== fileName) {
+              return prev.map(f => f.path === filePath ? { ...f, name: fileName } : f)
+            }
             return prev
           } else {
             setLeftPaneTab(filePath)
@@ -717,6 +883,10 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
           const existingFile = prev.find(f => f.path === filePath)
           if (existingFile) {
             setRightPaneTab(filePath)
+            // Update name for whiteboard tabs to sync with sidebar
+            if (filePath === 'special://whiteboard' && existingFile.name !== fileName) {
+              return prev.map(f => f.path === filePath ? { ...f, name: fileName } : f)
+            }
             return prev
           } else {
             setRightPaneTab(filePath)
@@ -1195,20 +1365,26 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             }
           }}
           onSettingsClick={() => setShowSettings(true)}
+          // CRM feature hidden for now
+          // onCRMClick={() => handleSelectFile('special://crm', 'CRM')}
           activeItem={
             activeTab === 'special://dashboard' ? 'dashboard' :
             activeTab === 'special://graph' ? 'graph' :
             activeTab === 'special://todos' ? 'todos' :
             activeTab === 'special://timeline' ? 'timeline' :
             activeTab === 'special://whiteboard' ? 'whiteboard' :
+            activeTab === 'special://crm' ? 'crm' :
             showSettings ? 'settings' : null
           }
           hasUpdate={hasUpdate}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onSidebarToggle={handleSidebarToggle}
         />
 
         {/* Left Sidebar - Explorer */}
-        <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
-          <UnifiedSidebar
+        {!isSidebarCollapsed && (
+          <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
+            <UnifiedSidebar
             ref={sidebarRef}
             fileTree={fileTree}
             onSelectFile={handleSelectFile}
@@ -1235,11 +1411,24 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             renamingWhiteboardId={renamingWhiteboardId}
             onWhiteboardRenameSubmit={handleWhiteboardRename}
             onWhiteboardRenameCancel={() => setRenamingWhiteboardId(null)}
-          />
-        </div>
+            // CRM section props
+            showCRMSection={activeTab === 'special://crm'}
+            crmBoards={crmBoardsForSidebar}
+            activeCRMBoardId={activeCRMBoardId}
+            onSelectCRMBoard={handleSelectCRMBoard}
+            onCreateCRMBoard={handleCreateCRMBoard}
+            onCRMBoardContextMenu={handleCRMBoardContextMenu}
+            renamingCRMBoardId={renamingCRMBoardId}
+            onCRMBoardRenameSubmit={handleCRMBoardRename}
+            onCRMBoardRenameCancel={() => setRenamingCRMBoardId(null)}
+            />
+          </div>
+        )}
 
-        {/* Sidebar Divider */}
-        <div className="sidebar-divider" onMouseDown={handleSidebarDividerMouseDown}></div>
+        {/* Sidebar Divider - only show when sidebar is not collapsed */}
+        {!isSidebarCollapsed && (
+          <div className="sidebar-divider" onMouseDown={handleSidebarDividerMouseDown}></div>
+        )}
 
         {/* Main Content Area */}
         <div
@@ -1297,6 +1486,15 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
               {activeTab === 'special://whiteboard' && (
                 <Suspense fallback={<LoadingFallback />}>
                   <LocalWhiteboardPanel rootPath={rootPath} fileTree={fileTree} selectedWhiteboardId={activeWhiteboardId} onWhiteboardsChange={setLocalWhiteboards} />
+                </Suspense>
+              )}
+              {activeTab === 'special://crm' && user && (
+                <Suspense fallback={<LoadingFallback />}>
+                  <CRMPanel
+                    userId={user.uid}
+                    userEmail={user.email || ''}
+                    boardId={activeCRMBoardId}
+                  />
                 </Suspense>
               )}
               {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
@@ -1543,6 +1741,35 @@ function MainUI({ rootPath, onRootPathChange }: MainUIProps) {
             <button
               className="delete"
               onClick={() => handleWhiteboardDelete(whiteboardContextMenu.whiteboard.id)}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CRM Board Context Menu */}
+      {crmBoardContextMenu && (
+        <div
+          className="whiteboard-context-menu-overlay"
+          onClick={() => setCRMBoardContextMenu(null)}
+        >
+          <div
+            className="whiteboard-context-menu"
+            style={{ left: crmBoardContextMenu.x, top: crmBoardContextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => {
+                setRenamingCRMBoardId(crmBoardContextMenu.board.id)
+                setCRMBoardContextMenu(null)
+              }}
+            >
+              Rename
+            </button>
+            <button
+              className="delete"
+              onClick={() => handleCRMBoardDelete(crmBoardContextMenu.board.id)}
             >
               Delete
             </button>

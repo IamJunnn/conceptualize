@@ -436,3 +436,98 @@
   z-index: 9999;
   background: #1a1a1a;
 }
+
+/* CRM Board Type Selection Modal */
+.crm-board-type-modal {
+  background: #252525;
+  border: 1px solid #3d3d3d;
+  border-radius: 12px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.crm-board-type-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.crm-board-type-modal .modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #e0e0e0;
+  font-weight: 600;
+}
+
+.crm-board-type-modal .modal-header .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.crm-board-type-modal .modal-header .close-btn:hover {
+  background: #333;
+  color: #fff;
+}
+
+.board-type-options {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.board-type-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  background: #2d2d2d;
+  border: 1px solid #3d3d3d;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.board-type-option:hover {
+  background: #333;
+  border-color: #64c8ca;
+}
+
+.board-type-option.team:hover {
+  border-color: #a78bfa;
+}
+
+.board-type-option svg {
+  color: #64c8ca;
+}
+
+.board-type-option.team svg {
+  color: #a78bfa;
+}
+
+.board-type-option .option-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.board-type-option .option-desc {
+  font-size: 12px;
+  color: #888;
+}

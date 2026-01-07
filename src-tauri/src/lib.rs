@@ -2049,6 +2049,201 @@ fn toggle_note_todo(
     Ok(())
 }
 
+// ============================================================================
+// WEB SCRAPING - Lead Finder
+// ============================================================================
+
+/// Represents a lead extracted from a website
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScrapedLead {
+    name: Option<String>,
+    email: Option<String>,
+    phone: Option<String>,
+    company: Option<String>,
+    position: Option<String>,
+    source_url: String,
+}
+
+/// Result from website scraping
+#[derive(Debug, Serialize, Deserialize)]
+struct ScrapeResult {
+    success: bool,
+    leads: Vec<ScrapedLead>,
+    emails_found: Vec<String>,
+    phones_found: Vec<String>,
+    error: Option<String>,
+}
+
+/// Scrape a website for contact information (emails, phones, names)
+#[tauri::command]
+async fn scrape_website_leads(url: String) -> Result<ScrapeResult, String> {
+    println!("🔍 Scraping website for leads: {}", url);
+
+    // Create HTTP client with browser-like headers
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // Fetch the webpage
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch URL: {}", e))?;
+
+    if !response.status().is_success() {
+        return Ok(ScrapeResult {
+            success: false,
+            leads: vec![],
+            emails_found: vec![],
+            phones_found: vec![],
+            error: Some(format!("HTTP error: {}", response.status())),
+        });
+    }
+
+    let html = response.text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    // Extract emails using regex
+    let email_regex = Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap();
+    let emails: Vec<String> = email_regex
+        .find_iter(&html)
+        .map(|m| m.as_str().to_lowercase())
+        .filter(|e| !e.contains("example.com") && !e.contains("email.com") && !e.ends_with(".png") && !e.ends_with(".jpg"))
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Extract phone numbers using regex (various formats)
+    let phone_regex = Regex::new(r"(?:\+?1[-.\s]?)?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}").unwrap();
+    let phones: Vec<String> = phone_regex
+        .find_iter(&html)
+        .map(|m| m.as_str().to_string())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    // Try to extract names from common patterns (team pages, about pages)
+    // Look for patterns like "John Smith" near job titles
+    let name_title_regex = Regex::new(r#"(?i)(?:^|\s|>)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)(?:\s*[-–|,]\s*|\s*</?\w+[^>]*>\s*)(?:CEO|CTO|CFO|COO|Founder|Director|Manager|President|VP|Head|Lead|Chief|Owner)"#).unwrap();
+
+    let mut leads: Vec<ScrapedLead> = Vec::new();
+
+    // Create leads from emails
+    for email in &emails {
+        // Try to extract name from email (john.smith@company.com -> John Smith)
+        let name = extract_name_from_email(email);
+        let company = extract_company_from_email(email);
+
+        leads.push(ScrapedLead {
+            name,
+            email: Some(email.clone()),
+            phone: None,
+            company,
+            position: None,
+            source_url: url.clone(),
+        });
+    }
+
+    // Try to match phones with leads or create standalone phone leads
+    for phone in &phones {
+        // Check if we already have this phone in any lead
+        let has_phone = leads.iter().any(|l| l.phone.as_ref() == Some(phone));
+        if !has_phone {
+            // Add as standalone lead if we have few email leads
+            if leads.len() < 5 {
+                leads.push(ScrapedLead {
+                    name: None,
+                    email: None,
+                    phone: Some(phone.clone()),
+                    company: None,
+                    position: None,
+                    source_url: url.clone(),
+                });
+            }
+        }
+    }
+
+    // Look for name + title patterns
+    for caps in name_title_regex.captures_iter(&html) {
+        if let Some(name_match) = caps.get(1) {
+            let name = name_match.as_str().trim().to_string();
+            // Find if this name might match an existing lead
+            let existing = leads.iter_mut().find(|l| {
+                if let Some(ref lead_name) = l.name {
+                    lead_name.to_lowercase().contains(&name.to_lowercase()) ||
+                    name.to_lowercase().contains(&lead_name.to_lowercase())
+                } else {
+                    false
+                }
+            });
+
+            if existing.is_none() && !name.is_empty() && name.len() < 50 {
+                leads.push(ScrapedLead {
+                    name: Some(name),
+                    email: None,
+                    phone: None,
+                    company: None,
+                    position: None,
+                    source_url: url.clone(),
+                });
+            }
+        }
+    }
+
+    println!("✅ Found {} emails, {} phones, {} leads", emails.len(), phones.len(), leads.len());
+
+    Ok(ScrapeResult {
+        success: true,
+        leads,
+        emails_found: emails,
+        phones_found: phones,
+        error: None,
+    })
+}
+
+/// Helper: Extract potential name from email address
+fn extract_name_from_email(email: &str) -> Option<String> {
+    let local_part = email.split('@').next()?;
+
+    // Handle patterns like john.smith, john_smith, johnsmith
+    let parts: Vec<&str> = local_part.split(|c| c == '.' || c == '_' || c == '-').collect();
+
+    if parts.len() >= 2 {
+        let first = capitalize_first(parts[0]);
+        let last = capitalize_first(parts[1]);
+        if first.len() > 1 && last.len() > 1 {
+            return Some(format!("{} {}", first, last));
+        }
+    }
+
+    None
+}
+
+/// Helper: Extract company name from email domain
+fn extract_company_from_email(email: &str) -> Option<String> {
+    let domain = email.split('@').nth(1)?;
+    let company = domain.split('.').next()?;
+
+    // Skip generic email providers
+    let generic = ["gmail", "yahoo", "hotmail", "outlook", "icloud", "aol", "mail", "protonmail"];
+    if generic.contains(&company.to_lowercase().as_str()) {
+        return None;
+    }
+
+    Some(capitalize_first(company))
+}
+
+/// Helper: Capitalize first letter
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
 /// Download a file from a URL to the specified path
 #[tauri::command]
 async fn download_file(url: String, save_path: String) -> Result<String, String> {
@@ -2322,6 +2517,8 @@ pub fn run() {
             get_markdown_files, delete_item, rename_item, move_item, read_file, read_binary_file, get_file_size, write_file,
             reveal_in_explorer, open_file_external, find_file_by_name, search_files, is_path_directory, copy_directory, list_directory_files,
             download_file,
+            // Web scraping - Lead Finder
+            scrape_website_leads,
             // Old Todo commands (to be deprecated)
             get_todos, save_todos, add_todo_list, add_todo, update_todo, delete_todo,
             // New note-embedded todo commands

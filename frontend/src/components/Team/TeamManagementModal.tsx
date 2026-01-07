@@ -4,6 +4,16 @@ import { User } from '../../services/authServiceTauri';
 import ConfirmModal, { ModalVariant } from '../UI/ConfirmModal';
 import './TeamManagementModal.css';
 
+// Helper to copy email to clipboard
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 interface TeamManagementModalProps {
   team: Team;
   currentUser: User;
@@ -28,6 +38,15 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
   const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
   const [resharingMember, setResharingMember] = useState<string | null>(null);
   const [removingMember, setRemovingMember] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+
+  const handleCopyEmail = async (email: string) => {
+    const success = await copyToClipboard(email);
+    if (success) {
+      setCopiedEmail(email);
+      setTimeout(() => setCopiedEmail(null), 2000);
+    }
+  };
 
   // Modal state for styled dialogs
   const [modal, setModal] = useState<ModalState>({
@@ -259,7 +278,13 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
                           <div className="member-name">
                             {member.displayName || member.email}
                           </div>
-                          <div className="member-email">{member.email}</div>
+                          <div
+                            className={`member-email clickable ${copiedEmail === member.email ? 'copied' : ''}`}
+                            onClick={() => handleCopyEmail(member.email)}
+                            title="Click to copy email"
+                          >
+                            {copiedEmail === member.email ? 'Copied!' : member.email}
+                          </div>
                           <div className="member-meta">
                             Joined {formatDate(member.joinedAt)}
                           </div>
@@ -320,7 +345,13 @@ export default function TeamManagementModal({ team, currentUser, onClose, onInvi
                     return (
                       <div key={invite.id} className="invitation-item">
                         <div className="invitation-info">
-                          <div className="invitation-email">{invite.memberEmail}</div>
+                          <div
+                            className={`invitation-email clickable ${copiedEmail === invite.memberEmail ? 'copied' : ''}`}
+                            onClick={() => handleCopyEmail(invite.memberEmail)}
+                            title="Click to copy email"
+                          >
+                            {copiedEmail === invite.memberEmail ? 'Copied!' : invite.memberEmail}
+                          </div>
                           <div className="invitation-meta">
                             Invited by {invite.invitedBy} · {formatDate(invite.invitedAt)}
                           </div>

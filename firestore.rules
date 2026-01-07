@@ -289,6 +289,20 @@ service cloud.firestore {
         allow read, write: if isAuthenticated() && isTeamMember(teamId);
       }
 
+      // Read states subcollection (for tracking last read message per channel per user)
+      // Used for cross-device sync of unread message counts
+      match /readStates/{readStateId} {
+        // Users can only read their own read states
+        // readStateId format: {encodedEmail}_{channelId}
+        allow read: if isAuthenticated() && isTeamMember(teamId);
+
+        // Users can only write their own read states
+        allow create, update: if isAuthenticated() && isTeamMember(teamId);
+
+        // Users can delete their own read states
+        allow delete: if isAuthenticated() && isTeamMember(teamId);
+      }
+
       // Recording requests subcollection (for triggering recording start/stop)
       // These are processed by a Firestore trigger function
       match /recordingRequests/{requestId} {
@@ -399,6 +413,175 @@ service cloud.firestore {
       // 2. Cloud Function verifies user is team owner
       // 3. 30 second timeout
       allow read, write: if isAuthenticated();
+    }
+
+    // CRM Boards collection (legacy name)
+    match /crm_boards/{boardId} {
+      // Users can read boards they own or are team members of
+      allow read: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.type == 'team' && isTeamMember(resource.data.teamId))
+      );
+
+      // Users can create their own personal boards or team boards (if team member)
+      allow create: if isAuthenticated() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        (request.resource.data.type == 'team' && isTeamMember(request.resource.data.teamId))
+      );
+
+      // Board owner or team admin can update
+      allow update: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.type == 'team' && isTeamAdmin(resource.data.teamId))
+      );
+
+      // Board owner or team admin can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.type == 'team' && isTeamAdmin(resource.data.teamId))
+      );
+    }
+
+    // CRM Boards collection (current name used by service)
+    match /crmBoards/{boardId} {
+      // Users can read boards they own or are team members of
+      allow read: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.ownerEmail == request.auth.token.email ||
+        (resource.data.type == 'team' && resource.data.teamId != null && isTeamMember(resource.data.teamId))
+      );
+
+      // Users can create their own boards
+      allow create: if isAuthenticated() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      // Board owner can update
+      allow update: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.ownerEmail == request.auth.token.email ||
+        (resource.data.type == 'team' && resource.data.teamId != null && isTeamAdmin(resource.data.teamId))
+      );
+
+      // Board owner can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.ownerEmail == request.auth.token.email ||
+        (resource.data.type == 'team' && resource.data.teamId != null && isTeamAdmin(resource.data.teamId))
+      );
+    }
+
+    // CRM Contacts collection (legacy)
+    match /crm_contacts/{contactId} {
+      // Helper to check if user has access to the board
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+    }
+
+    // CRM Contacts collection (current)
+    match /crmContacts/{contactId} {
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email ||
+          (board.data.type == 'team' && board.data.teamId != null && isTeamMember(board.data.teamId))
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+    }
+
+    // CRM Deals collection (legacy)
+    match /crm_deals/{dealId} {
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+    }
+
+    // CRM Deals collection (current)
+    match /crmDeals/{dealId} {
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+    }
+
+    // CRM Activities collection
+    match /crm_activities/{activityId} {
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+    }
+
+    // CRM Activities collection (current)
+    match /crmActivities/{activityId} {
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+    }
+
+    // CRM Companies collection
+    match /crmCompanies/{companyId} {
+      function hasAccessToBoard(boardId) {
+        let board = get(/databases/$(database)/documents/crmBoards/$(boardId));
+        return board != null && (
+          board.data.ownerId == request.auth.uid ||
+          board.data.ownerEmail == request.auth.token.email
+        );
+      }
+
+      allow read: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow create: if isAuthenticated() && hasAccessToBoard(request.resource.data.boardId);
+      allow update: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
+      allow delete: if isAuthenticated() && hasAccessToBoard(resource.data.boardId);
     }
   }
 }

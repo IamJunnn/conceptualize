@@ -53,3 +53,10 @@ latest.json.template
 
 # Frontend env
 frontend.env
+
+# Build artifacts
+public/downloads/*.dmg
+public/downloads/*.tar.gz
+
+# Certificates
+*.cer
