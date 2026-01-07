@@ -1,0 +1,299 @@
+/**
+ * Company Modal Styles
+ */
+
+.company-modal {
+  background: var(--panel-bg, #1a1a2e);
+  border-radius: 12px;
+  width: 580px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.company-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #2a2a4a);
+}
+
+.company-modal .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.company-modal .modal-title h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.company-modal .modal-title svg {
+  color: var(--accent-color, #64c8ca);
+}
+
+.company-modal .close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.company-modal .close-btn:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #fff);
+}
+
+.company-modal form {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.company-modal .form-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #2a2a4a);
+}
+
+.company-modal .form-section:last-of-type {
+  border-bottom: none;
+}
+
+.company-modal .form-section h4 {
+  margin: 0 0 14px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.company-modal .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.company-modal .form-row:last-child {
+  margin-bottom: 0;
+}
+
+.company-modal .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.company-modal .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.company-modal .form-row .form-group {
+  margin-bottom: 0;
+}
+
+.company-modal label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #888);
+}
+
+.company-modal input,
+.company-modal select,
+.company-modal textarea {
+  background: var(--input-bg, #0d0d1a);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-primary, #fff);
+  transition: border-color 0.2s;
+}
+
+.company-modal input:focus,
+.company-modal select:focus,
+.company-modal textarea:focus {
+  outline: none;
+  border-color: var(--accent-color, #64c8ca);
+}
+
+.company-modal input::placeholder,
+.company-modal textarea::placeholder {
+  color: var(--text-tertiary, #555);
+}
+
+.company-modal select {
+  cursor: pointer;
+}
+
+.company-modal textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.company-modal .input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.company-modal .input-with-icon svg {
+  position: absolute;
+  left: 10px;
+  color: var(--text-tertiary, #555);
+  pointer-events: none;
+}
+
+.company-modal .input-with-icon input {
+  padding-left: 32px;
+  width: 100%;
+}
+
+/* Status Options */
+.company-modal .status-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.company-modal .status-option {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  background: transparent;
+  color: var(--text-secondary, #888);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.company-modal .status-option:hover {
+  border-color: var(--status-color);
+  color: var(--status-color);
+}
+
+.company-modal .status-option.active {
+  background: var(--status-color);
+  border-color: var(--status-color);
+  color: #fff;
+}
+
+/* Tags Input */
+.company-modal .tags-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.company-modal .tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.company-modal .tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--accent-color, #64c8ca);
+  color: #000;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.company-modal .tag button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: #000;
+  opacity: 0.7;
+}
+
+.company-modal .tag button:hover {
+  opacity: 1;
+}
+
+/* Modal Footer */
+.company-modal .modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color, #2a2a4a);
+  background: var(--panel-bg, #1a1a2e);
+}
+
+.company-modal .footer-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.company-modal .delete-btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid #ef4444;
+  background: transparent;
+  color: #ef4444;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.company-modal .delete-btn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.company-modal .cancel-btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #2a2a4a);
+  background: transparent;
+  color: var(--text-secondary, #888);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.company-modal .cancel-btn:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #fff);
+}
+
+.company-modal .save-btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent-color, #64c8ca);
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.company-modal .save-btn:hover {
+  filter: brightness(1.1);
+}

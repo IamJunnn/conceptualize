@@ -194,6 +194,27 @@
   z-index: 10;
 }
 
+/* Current time indicator (now line) */
+.schedule-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ef4444;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.schedule-now-dot {
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border-radius: 50%;
+}
+
 /* Context menu */
 .schedule-context-menu {
   position: fixed;

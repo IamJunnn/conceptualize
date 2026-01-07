@@ -440,7 +440,7 @@ export default function TeamAvailabilityPanel({
           </div>
 
           {/* Share settings (My Schedule only) */}
-          {activeTab === 'my-schedule' && userTeams.length > 1 && (
+          {activeTab === 'my-schedule' && userTeams.length >= 1 && (
             <div className="share-selector">
               <button
                 className="share-btn"
@@ -486,7 +486,7 @@ export default function TeamAvailabilityPanel({
 
             {showTimeRangeDropdown && (
               <div className="dropdown-menu time-range-dropdown">
-                <div className="dropdown-header">Display Time Range</div>
+                <div className="dropdown-header">Display time range</div>
                 {timeRangePresets.map(preset => {
                   const isSelected = displayStartHour === preset.startHour && displayEndHour === preset.endHour;
                   return (
@@ -502,7 +502,7 @@ export default function TeamAvailabilityPanel({
                 })}
                 <div className="dropdown-divider" />
                 <div className="custom-time-range">
-                  <div className="custom-time-label">Custom Range</div>
+                  <div className="custom-time-label">Custom range</div>
                   <div className="custom-time-inputs">
                     <select
                       value={displayStartHour}
@@ -543,7 +543,7 @@ export default function TeamAvailabilityPanel({
 
             {showDaysDropdown && (
               <div className="dropdown-menu days-dropdown">
-                <div className="dropdown-header">Display Days</div>
+                <div className="dropdown-header">Display days</div>
                 {dayPresets.map(preset => {
                   const isSelected = JSON.stringify(displayDays) === JSON.stringify(preset.days);
                   return (
@@ -562,7 +562,7 @@ export default function TeamAvailabilityPanel({
                 })}
                 <div className="dropdown-divider" />
                 <div className="custom-days">
-                  <div className="custom-days-label">Custom Selection</div>
+                  <div className="custom-days-label">Custom selection</div>
                   <div className="custom-days-grid">
                     {[0, 1, 2, 3, 4, 5, 6].map(day => (
                       <button

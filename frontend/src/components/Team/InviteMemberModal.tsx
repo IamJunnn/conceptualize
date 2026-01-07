@@ -4,6 +4,16 @@ import { Team, inviteTeamMember } from '../../services/teamService';
 import { isValidEmail } from '../../utils/validators';
 import './InviteMemberModal.css';
 
+// Helper to copy email to clipboard
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 interface InviteMemberModalProps {
   team: Team;
   user: User;
@@ -17,6 +27,15 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
   const [isInviting, setIsInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+
+  const handleCopyEmail = async (email: string) => {
+    const success = await copyToClipboard(email);
+    if (success) {
+      setCopiedEmail(email);
+      setTimeout(() => setCopiedEmail(null), 2000);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,7 +178,13 @@ export default function InviteMemberModal({ team, user, onClose, onMemberInvited
                     <div className="member-name">
                       {displayName.split('@')[0]}
                     </div>
-                    <div className="member-email">{email}</div>
+                    <div
+                      className={`member-email clickable ${copiedEmail === email ? 'copied' : ''}`}
+                      onClick={() => handleCopyEmail(email)}
+                      title="Click to copy email"
+                    >
+                      {copiedEmail === email ? 'Copied!' : email}
+                    </div>
                   </div>
                   <div className={`member-role role-${member.role || 'member'}`}>
                     {member.role || 'member'}

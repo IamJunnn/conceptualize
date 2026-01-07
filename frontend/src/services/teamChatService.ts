@@ -1098,16 +1098,49 @@ export async function votePoll(
 }
 
 // ============================================================================
-// UNREAD MESSAGE TRACKING
+// UNREAD MESSAGE TRACKING (Firestore-based with localStorage cache)
 // ============================================================================
 
 const LAST_READ_KEY_PREFIX = 'chat_last_read_';
 
 /**
- * Get the last read timestamp for a channel
+ * Channel read state stored in Firestore for cross-device sync
  */
-export function getLastReadTimestamp(teamId: string, channelId: string): Date | null {
+export interface ChannelReadState {
+  channelId: string;
+  lastReadAt: Date;
+  lastReadMessageId?: string;
+}
+
+interface ChannelReadStateFirestore {
+  channelId: string;
+  lastReadAt: Timestamp;
+  lastReadMessageId?: string;
+}
+
+// In-memory cache for read states (faster than localStorage reads)
+const readStateCache: Map<string, Date> = new Map();
+
+/**
+ * Get cache key for read state
+ */
+function getReadStateCacheKey(teamId: string, channelId: string, userEmail: string): string {
+  return `${teamId}_${channelId}_${userEmail}`;
+}
+
+/**
+ * Get the last read timestamp for a channel (from cache -> localStorage -> Firestore)
+ */
+export function getLastReadTimestamp(teamId: string, channelId: string, userEmail?: string): Date | null {
   try {
+    // Check in-memory cache first (fastest)
+    if (userEmail) {
+      const cacheKey = getReadStateCacheKey(teamId, channelId, userEmail);
+      const cached = readStateCache.get(cacheKey);
+      if (cached) return cached;
+    }
+
+    // Fall back to localStorage (fast, works offline)
     const key = `${LAST_READ_KEY_PREFIX}${teamId}_${channelId}`;
     const saved = localStorage.getItem(key);
     return saved ? new Date(saved) : null;
@@ -1117,14 +1150,186 @@ export function getLastReadTimestamp(teamId: string, channelId: string): Date | 
 }
 
 /**
- * Set the last read timestamp for a channel to now
+ * Mark channel as read - updates Firestore (sync) + localStorage (cache) + memory cache
+ * Returns immediately for optimistic UI, syncs to Firestore in background
  */
-export function markChannelAsRead(teamId: string, channelId: string): void {
+export async function markChannelAsRead(
+  teamId: string,
+  channelId: string,
+  userEmail: string,
+  lastMessageId?: string
+): Promise<void> {
+  const now = new Date();
+  const cacheKey = getReadStateCacheKey(teamId, channelId, userEmail);
+
+  // 1. Update in-memory cache immediately (optimistic)
+  readStateCache.set(cacheKey, now);
+
+  // 2. Update localStorage (backup/offline support)
   try {
     const key = `${LAST_READ_KEY_PREFIX}${teamId}_${channelId}`;
-    localStorage.setItem(key, new Date().toISOString());
+    localStorage.setItem(key, now.toISOString());
   } catch (e) {
-    console.error('Failed to mark channel as read:', e);
+    console.error('Failed to update localStorage:', e);
+  }
+
+  // 3. Sync to Firestore (cross-device sync) - don't await, fire and forget
+  syncReadStateToFirestore(teamId, channelId, userEmail, now, lastMessageId).catch(e => {
+    console.error('Failed to sync read state to Firestore:', e);
+  });
+}
+
+/**
+ * Sync read state to Firestore for cross-device sync
+ */
+async function syncReadStateToFirestore(
+  teamId: string,
+  channelId: string,
+  userEmail: string,
+  lastReadAt: Date,
+  lastMessageId?: string
+): Promise<void> {
+  try {
+    const encodedEmail = userEmail.replace(/\./g, '_DOT_').replace(/@/g, '_AT_');
+    const readStateRef = doc(db, 'teams', teamId, 'readStates', `${encodedEmail}_${channelId}`);
+
+    const readStateData: ChannelReadStateFirestore = {
+      channelId,
+      lastReadAt: Timestamp.fromDate(lastReadAt),
+      ...(lastMessageId && { lastReadMessageId: lastMessageId }),
+    };
+
+    await setDoc(readStateRef, readStateData, { merge: true });
+  } catch (error) {
+    console.error('Error syncing read state to Firestore:', error);
+    throw error;
+  }
+}
+
+/**
+ * Load read states from Firestore (call on app start for cross-device sync)
+ */
+export async function loadReadStatesFromFirestore(
+  teamId: string,
+  userEmail: string
+): Promise<Map<string, Date>> {
+  const readStates = new Map<string, Date>();
+
+  try {
+    const encodedEmail = userEmail.replace(/\./g, '_DOT_').replace(/@/g, '_AT_');
+    const readStatesRef = collection(db, 'teams', teamId, 'readStates');
+    const q = query(readStatesRef, where('__name__', '>=', encodedEmail), where('__name__', '<=', encodedEmail + '\uf8ff'));
+
+    const snapshot = await getDocs(q);
+    snapshot.docs.forEach(docSnap => {
+      const data = docSnap.data() as ChannelReadStateFirestore;
+      const lastReadAt = data.lastReadAt instanceof Timestamp ? data.lastReadAt.toDate() : new Date(data.lastReadAt as unknown as string);
+      readStates.set(data.channelId, lastReadAt);
+
+      // Update caches
+      const cacheKey = getReadStateCacheKey(teamId, data.channelId, userEmail);
+      readStateCache.set(cacheKey, lastReadAt);
+
+      const localKey = `${LAST_READ_KEY_PREFIX}${teamId}_${data.channelId}`;
+      localStorage.setItem(localKey, lastReadAt.toISOString());
+    });
+
+    console.log(`Loaded ${readStates.size} read states from Firestore`);
+  } catch (error) {
+    console.error('Error loading read states from Firestore:', error);
+  }
+
+  return readStates;
+}
+
+/**
+ * Subscribe to read state changes for cross-device sync
+ * When read state changes on another device, this updates local cache
+ */
+export function subscribeToReadStateChanges(
+  teamId: string,
+  userEmail: string,
+  onUpdate: (channelId: string, lastReadAt: Date) => void
+): Unsubscribe {
+  const encodedEmail = userEmail.replace(/\./g, '_DOT_').replace(/@/g, '_AT_');
+  const readStatesRef = collection(db, 'teams', teamId, 'readStates');
+
+  // Query for this user's read states
+  const q = query(readStatesRef, where('__name__', '>=', encodedEmail), where('__name__', '<=', encodedEmail + '\uf8ff'));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'modified' || change.type === 'added') {
+          const data = change.doc.data() as ChannelReadStateFirestore;
+          const lastReadAt = data.lastReadAt instanceof Timestamp ? data.lastReadAt.toDate() : new Date(data.lastReadAt as unknown as string);
+
+          // Update caches
+          const cacheKey = getReadStateCacheKey(teamId, data.channelId, userEmail);
+          readStateCache.set(cacheKey, lastReadAt);
+
+          const localKey = `${LAST_READ_KEY_PREFIX}${teamId}_${data.channelId}`;
+          localStorage.setItem(localKey, lastReadAt.toISOString());
+
+          // Notify caller
+          onUpdate(data.channelId, lastReadAt);
+        }
+      });
+    },
+    (error) => {
+      console.error('Error subscribing to read state changes:', error);
+    }
+  );
+}
+
+/**
+ * Mark channel as read and also mark related notifications as read
+ * This unifies the message read state and notification read state
+ */
+export async function markChannelAsReadWithNotifications(
+  teamId: string,
+  channelId: string,
+  userEmail: string,
+  lastMessageId?: string
+): Promise<void> {
+  // Mark channel messages as read
+  await markChannelAsRead(teamId, channelId, userEmail, lastMessageId);
+
+  // Also mark related notifications as read (fire and forget)
+  markChannelNotificationsAsRead(teamId, channelId, userEmail).catch(e => {
+    console.error('Failed to mark channel notifications as read:', e);
+  });
+}
+
+/**
+ * Mark all notifications for a specific channel as read
+ */
+async function markChannelNotificationsAsRead(
+  teamId: string,
+  channelId: string,
+  userEmail: string
+): Promise<void> {
+  try {
+    const notificationsRef = collection(db, 'teams', teamId, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('recipientEmail', '==', userEmail),
+      where('channelId', '==', channelId),
+      where('read', '==', false)
+    );
+
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return;
+
+    const updatePromises = snapshot.docs.map(docSnap =>
+      updateDoc(doc(db, 'teams', teamId, 'notifications', docSnap.id), { read: true })
+    );
+
+    await Promise.all(updatePromises);
+    console.log(`Marked ${snapshot.size} channel notifications as read`);
+  } catch (error) {
+    console.error('Error marking channel notifications as read:', error);
   }
 }
 
@@ -1137,7 +1342,7 @@ export async function getUnreadCount(
   currentUserEmail: string
 ): Promise<number> {
   try {
-    const lastRead = getLastReadTimestamp(teamId, channelId);
+    const lastRead = getLastReadTimestamp(teamId, channelId, currentUserEmail);
 
     const messagesRef = collection(
       db,
@@ -1175,7 +1380,8 @@ export async function getUnreadCount(
 }
 
 /**
- * Subscribe to unread counts for all DM channels
+ * Subscribe to unread counts for channels with optimistic updates
+ * Now supports real-time sync when read state changes on other devices
  */
 export function subscribeToUnreadCounts(
   teamId: string,
@@ -1185,10 +1391,12 @@ export function subscribeToUnreadCounts(
 ): Unsubscribe {
   const unsubscribes: Unsubscribe[] = [];
   const counts: { [channelId: string]: number } = {};
+  const lastReadTimestamps: { [channelId: string]: Date | null } = {};
 
-  // Initialize all counts to 0
+  // Initialize all counts to 0 and load last read timestamps
   channelIds.forEach(id => {
     counts[id] = 0;
+    lastReadTimestamps[id] = getLastReadTimestamp(teamId, id, currentUserEmail);
   });
 
   // Subscribe to each channel's messages
@@ -1202,7 +1410,7 @@ export function subscribeToUnreadCounts(
       'items'
     );
 
-    const lastRead = getLastReadTimestamp(teamId, channelId);
+    const lastRead = lastReadTimestamps[channelId];
 
     // Query for recent messages
     const q = lastRead
@@ -1221,10 +1429,23 @@ export function subscribeToUnreadCounts(
     const unsub = onSnapshot(
       q,
       (snapshot) => {
-        // Count messages not from current user
-        const unreadCount = snapshot.docs.filter(doc => {
-          const data = doc.data();
-          return data.senderEmail !== currentUserEmail;
+        // Get current last read (may have been updated by markChannelAsRead)
+        const currentLastRead = getLastReadTimestamp(teamId, channelId, currentUserEmail);
+
+        // Count messages not from current user and after last read
+        const unreadCount = snapshot.docs.filter(docSnap => {
+          const data = docSnap.data();
+          if (data.senderEmail === currentUserEmail) return false;
+
+          // If we have a lastRead time, only count messages after it
+          if (currentLastRead) {
+            const msgTime = data.createdAt instanceof Timestamp
+              ? data.createdAt.toDate()
+              : new Date(data.createdAt);
+            return msgTime > currentLastRead;
+          }
+
+          return true;
         }).length;
 
         counts[channelId] = unreadCount;
@@ -1238,10 +1459,33 @@ export function subscribeToUnreadCounts(
     unsubscribes.push(unsub);
   });
 
+  // Subscribe to read state changes (for cross-device sync)
+  const readStateUnsub = subscribeToReadStateChanges(
+    teamId,
+    currentUserEmail,
+    (channelId, lastReadAt) => {
+      // Update lastReadTimestamps and recalculate (the message subscription will handle it)
+      lastReadTimestamps[channelId] = lastReadAt;
+      // Force a re-check by setting count to 0 if read on another device
+      if (channelIds.includes(channelId)) {
+        counts[channelId] = 0;
+        onUpdate({ ...counts });
+      }
+    }
+  );
+  unsubscribes.push(readStateUnsub);
+
   // Return a function to unsubscribe from all
   return () => {
     unsubscribes.forEach(unsub => unsub());
   };
+}
+
+/**
+ * Clear read state cache (useful when switching users/teams)
+ */
+export function clearReadStateCache(): void {
+  readStateCache.clear();
 }
 
 // ============================================================================

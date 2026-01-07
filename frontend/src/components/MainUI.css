@@ -172,3 +172,13 @@
 .whiteboard-context-menu button.delete:hover {
   background: rgba(239, 68, 68, 0.15);
 }
+
+/* CRM Overlay */
+.crm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #1a1a1a;
+}

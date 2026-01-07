@@ -160,7 +160,6 @@
   padding: 8px 12px;
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--text-muted, #666);
   border-bottom: 1px solid var(--border-color, #333);
 }
@@ -480,7 +479,6 @@
 .custom-time-label {
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--text-muted, #666);
   margin-bottom: 8px;
 }
@@ -556,7 +554,6 @@
 .custom-days-label {
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--text-muted, #666);
   margin-bottom: 8px;
 }

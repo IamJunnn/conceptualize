@@ -1,10 +1,13 @@
 import { FolderIcon, DocumentIcon, ChevronRightIcon, ChevronDownIcon, DocumentPlusIcon, FolderPlusIcon, Cog6ToothIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { FolderIcon as FolderSolidIcon, StarIcon as StarSolidIcon } from '@heroicons/react/24/solid';
+import { TableProperties, ChevronDown } from 'lucide-react';
 import { isImportantNote } from '../../utils/importantNotes';
 import { getLocalStorage, setLocalStorage } from '../../hooks/useLocalStorage';
 import { getPlatformEventConfig } from '../../utils/platform';
 import React from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { AccountSwitcher } from '../../components/AccountSwitcher';
+import { useAuth } from '../../contexts/AuthContext';
 import './UnifiedSidebar.css';
 
 // Development mode flag
@@ -41,6 +44,8 @@ interface UnifiedSidebarProps {
   onChangeFolderPath?: () => void;
   filesWithIncomingLinks?: Set<string>;
   teamName?: string;  // Optional team name to display at the top
+  teamId?: string;  // Current team ID for account switcher
+  onTeamSelect?: (teamId: string) => void;  // Callback when team is selected from account switcher
   // Whiteboard props (for team mode)
   whiteboards?: WhiteboardMeta[];
   activeWhiteboardId?: string | null;
@@ -52,6 +57,16 @@ interface UnifiedSidebarProps {
   renamingWhiteboardId?: string | null;
   onWhiteboardRenameSubmit?: (id: string, newName: string) => void;
   onWhiteboardRenameCancel?: () => void;
+  // CRM props
+  showCRMSection?: boolean;
+  crmBoards?: { id: string; name: string; type?: 'personal' | 'team' }[];
+  activeCRMBoardId?: string | null;
+  onSelectCRMBoard?: (boardId: string) => void;
+  onCreateCRMBoard?: () => void;
+  onCRMBoardContextMenu?: (e: React.MouseEvent, board: { id: string; name: string; type?: 'personal' | 'team' }) => void;
+  renamingCRMBoardId?: string | null;
+  onCRMBoardRenameSubmit?: (id: string, newName: string) => void;
+  onCRMBoardRenameCancel?: () => void;
 }
 
 // Ensure TreeNodeProps is defined
@@ -534,12 +549,16 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   const {
     fileTree, onSelectFile, getRootPath, editing, onStartEditing, onFinishEditing,
     onContextMenu, onMoveItem, onDropExternalFiles, onDropExternalDirectory,
-    onChangeFolderPath, filesWithIncomingLinks, teamName,
+    onChangeFolderPath, filesWithIncomingLinks, teamName, teamId, onTeamSelect,
     // Whiteboard props
     whiteboards = [], activeWhiteboardId, onSelectWhiteboard, onCreateWhiteboard,
     onWhiteboardContextMenu, showWhiteboardSection = false,
     // Whiteboard inline rename props
-    renamingWhiteboardId, onWhiteboardRenameSubmit, onWhiteboardRenameCancel
+    renamingWhiteboardId, onWhiteboardRenameSubmit, onWhiteboardRenameCancel,
+    // CRM props
+    showCRMSection = false, crmBoards = [], activeCRMBoardId, onSelectCRMBoard,
+    onCreateCRMBoard, onCRMBoardContextMenu, renamingCRMBoardId,
+    onCRMBoardRenameSubmit, onCRMBoardRenameCancel
   } = props;
   const [isRootDragOver, setIsRootDragOver] = React.useState(false);
   const [highlightedPath, setHighlightedPath] = React.useState<string | null>(null);
@@ -554,12 +573,23 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     return getLocalStorage<boolean>('sidebar-whiteboards-collapsed', false);
   });
 
+  // CRM section collapse state
+  const [crmCollapsed, setCRMCollapsed] = React.useState(() => {
+    return getLocalStorage<boolean>('sidebar-crm-collapsed', false);
+  });
+
   // Section height state for draggable divider (percentage for files section)
   const [filesSectionHeight, setFilesSectionHeight] = React.useState(() => {
     return getLocalStorage<number>('sidebar-files-height', 30); // Default 30% for files, 70% for whiteboards
   });
   const [isDraggingDivider, setIsDraggingDivider] = React.useState(false);
   const sidebarSectionsRef = React.useRef<HTMLDivElement>(null);
+
+  // Account switcher state
+  const [accountSwitcherOpen, setAccountSwitcherOpen] = React.useState(false);
+  const [accountSwitcherAnchorRect, setAccountSwitcherAnchorRect] = React.useState<DOMRect | null>(null);
+  const teamHeaderRef = React.useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
   // Save section states to localStorage
   React.useEffect(() => {
@@ -569,6 +599,10 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
   React.useEffect(() => {
     setLocalStorage('sidebar-whiteboards-collapsed', whiteboardsCollapsed);
   }, [whiteboardsCollapsed]);
+
+  React.useEffect(() => {
+    setLocalStorage('sidebar-crm-collapsed', crmCollapsed);
+  }, [crmCollapsed]);
 
   React.useEffect(() => {
     setLocalStorage('sidebar-files-height', filesSectionHeight);
@@ -1205,16 +1239,47 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
     </>
   );
 
-  // Sectioned layout (when whiteboard section is shown)
-  if (showWhiteboardSection) {
+  // Sectioned layout (when whiteboard or CRM section is shown)
+  if (showWhiteboardSection || showCRMSection) {
     return (
       <div className="unified-sidebar">
-        {/* Team Header */}
+        {/* Team Header with Account Switcher */}
         {teamName && (
           <div className="sidebar-header">
-            <div className="team-header-info">
-              <h2 className="sidebar-title team-name">{teamName}</h2>
+            <div
+              className="team-header-info clickable"
+              ref={teamHeaderRef}
+              onClick={() => {
+                if (teamHeaderRef.current) {
+                  setAccountSwitcherAnchorRect(teamHeaderRef.current.getBoundingClientRect());
+                }
+                setAccountSwitcherOpen(!accountSwitcherOpen);
+              }}
+            >
+              <div className="team-header-content">
+                <h2 className="sidebar-title team-name" title={teamName}>
+                  {teamName}
+                </h2>
+                {user && (
+                  <span className="team-header-email" title={user.email}>
+                    {user.email}
+                  </span>
+                )}
+              </div>
+              <ChevronDown
+                className={`team-header-chevron ${accountSwitcherOpen ? 'open' : ''}`}
+                size={16}
+              />
             </div>
+            {accountSwitcherOpen && (
+              <AccountSwitcher
+                isOpen={accountSwitcherOpen}
+                onClose={() => setAccountSwitcherOpen(false)}
+                anchorRect={accountSwitcherAnchorRect}
+                currentTeamId={teamId}
+                onTeamSelect={onTeamSelect ? (selectedTeamId) => onTeamSelect(selectedTeamId) : undefined}
+              />
+            )}
           </div>
         )}
 
@@ -1275,7 +1340,7 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           )}
 
           {/* Draggable Divider */}
-          {!filesCollapsed && !whiteboardsCollapsed && (
+          {!filesCollapsed && ((showWhiteboardSection && !whiteboardsCollapsed) || (showCRMSection && !crmCollapsed)) && (
             <div
               className={`section-divider ${isDraggingDivider ? 'dragging' : ''}`}
               onMouseDown={() => setIsDraggingDivider(true)}
@@ -1285,44 +1350,129 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
           )}
 
           {/* WHITEBOARDS Section - collapsed bar style */}
-          <div
-            className="section-collapsed-bar"
-            onClick={() => setWhiteboardsCollapsed(!whiteboardsCollapsed)}
-            title={whiteboardsCollapsed ? "Expand Whiteboards" : "Collapse Whiteboards"}
-          >
-            <svg className="collapsed-bar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 19l7-7 3 3-7 7-3-3z" />
-              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
-              <path d="M2 2l7.586 7.586" />
-              <circle cx="11" cy="11" r="2" />
-            </svg>
-            <span className="collapsed-bar-label">Whiteboards</span>
-            <div className="section-actions" onClick={(e) => e.stopPropagation()}>
-              {onCreateWhiteboard && (
-                <button
-                  onClick={onCreateWhiteboard}
-                  className="section-action-btn"
-                  title="New Whiteboard"
-                >
-                  <PlusIcon className="action-icon" />
-                </button>
-              )}
-            </div>
-            {whiteboardsCollapsed ? (
-              <ChevronRightIcon className="collapsed-bar-chevron" />
-            ) : (
-              <ChevronDownIcon className="collapsed-bar-chevron" />
-            )}
-          </div>
-          {!whiteboardsCollapsed && (
-            <div
-              className={`sidebar-section whiteboards-section`}
-              style={{ height: filesCollapsed ? 'calc(100% - 64px)' : `calc(${100 - filesSectionHeight}% - 36px)` }}
-            >
-              <div className="section-content whiteboard-list">
-                {renderWhiteboardList()}
+          {showWhiteboardSection && (
+            <>
+              <div
+                className="section-collapsed-bar"
+                onClick={() => setWhiteboardsCollapsed(!whiteboardsCollapsed)}
+                title={whiteboardsCollapsed ? "Expand Whiteboards" : "Collapse Whiteboards"}
+              >
+                <svg className="collapsed-bar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 19l7-7 3 3-7 7-3-3z" />
+                  <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+                  <path d="M2 2l7.586 7.586" />
+                  <circle cx="11" cy="11" r="2" />
+                </svg>
+                <span className="collapsed-bar-label">Whiteboards</span>
+                <div className="section-actions" onClick={(e) => e.stopPropagation()}>
+                  {onCreateWhiteboard && (
+                    <button
+                      onClick={onCreateWhiteboard}
+                      className="section-action-btn"
+                      title="New Whiteboard"
+                    >
+                      <PlusIcon className="action-icon" />
+                    </button>
+                  )}
+                </div>
+                {whiteboardsCollapsed ? (
+                  <ChevronRightIcon className="collapsed-bar-chevron" />
+                ) : (
+                  <ChevronDownIcon className="collapsed-bar-chevron" />
+                )}
               </div>
-            </div>
+              {!whiteboardsCollapsed && (
+                <div
+                  className={`sidebar-section whiteboards-section`}
+                  style={{ height: filesCollapsed ? 'calc(100% - 64px)' : `calc(${100 - filesSectionHeight}% - 36px)` }}
+                >
+                  <div className="section-content whiteboard-list">
+                    {renderWhiteboardList()}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* CRM BOARDS Section - collapsed bar style */}
+          {showCRMSection && (
+            <>
+              <div
+                className="section-collapsed-bar"
+                onClick={() => setCRMCollapsed(!crmCollapsed)}
+                title={crmCollapsed ? "Expand CRM" : "Collapse CRM"}
+              >
+                <TableProperties className="collapsed-bar-icon" size={14} />
+                <span className="collapsed-bar-label">CRM</span>
+                <div className="section-actions" onClick={(e) => e.stopPropagation()}>
+                  {onCreateCRMBoard && (
+                    <button
+                      onClick={onCreateCRMBoard}
+                      className="section-action-btn"
+                      title="New Board"
+                    >
+                      <PlusIcon className="action-icon" />
+                    </button>
+                  )}
+                </div>
+                {crmCollapsed ? (
+                  <ChevronRightIcon className="collapsed-bar-chevron" />
+                ) : (
+                  <ChevronDownIcon className="collapsed-bar-chevron" />
+                )}
+              </div>
+              {!crmCollapsed && (
+                <div
+                  className={`sidebar-section crm-section`}
+                  style={{ height: filesCollapsed ? 'calc(100% - 64px)' : `calc(${100 - filesSectionHeight}% - 36px)` }}
+                >
+                  <div className="section-content crm-board-list">
+                    {crmBoards.map((board) => (
+                      <div
+                        key={board.id}
+                        className={`crm-board-item ${activeCRMBoardId === board.id ? 'active' : ''}`}
+                        onClick={() => onSelectCRMBoard?.(board.id)}
+                        onContextMenu={(e) => onCRMBoardContextMenu?.(e, board)}
+                      >
+                        {renamingCRMBoardId === board.id ? (
+                          <input
+                            type="text"
+                            defaultValue={board.name}
+                            autoFocus
+                            className="crm-board-rename-input"
+                            onClick={(e) => e.stopPropagation()}
+                            onBlur={(e) => {
+                              if (e.target.value.trim()) {
+                                onCRMBoardRenameSubmit?.(board.id, e.target.value.trim());
+                              } else {
+                                onCRMBoardRenameCancel?.();
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                onCRMBoardRenameSubmit?.(board.id, (e.target as HTMLInputElement).value.trim());
+                              } else if (e.key === 'Escape') {
+                                onCRMBoardRenameCancel?.();
+                              }
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <span className="crm-board-name">{board.name}</span>
+                            {board.type && (
+                              <span className={`crm-board-type-badge ${board.type}`} title={board.type === 'personal' ? 'Personal' : 'Team'}>
+                                {board.type === 'personal' ? 'Me' : 'Team'}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))}
+                    {/* Empty state removed - boards are auto-created */}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -1368,11 +1518,40 @@ const UnifiedSidebar = React.forwardRef<{ revealFile: (filePath: string) => void
       {/* Header */}
       <div className="sidebar-header">
         {teamName && (
-          <div className="team-header-info">
-            <h2 className="sidebar-title team-name">
-              {teamName}
-            </h2>
+          <div
+            className="team-header-info clickable"
+            ref={teamHeaderRef}
+            onClick={() => {
+              if (teamHeaderRef.current) {
+                setAccountSwitcherAnchorRect(teamHeaderRef.current.getBoundingClientRect());
+              }
+              setAccountSwitcherOpen(!accountSwitcherOpen);
+            }}
+          >
+            <div className="team-header-content">
+              <h2 className="sidebar-title team-name" title={teamName}>
+                {teamName}
+              </h2>
+              {user && (
+                <span className="team-header-email" title={user.email}>
+                  {user.email}
+                </span>
+              )}
+            </div>
+            <ChevronDown
+              className={`team-header-chevron ${accountSwitcherOpen ? 'open' : ''}`}
+              size={16}
+            />
           </div>
+        )}
+        {accountSwitcherOpen && teamName && (
+          <AccountSwitcher
+            isOpen={accountSwitcherOpen}
+            onClose={() => setAccountSwitcherOpen(false)}
+            anchorRect={accountSwitcherAnchorRect}
+            currentTeamId={teamId}
+            onTeamSelect={onTeamSelect ? (selectedTeamId) => onTeamSelect(selectedTeamId) : undefined}
+          />
         )}
         {!isGoogleDriveFolderId && !teamName && (
           <h2

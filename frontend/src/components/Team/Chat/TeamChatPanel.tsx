@@ -19,8 +19,10 @@ import {
   subscribeToDMConversations,
   addMembersToGroup,
   votePoll,
-  markChannelAsRead,
+  markChannelAsReadWithNotifications,
   subscribeToUnreadCounts,
+  loadReadStatesFromFirestore,
+  clearReadStateCache,
   pinMessage,
   unpinMessage,
   subscribeToPinnedMessageIds,
@@ -261,12 +263,27 @@ export default function TeamChatPanel({
     };
   }, [hasAccess, teamId, currentUserEmail, members, groupChats, onUnreadCountChange]);
 
-  // Mark channel as read when it becomes active
+  // Load read states from Firestore on mount (for cross-device sync)
   useEffect(() => {
-    if (activeChannelId && teamId) {
-      markChannelAsRead(teamId, activeChannelId);
+    if (teamId && currentUserEmail) {
+      loadReadStatesFromFirestore(teamId, currentUserEmail).catch(e => {
+        console.error('Failed to load read states:', e);
+      });
     }
-  }, [activeChannelId, teamId]);
+
+    // Clear cache when unmounting or switching teams
+    return () => {
+      clearReadStateCache();
+    };
+  }, [teamId, currentUserEmail]);
+
+  // Mark channel as read when it becomes active (with optimistic UI)
+  useEffect(() => {
+    if (activeChannelId && teamId && currentUserEmail) {
+      // This updates immediately (optimistic) then syncs to Firestore
+      markChannelAsReadWithNotifications(teamId, activeChannelId, currentUserEmail);
+    }
+  }, [activeChannelId, teamId, currentUserEmail]);
 
   // Subscribe to call state changes
   useEffect(() => {

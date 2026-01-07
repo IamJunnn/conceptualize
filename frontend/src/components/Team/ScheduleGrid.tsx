@@ -101,6 +101,50 @@ export default function ScheduleGrid({
   // Calculate hours based on startHour and endHour
   // Handle overnight schedules (e.g., 21:00 to 06:00)
   const isOvernight = startHour > endHour;
+
+  // Current time state for "now" indicator
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Get today's day of week (0 = Sunday, 6 = Saturday)
+  const today = currentTime.getDay() as DayOfWeek;
+
+  // Calculate "now" line position
+  const getNowLinePosition = useMemo(() => {
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentMinutes = currentHour * 60 + currentMinute;
+    const gridStartMinutes = startHour * 60;
+    const gridEndMinutes = isOvernight
+      ? (24 * 60) + (endHour * 60)
+      : endHour * 60;
+
+    // Check if current time is within the display range
+    let minutesFromStart: number;
+    if (isOvernight) {
+      if (currentMinutes >= gridStartMinutes) {
+        minutesFromStart = currentMinutes - gridStartMinutes;
+      } else {
+        minutesFromStart = (24 * 60 - gridStartMinutes) + currentMinutes;
+      }
+      const totalGridMinutes = (24 - startHour) * 60 + endHour * 60;
+      if (minutesFromStart > totalGridMinutes) return null;
+    } else {
+      if (currentMinutes < gridStartMinutes || currentMinutes > gridEndMinutes) {
+        return null; // Current time is outside display range
+      }
+      minutesFromStart = currentMinutes - gridStartMinutes;
+    }
+
+    return (minutesFromStart / 60) * HOUR_HEIGHT;
+  }, [currentTime, startHour, endHour, isOvernight]);
   const totalHours = isOvernight
     ? (24 - startHour) + endHour
     : endHour - startHour;
@@ -477,6 +521,16 @@ export default function ScheduleGrid({
               {dragState.isDragging && dragState.dayOfWeek === day && (
                 <div className="schedule-drag-preview" style={getDragPreviewStyle() || undefined} />
               )}
+
+              {/* Current time indicator (now line) */}
+              {day === today && getNowLinePosition !== null && (
+                <div
+                  className="schedule-now-line"
+                  style={{ top: `${getNowLinePosition}px` }}
+                >
+                  <div className="schedule-now-dot" />
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -599,38 +653,40 @@ interface BlockEditModalProps {
 const generateTimeOptions = (fromHour: number = 0, toHour: number = 24) => {
   const options: { value: string; label: string }[] = [];
   const isOvernight = fromHour > toHour;
+  // Cap at 23 to avoid invalid times (24:00, etc.)
+  const effectiveToHour = Math.min(toHour, 23);
+
+  const addSlot = (h: number, m: number) => {
+    const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    const hour12 = h % 12 || 12;
+    const suffix = h >= 12 ? 'PM' : 'AM';
+    const label = `${hour12}:${m.toString().padStart(2, '0')} ${suffix}`;
+    options.push({ value, label });
+  };
 
   if (isOvernight) {
     // e.g., 21:00 to 06:00
     for (let h = fromHour; h < 24; h++) {
       for (let m = 0; m < 60; m += 15) {
-        const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-        const hour12 = h % 12 || 12;
-        const suffix = h >= 12 ? 'PM' : 'AM';
-        const label = `${hour12}:${m.toString().padStart(2, '0')} ${suffix}`;
-        options.push({ value, label });
+        addSlot(h, m);
       }
     }
-    for (let h = 0; h < toHour; h++) {
+    for (let h = 0; h < effectiveToHour; h++) {
       for (let m = 0; m < 60; m += 15) {
-        const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-        const hour12 = h % 12 || 12;
-        const suffix = h >= 12 ? 'PM' : 'AM';
-        const label = `${hour12}:${m.toString().padStart(2, '0')} ${suffix}`;
-        options.push({ value, label });
+        addSlot(h, m);
       }
     }
+    // Add only :00 for the end hour
+    addSlot(effectiveToHour, 0);
   } else {
     // Normal daytime range
-    for (let h = fromHour; h < toHour; h++) {
+    for (let h = fromHour; h < effectiveToHour; h++) {
       for (let m = 0; m < 60; m += 15) {
-        const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-        const hour12 = h % 12 || 12;
-        const suffix = h >= 12 ? 'PM' : 'AM';
-        const label = `${hour12}:${m.toString().padStart(2, '0')} ${suffix}`;
-        options.push({ value, label });
+        addSlot(h, m);
       }
     }
+    // Add only :00 for the end hour
+    addSlot(effectiveToHour, 0);
   }
   return options;
 };
