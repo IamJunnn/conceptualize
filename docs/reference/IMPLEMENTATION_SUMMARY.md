@@ -13,7 +13,7 @@
 │                       Frontend (React + Tauri)               │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │  User signs in with Firebase Auth (any email)          │  │
-│  │  iamjunson@gmail.com, alice@company.com, etc.          │  │
+│  │  user-a@example.com, alice@company.com, etc.          │  │
 │  └────────────────────────────────────────────────────────┘  │
 │                            ↓                                  │
 │  ┌────────────────────────────────────────────────────────┐  │
@@ -191,7 +191,7 @@ npm run test:service-account
 ```
 
 ### 2. Test User Flow
-1. Sign in as User A (e.g., `iamjunson@gmail.com`)
+1. Sign in as User A (e.g., `user-a@example.com`)
 2. Join/create a team
 3. Create a note
 4. Sign out

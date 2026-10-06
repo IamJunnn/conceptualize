@@ -1,6 +1,7 @@
 // Simple Title Bar for auth screens - just window controls
 import { useState, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { isMac } from '../../utils/platform';
 import './SimpleTitleBar.css';
 
 function SimpleTitleBar() {
@@ -11,6 +12,11 @@ function SimpleTitleBar() {
   useEffect(() => {
     appWindow.isMaximized().then(setIsMaximized);
   }, [appWindow]);
+
+  // macOS shows native window decorations; a second title bar would be redundant
+  if (isMac()) {
+    return null;
+  }
 
   const handleMinimize = () => {
     appWindow.minimize();

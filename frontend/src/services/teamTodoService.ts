@@ -10,6 +10,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  writeBatch,
   query,
   orderBy,
   onSnapshot,
@@ -418,17 +419,15 @@ export async function deleteCompletedTodos(teamId: string): Promise<number> {
     const snapshot = await getDocs(todosRef);
 
     let deletedCount = 0;
-    const deletePromises: Promise<void>[] = [];
+    const completedDocs = snapshot.docs.filter(docSnap => docSnap.data().completed);
+    deletedCount = completedDocs.length;
 
-    snapshot.docs.forEach(docSnap => {
-      const todo = docSnap.data();
-      if (todo.completed) {
-        deletePromises.push(deleteDoc(docSnap.ref));
-        deletedCount++;
-      }
-    });
-
-    await Promise.all(deletePromises);
+    // Delete in Firestore batches (max 500 per batch)
+    for (let i = 0; i < completedDocs.length; i += 500) {
+      const batch = writeBatch(db);
+      completedDocs.slice(i, i + 500).forEach(docSnap => batch.delete(docSnap.ref));
+      await batch.commit();
+    }
 
     console.log(`✅ Deleted ${deletedCount} completed todos from team ${teamId}`);
     return deletedCount;

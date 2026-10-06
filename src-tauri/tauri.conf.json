@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "conceptualize",
   "version": "1.0.9",
-  "identifier": "com.conceptualize.desktop",
+  "identifier": "com.conceptualize.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -14,7 +14,7 @@
       {
         "title": "Conceptualize",
         "width": 1000,
-        "height": 600,
+        "height": 700,
         "minWidth": 1000,
         "minHeight": 600,
         "resizable": true,
@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: http: data: blob: wss: ws:; connect-src 'self' https: http: wss: ws: ipc: tauri:",
       "assetProtocol": {
         "enable": true,
         "scope": ["**"]
@@ -42,7 +42,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "signingIdentity": "Developer ID Application: JunSeop Son (96AL947RQ2)"
+      "signingIdentity": "-",
+      "entitlements": "entitlements.plist"
     }
   },
   "plugins": {

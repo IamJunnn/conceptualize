@@ -531,12 +531,18 @@ export function getGracePeriodDaysRemaining(member: TeamMember | undefined): num
  */
 export async function getUserTeams(userEmail: string): Promise<Team[]> {
   try {
+    console.log('[getUserTeams] START - querying for:', userEmail);
     const q = query(
       collection(db, 'teams'),
       where('memberEmails', 'array-contains', userEmail)
     );
 
-    const snapshot = await getDocs(q);
+    console.log('[getUserTeams] query built, calling getDocs...');
+    const snapshot = await Promise.race([
+      getDocs(q),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('getUserTeams query timed out')), 15000))
+    ]);
+    console.log('[getUserTeams] getDocs returned');
     console.log(`🔍 Query returned ${snapshot.docs.length} teams for ${userEmail}`);
 
     const teams = snapshot.docs.map(docSnap => {
@@ -658,16 +664,23 @@ export async function getAllTeamsForUser(userEmail: string): Promise<Team[]> {
  */
 export async function getPendingInvites(userEmail: string): Promise<TeamInvitation[]> {
   try {
+    console.log('[getPendingInvites] START - email:', userEmail);
     const normalizedEmail = userEmail.toLowerCase();
     const invitesMap = new Map<string, TeamInvitation>();
 
     // Query 1: Try lowercase (new format)
+    console.log('[getPendingInvites] building query 1 for:', normalizedEmail);
     const q1 = query(
       collection(db, 'team_invites'),
       where('memberEmail', '==', normalizedEmail),
       where('status', '==', 'pending')
     );
-    const snapshot1 = await getDocs(q1);
+    console.log('[getPendingInvites] calling getDocs for query 1...');
+    const snapshot1 = await Promise.race([
+      getDocs(q1),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('getPendingInvites query timed out')), 10000))
+    ]);
+    console.log('[getPendingInvites] query 1 returned:', snapshot1.docs.length, 'docs');
     snapshot1.docs.forEach(doc => {
       const data = doc.data();
       invitesMap.set(doc.id, {
@@ -684,7 +697,10 @@ export async function getPendingInvites(userEmail: string): Promise<TeamInvitati
         where('memberEmail', '==', userEmail),
         where('status', '==', 'pending')
       );
-      const snapshot2 = await getDocs(q2);
+      const snapshot2 = await Promise.race([
+        getDocs(q2),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('getPendingInvites query 2 timed out')), 10000))
+      ]);
       snapshot2.docs.forEach(doc => {
         if (!invitesMap.has(doc.id)) {
           const data = doc.data();

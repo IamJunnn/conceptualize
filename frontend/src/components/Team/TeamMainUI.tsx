@@ -607,6 +607,7 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
 
   // Load user's teams on mount
   useEffect(() => {
+    console.log('[TeamMainUI] useEffect triggered - user.email:', user.email);
     loadTeams();
   }, [user.email]);
 
@@ -655,32 +656,37 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      if (isDev) console.log('🔄 Loading teams for user:', user.email);
+      console.log('[loadTeams] START - user.email:', user.email);
+      console.log('[loadTeams] timestamp:', new Date().toISOString());
 
       // First, check for pending invitations and auto-accept them
       try {
+        console.log('[loadTeams] calling getPendingInvites...');
         const pendingInvites = await getPendingInvites(user.email);
+        console.log('[loadTeams] getPendingInvites returned:', pendingInvites.length, 'invites');
         if (pendingInvites.length > 0) {
-          if (isDev) console.log(`📨 Found ${pendingInvites.length} pending invitation(s) for ${user.email}`);
+          console.log(`[loadTeams] Found ${pendingInvites.length} pending invitation(s)`);
 
           // Auto-accept all pending invitations
           for (const invite of pendingInvites) {
             try {
-              if (isDev) console.log(`✅ Auto-accepting invite to team "${invite.teamName}" as ${invite.role || 'member'}...`);
+              console.log(`[loadTeams] Auto-accepting invite to team "${invite.teamName}"...`);
               await acceptTeamInvite(invite.teamId, user.email, user.displayName || user.email, user.photoURL);
-              if (isDev) console.log(`🎉 Successfully joined team "${invite.teamName}" as ${invite.role || 'member'}`);
+              console.log(`[loadTeams] Accepted invite to "${invite.teamName}"`);
             } catch (acceptError) {
-              console.error(`❌ Failed to accept invite to team ${invite.teamName}:`, acceptError);
+              console.error(`[loadTeams] Failed to accept invite:`, acceptError);
             }
           }
         }
       } catch (inviteError) {
-        console.error('⚠️ Error checking pending invites:', inviteError);
+        console.error('[loadTeams] getPendingInvites FAILED:', inviteError);
         // Continue loading teams even if invite check fails
       }
 
+      console.log('[loadTeams] calling getUserTeams...');
       const userTeams = await getUserTeams(user.email);
-      if (isDev) console.log('✅ Loaded teams:', userTeams);
+      console.log('[loadTeams] getUserTeams returned:', userTeams.length, 'teams');
+      console.log('[loadTeams] team names:', userTeams.map(t => t.name));
       const userEmailLower = user.email.toLowerCase();
       if (isDev) console.log('📋 Team details:', userTeams.map(t => ({
         name: t.name,
@@ -691,20 +697,16 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         yourRole: t.members[userEmailLower]?.role,
         yourJoinedAt: t.members[userEmailLower]?.joinedAt
       })));
-      // Sync user's current profile (photoURL, displayName, customAvatar) to all their teams
-      // This ensures profile info is shown even for existing members
-      // Also update the local state immediately so we don't wait for Firestore
+      // Profile sync is handled by the dedicated useEffect (syncs on displayName/photoURL/customAvatar changes)
+      // No need to duplicate writes here — just update local state
       const userEmailLowerForSync = user.email.toLowerCase();
       if (user.photoURL || user.displayName || user.customAvatar) {
         userTeams.forEach(team => {
-          // Update Firestore
-          updateMemberProfile(team.id, user.email, user.displayName, user.photoURL, user.customAvatar);
-          // Also update local state immediately
-          if (team.members[userEmailLowerForSync]) {
-            if (user.displayName) team.members[userEmailLowerForSync].displayName = user.displayName;
-            if (user.photoURL) team.members[userEmailLowerForSync].photoURL = user.photoURL;
-            if (user.customAvatar) team.members[userEmailLowerForSync].customAvatar = user.customAvatar;
-          }
+          const member = team.members[userEmailLowerForSync];
+          if (!member) return;
+          if (user.displayName) member.displayName = user.displayName;
+          if (user.photoURL) member.photoURL = user.photoURL;
+          if (user.customAvatar) member.customAvatar = user.customAvatar;
         });
       }
       setTeams(userTeams);
@@ -823,8 +825,10 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         setShowCreateTeamModal(true);
       }
     } catch (error) {
-      console.error('❌ Failed to load teams:', error);
+      console.error('[loadTeams] CAUGHT ERROR:', error);
+      console.error('[loadTeams] error type:', typeof error, 'message:', (error as any)?.message, 'code:', (error as any)?.code);
     } finally {
+      console.log('[loadTeams] FINALLY - setting loading=false');
       setLoading(false);
     }
   };
@@ -3449,6 +3453,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     fileTree.forEach(traverse);
     return items;
   }, [fileTree]);
+
+  console.log('[TeamMainUI] render - loading:', loading, 'teams:', teams.length, 'selectedTeam:', selectedTeam?.name);
 
   if (loading) {
     return (

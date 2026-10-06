@@ -75,7 +75,7 @@ We recommend checking for updates monthly. Critical security updates will be rel
 ## Need Help?
 
 If you experience issues with updates:
-- Email: iamjunson@gmail.com
+- Email: user-a@example.com
 - GitHub Issues: https://github.com/IamJunnn/conceptualize/issues
 
 ---

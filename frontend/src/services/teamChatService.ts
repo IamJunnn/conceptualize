@@ -23,6 +23,7 @@ import {
   DocumentSnapshot,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
@@ -314,9 +315,13 @@ export async function deleteChannel(
     const messagesRef = collection(db, 'teams', teamId, 'messages', channelId, 'items');
     const messagesSnapshot = await getDocs(messagesRef);
 
-    // Delete messages in batches
-    const deletePromises = messagesSnapshot.docs.map(msgDoc => deleteDoc(msgDoc.ref));
-    await Promise.all(deletePromises);
+    // Delete messages in Firestore batches (max 500 per batch)
+    const docs = messagesSnapshot.docs;
+    for (let i = 0; i < docs.length; i += 500) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + 500).forEach(msgDoc => batch.delete(msgDoc.ref));
+      await batch.commit();
+    }
     console.log(`Deleted ${messagesSnapshot.size} messages from channel:`, channelId);
 
     // Now delete the channel document
@@ -1655,11 +1660,12 @@ export async function deleteAllNotifications(
     const q = query(notificationsRef, where('recipientEmail', '==', userEmail));
 
     const snapshot = await getDocs(q);
-    const deletePromises = snapshot.docs.map(docSnap =>
-      deleteDoc(doc(db, 'teams', teamId, 'notifications', docSnap.id))
-    );
-
-    await Promise.all(deletePromises);
+    const docs = snapshot.docs;
+    for (let i = 0; i < docs.length; i += 500) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + 500).forEach(docSnap => batch.delete(doc(db, 'teams', teamId, 'notifications', docSnap.id)));
+      await batch.commit();
+    }
     console.log('Deleted all notifications for:', userEmail);
   } catch (error) {
     console.error('Error deleting all notifications:', error);

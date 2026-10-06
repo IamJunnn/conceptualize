@@ -76,7 +76,7 @@ export function initializeSync(
           onRemoteUpdate(whiteboard);
           setTimeout(() => {
             state.isRemoteUpdate = false;
-          }, 100);
+          }, 200);
         }
       }
     }
@@ -139,8 +139,8 @@ const debouncedSave = debounce(
       state.isSaving = false;
     }
   },
-  500, // Debounce by 500ms
-  { maxWait: 2000 } // But save at least every 2 seconds if continuously changing
+  150, // Debounce by 150ms for more responsive live sync
+  { maxWait: 500 } // Save at least every 500ms for live updates
 );
 
 /**
@@ -205,7 +205,7 @@ const throttledPresenceUpdate = throttle(
       console.error('Failed to update presence:', error);
     }
   },
-  100 // Update presence at most every 100ms
+  200 // Update presence at most every 200ms for smoother cursor tracking
 );
 
 /**

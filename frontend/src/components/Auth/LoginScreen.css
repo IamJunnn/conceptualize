@@ -2,8 +2,10 @@
   width: 100vw;
   height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
+  overflow-y: auto;
+  padding: 24px;
+  box-sizing: border-box;
   background: linear-gradient(135deg, #c44fc4 0%, #8b5fbf 50%, #64c8ca 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
@@ -17,9 +19,13 @@
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 420px;
-  padding: 32px 36px;
+  padding: 24px 36px;
   animation: slideUp 0.4s ease-out;
   position: relative;
+  /* margin auto centers vertically but, unlike align-items: center,
+     keeps the top reachable when the form is taller than the window */
+  margin: auto;
+  flex-shrink: 0;
 }
 
 .back-button {
@@ -68,7 +74,7 @@
 }
 
 .login-header h1 {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #ffffff;
   margin: 0 0 4px 0;
@@ -81,17 +87,17 @@
 }
 
 .login-content h2 {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: #ffffff;
-  margin: 0 0 6px 0;
+  margin: 8px 0 4px 0;
 }
 
 .login-description {
   font-size: 14px;
   color: #cbd5e0;
   line-height: 1.5;
-  margin: 0 0 4px 0;
+  margin: 0 0 8px 0;
 }
 
 .login-error {
@@ -223,7 +229,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin: 0 0 6px 0 !important;
+  margin: 0 0 10px 0 !important;
 }
 
 .form-group + .form-group {
@@ -239,9 +245,13 @@
   line-height: 1.2;
 }
 
+.form-group label {
+  margin-bottom: 4px;
+}
+
 .form-group input {
   width: 100%;
-  padding: 6px 10px;
+  padding: 8px 10px;
   margin: 0;
   background: rgba(45, 55, 72, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
