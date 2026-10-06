@@ -54,7 +54,7 @@
       }
     },
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRThCMDAyM0JGRjQwMkE0MApSV1JBS2tEL093S3c2TWJ3YlllTDZvUUI4V1I1YVQ1VzFhRElmankwMVpFUnlYQjBMdmg0cVFUeAo=",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZGQkVGMjgxREZEMjdCRjMKUldUemU5TGZnZksrYjBka3p0Tks1aFlpYXdIZERJNEtMKzN2T0pnUUJqY2txUVppYUNsNGNtRGkK",
       "endpoints": [
         "https://conceptualize-c9a41.web.app/updates/latest.json"
       ]
