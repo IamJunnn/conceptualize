@@ -4,14 +4,26 @@ import {
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User as FirebaseUser
+  User as FirebaseUser,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail as firebaseSendPasswordReset,
+  sendEmailVerification as firebaseSendEmailVerification,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, Timestamp, collection, query, where, getDocs, updateDoc, arrayUnion } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { storeTokens, clearTokens } from './tokenStorage';
+import { storeTokens, clearTokens, getTokens } from './tokenStorage';
 import { getErrorMessage } from '../utils/errorUtils';
+import {
+  saveAccount,
+  removeAccount as removeStoredAccount,
+  getAccountById,
+  setActiveAccountId,
+  updateAccountLastUsed,
+  StoredAccount,
+} from './accountStorage';
 
 // User roles
 export type UserRole = "member" | "leader" | "admin";
@@ -179,7 +191,7 @@ export const signInWithGoogle = async (): Promise<User> => {
       });
     }
 
-    return {
+    const user: User = {
       uid: firebaseUser.uid,
       email: firebaseUser.email || "",
       displayName: firebaseUser.displayName || userData.displayName || "",
@@ -188,6 +200,21 @@ export const signInWithGoogle = async (): Promise<User> => {
       createdAt: userData.createdAt?.toDate() || new Date(),
       lastLogin: new Date()
     };
+
+    // Save account for multi-account support
+    const refreshToken = tokens.refresh_token || (await getTokens())?.refreshToken || '';
+    await saveAccount({
+      id: firebaseUser.uid,
+      email: firebaseUser.email || "",
+      displayName: firebaseUser.displayName || userData.displayName || "",
+      photoURL: firebaseUser.photoURL || userData.photoURL || "",
+      googleRefreshToken: refreshToken,
+      lastUsed: Date.now(),
+      authMethod: 'google',
+    });
+    await setActiveAccountId(firebaseUser.uid);
+
+    return user;
   } catch (error) {
     console.error('Sign in error:', error);
     throw new Error(`Sign in failed: ${getErrorMessage(error)}`);
@@ -196,13 +223,26 @@ export const signInWithGoogle = async (): Promise<User> => {
 
 /**
  * Sign out current user
+ * @param removeFromSaved - If true, removes the account from saved accounts list
  */
-export const signOut = async (): Promise<void> => {
+export const signOut = async (removeFromSaved = false): Promise<void> => {
   try {
+    // Get current user ID before signing out
+    const currentUserId = auth.currentUser?.uid;
+
     // Clear Google Drive tokens
     clearTokens();
+
     // Sign out from Firebase
     await firebaseSignOut(auth);
+
+    // Clear active account
+    await setActiveAccountId(null);
+
+    // Optionally remove from saved accounts
+    if (removeFromSaved && currentUserId) {
+      await removeStoredAccount(currentUserId);
+    }
   } catch (error) {
     throw new Error(`Sign out failed: ${getErrorMessage(error)}`);
   }
@@ -450,3 +490,277 @@ async function checkAndAcceptPendingInvitations(email: string, displayName: stri
 export const checkRedirectResult = async (): Promise<User | null> => {
   return null;
 };
+
+/**
+ * Sign up with email and password
+ */
+export const signUpWithEmail = async (email: string, password: string, displayName: string): Promise<User> => {
+  try {
+    // Create the user in Firebase Auth
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    const firebaseUser = result.user;
+
+    // Send email verification
+    await firebaseSendEmailVerification(firebaseUser);
+
+    // Create user document in Firestore
+    const newUserData = {
+      email: firebaseUser.email || email,
+      displayName: displayName,
+      photoURL: "",
+      role: "member" as UserRole,
+      createdAt: Timestamp.now(),
+      lastLogin: Timestamp.now(),
+      emailVerified: false,
+    };
+
+    await setDoc(doc(db, "users", firebaseUser.uid), newUserData);
+
+    // Check for pending team invitations
+    await checkAndAcceptPendingInvitations(email, displayName, "");
+
+    return {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || email,
+      displayName: displayName,
+      photoURL: "",
+      role: "member" as UserRole,
+      createdAt: new Date(),
+      lastLogin: new Date(),
+    };
+  } catch (error: any) {
+    console.error('Sign up error:', error);
+
+    // Provide user-friendly error messages
+    if (error.code === 'auth/email-already-in-use') {
+      throw new Error('This email is already registered. Please sign in instead.');
+    } else if (error.code === 'auth/weak-password') {
+      throw new Error('Password is too weak. Please use at least 6 characters.');
+    } else if (error.code === 'auth/invalid-email') {
+      throw new Error('Please enter a valid email address.');
+    }
+
+    throw new Error(`Sign up failed: ${getErrorMessage(error)}`);
+  }
+};
+
+/**
+ * Sign in with email and password
+ */
+export const signInWithEmail = async (email: string, password: string): Promise<User> => {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    const firebaseUser = result.user;
+
+    // Get or create user document
+    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+
+    let userData;
+    if (!userDoc.exists()) {
+      // Create user document if it doesn't exist (edge case)
+      userData = {
+        email: firebaseUser.email || email,
+        displayName: firebaseUser.displayName || email.split('@')[0],
+        photoURL: "",
+        role: "member" as UserRole,
+        createdAt: Timestamp.now(),
+        lastLogin: Timestamp.now(),
+      };
+      await setDoc(doc(db, "users", firebaseUser.uid), userData);
+    } else {
+      userData = userDoc.data();
+      // Update last login
+      await updateDoc(doc(db, "users", firebaseUser.uid), {
+        lastLogin: Timestamp.now(),
+        emailVerified: firebaseUser.emailVerified,
+      });
+    }
+
+    const user: User = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || email,
+      displayName: userData.displayName || firebaseUser.displayName || "",
+      photoURL: userData.photoURL || "",
+      role: userData.role as UserRole,
+      createdAt: userData.createdAt?.toDate() || new Date(),
+      lastLogin: new Date(),
+    };
+
+    // Save account for multi-account support (email accounts don't have refresh tokens)
+    await saveAccount({
+      id: firebaseUser.uid,
+      email: firebaseUser.email || email,
+      displayName: userData.displayName || firebaseUser.displayName || "",
+      photoURL: userData.photoURL || "",
+      lastUsed: Date.now(),
+      authMethod: 'email',
+    });
+    await setActiveAccountId(firebaseUser.uid);
+
+    return user;
+  } catch (error: any) {
+    console.error('Sign in error:', error);
+
+    // Provide user-friendly error messages
+    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+      throw new Error('Invalid email or password. Please try again.');
+    } else if (error.code === 'auth/too-many-requests') {
+      throw new Error('Too many failed attempts. Please try again later.');
+    } else if (error.code === 'auth/user-disabled') {
+      throw new Error('This account has been disabled. Please contact support.');
+    }
+
+    throw new Error(`Sign in failed: ${getErrorMessage(error)}`);
+  }
+};
+
+/**
+ * Send password reset email
+ */
+export const sendPasswordResetEmail = async (email: string): Promise<void> => {
+  try {
+    await firebaseSendPasswordReset(auth, email);
+  } catch (error: any) {
+    console.error('Password reset error:', error);
+
+    if (error.code === 'auth/user-not-found') {
+      // Don't reveal if email exists for security
+      return; // Silently succeed
+    } else if (error.code === 'auth/invalid-email') {
+      throw new Error('Please enter a valid email address.');
+    }
+
+    throw new Error(`Failed to send reset email: ${getErrorMessage(error)}`);
+  }
+};
+
+/**
+ * Resend email verification
+ */
+export const resendEmailVerification = async (): Promise<void> => {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('No user is currently signed in.');
+    }
+
+    if (currentUser.emailVerified) {
+      throw new Error('Email is already verified.');
+    }
+
+    await firebaseSendEmailVerification(currentUser);
+  } catch (error: any) {
+    console.error('Email verification error:', error);
+    throw new Error(`Failed to send verification email: ${getErrorMessage(error)}`);
+  }
+};
+
+/**
+ * Switch to a different saved account (Google accounts only - instant switch)
+ * For email accounts, this will throw REAUTH_REQUIRED
+ */
+export const switchToAccount = async (accountId: string): Promise<User> => {
+  try {
+    // Get stored account data
+    const account = await getAccountById(accountId);
+    if (!account) {
+      throw new Error('Account not found in saved accounts');
+    }
+
+    // Email accounts require re-authentication
+    if (account.authMethod === 'email') {
+      throw new Error('REAUTH_REQUIRED');
+    }
+
+    // Google accounts - use refresh token to get new tokens
+    if (!account.googleRefreshToken) {
+      throw new Error('REAUTH_REQUIRED');
+    }
+
+    console.log('Switching to account:', account.email);
+
+    // Use refresh token to get new access_token + id_token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        client_secret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET,
+        refresh_token: account.googleRefreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error('Token refresh failed:', errorText);
+      // Token expired/revoked - need full re-auth
+      throw new Error('REAUTH_REQUIRED');
+    }
+
+    const tokens = await tokenResponse.json();
+
+    // Store new tokens in localStorage
+    storeTokens({
+      accessToken: tokens.access_token,
+      refreshToken: account.googleRefreshToken, // Keep the same refresh token
+      expiresAt: Date.now() + (tokens.expires_in * 1000),
+    });
+
+    // Create Firebase credential from id_token
+    const credential = GoogleAuthProvider.credential(tokens.id_token);
+
+    // Sign into Firebase
+    const result = await signInWithCredential(auth, credential);
+    const firebaseUser = result.user;
+
+    // Get user data from Firestore
+    const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+    const userData = userDoc.exists() ? userDoc.data() : {};
+
+    // Update last login
+    await updateDoc(doc(db, "users", firebaseUser.uid), {
+      lastLogin: Timestamp.now(),
+    });
+
+    // Update stored account with fresh data (including photoURL) and set as active
+    await saveAccount({
+      id: firebaseUser.uid,
+      email: firebaseUser.email || account.email,
+      displayName: userData.displayName || firebaseUser.displayName || account.displayName,
+      photoURL: firebaseUser.photoURL || userData.photoURL || "",
+      customAvatar: userData.customAvatar || "",
+      googleRefreshToken: account.googleRefreshToken,
+      lastUsed: Date.now(),
+      authMethod: 'google',
+    });
+    await setActiveAccountId(accountId);
+
+    console.log('Successfully switched to account:', account.email);
+
+    return {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || "",
+      displayName: userData.displayName || firebaseUser.displayName || "",
+      photoURL: firebaseUser.photoURL || userData.photoURL || "",
+      customAvatar: userData.customAvatar || "",
+      role: (userData.role as UserRole) || "member",
+      createdAt: userData.createdAt?.toDate() || new Date(),
+      lastLogin: new Date(),
+    };
+  } catch (error: any) {
+    console.error('Account switch error:', error);
+
+    // Re-throw REAUTH_REQUIRED as-is
+    if (error.message === 'REAUTH_REQUIRED') {
+      throw error;
+    }
+
+    throw new Error(`Failed to switch account: ${getErrorMessage(error)}`);
+  }
+};
+
+// Re-export StoredAccount type for use in other modules
+export type { StoredAccount };

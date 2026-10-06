@@ -12,7 +12,7 @@ import {
 // Consider user online if last seen within 2 minutes
 const ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
 // Update presence every 30 seconds
-const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+const HEARTBEAT_INTERVAL_MS = 60 * 1000;
 
 export interface UserPresence {
   email: string;

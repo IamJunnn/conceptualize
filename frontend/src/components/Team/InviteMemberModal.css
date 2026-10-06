@@ -149,6 +149,24 @@
   text-overflow: ellipsis;
 }
 
+.member-email.clickable {
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 4px;
+}
+
+.member-email.clickable:hover {
+  color: #64c8ca;
+  background: rgba(100, 200, 202, 0.1);
+}
+
+.member-email.clickable.copied {
+  color: #4caf50;
+  background: rgba(76, 175, 80, 0.1);
+}
+
 .member-role {
   padding: 4px 12px;
   border-radius: 12px;

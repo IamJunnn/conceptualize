@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
 import { getPlatformEventConfig, getIsMac } from '../../utils/platform';
@@ -22,6 +22,13 @@ import RecordingsPanel from './RecordingsPanel';
 import WhiteboardPanel from '../Whiteboard/WhiteboardPanel';
 import { subscribeToWhiteboards, createUntitledWhiteboard, renameWhiteboard, deleteWhiteboard } from '../../services/whiteboardService';
 import { WhiteboardMeta } from '../../services/whiteboardTypes';
+import { CRMBoard } from '../../services/crmTypes';
+import {
+  subscribeToUserBoards as subscribeToCRMBoards,
+  createBoard as createCRMBoard,
+  renameBoard as renameCRMBoard,
+  deleteBoard as deleteCRMBoard,
+} from '../../services/crmService';
 import { TeamDriveStorage, getTeamDriveStorage } from '../../services/teamDriveStorage';
 import { DragDropProvider, useDragDrop, EditorPane } from '../../contexts/DragDropContext';
 import { GraphVisibilityProvider } from '../../contexts/GraphVisibilityContext';
@@ -33,7 +40,7 @@ import ContextMenu from '../UI/ContextMenu';
 import HelpModal from '../UI/HelpModal';
 import ConfirmModal from '../UI/ConfirmModal';
 import { PencilIcon, TrashIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
-import { AlertTriangle, Video, CheckSquare, Users, X, Send, Check, ExternalLink, PanelRight } from 'lucide-react';
+import { AlertTriangle, Video, CheckSquare, Users, User as UserIcon, X, Send, Check, ExternalLink, PanelRight } from 'lucide-react';
 import { DropZoneOverlay } from '../UI/DropZoneOverlay';
 import IconRail from '../UI/IconRail';
 import TeamDashboardPanel from '../Dashboard/TeamDashboardPanel';
@@ -70,6 +77,9 @@ import ShareToChatModal from './Chat/ShareToChatModal';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import './TeamMainUI.css';
+
+// Lazy loaded components
+const CRMPanel = lazy(() => import('../CRM/CRMPanel'));
 
 // Development mode flag
 const isDev = import.meta.env.DEV;
@@ -155,6 +165,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   const [rightPaneGraphIndex, setRightPaneGraphIndex] = useState(0); // Graph position in right pane
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(250);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // Track if sidebar is collapsed
+  const [lastSidebarWidth, setLastSidebarWidth] = useState(250); // Remember width before collapse
   const [graphKey, setGraphKey] = useState(0);
   const [, setTodoKey] = useState(0);
   void setTodoKey; // Reserved for todo refresh
@@ -230,6 +242,17 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   const [whiteboardRenaming, setWhiteboardRenaming] = useState<string | null>(null);
   const [whiteboardDeleteConfirm, setWhiteboardDeleteConfirm] = useState<WhiteboardMeta | null>(null);
 
+  // CRM state for sidebar
+  const [crmBoards, setCRMBoards] = useState<CRMBoard[]>([]);
+  const [activeCRMBoardId, setActiveCRMBoardId] = useState<string | null>(null);
+  const [renamingCRMBoardId, setRenamingCRMBoardId] = useState<string | null>(null);
+  const [crmBoardContextMenu, setCRMBoardContextMenu] = useState<{
+    x: number;
+    y: number;
+    board: CRMBoard;
+  } | null>(null);
+  const [showCRMBoardTypeModal, setShowCRMBoardTypeModal] = useState(false);
+
   // Unread chat message count
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
@@ -268,6 +291,9 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
 
   // Track if we've already processed the redirect (prevents double-processing in React Strict Mode)
   const redirectProcessedRef = useRef(false);
+
+  // Track previous team ID for per-team session management
+  const previousTeamIdRef = useRef<string | null>(null);
 
   // Refs to capture latest state values for event handlers
   const isDraggingRef = useRef(isDragging);
@@ -435,57 +461,123 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     }
   }, [splitView, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab]);
 
-  // Load session from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedSession = localStorage.getItem('teamEditorSession');
-      if (savedSession) {
-        const session = JSON.parse(savedSession);
-        if (isDev) console.log('📂 Restoring team session:', session);
+  // Helper function to apply session state
+  const applySessionState = useCallback((session: any) => {
+    if (session.splitView) {
+      // Restore split view
+      setSplitView(true);
+      setLeftPaneFiles(session.leftPaneFiles || []);
+      setRightPaneFiles(session.rightPaneFiles || []);
+      setLeftPaneTab(session.leftPaneTab || 'graph');
+      setRightPaneTab(session.rightPaneTab || 'graph');
+      setActivePane(session.activePane || 'left');
+      // Restore graph visibility for split view
+      if (session.leftPaneShowGraph !== undefined) setLeftPaneShowGraph(session.leftPaneShowGraph);
+      if (session.rightPaneShowGraph !== undefined) setRightPaneShowGraph(session.rightPaneShowGraph);
+      // Restore graph tab indices for split view
+      if (session.leftPaneGraphIndex !== undefined) setLeftPaneGraphIndex(session.leftPaneGraphIndex);
+      if (session.rightPaneGraphIndex !== undefined) setRightPaneGraphIndex(session.rightPaneGraphIndex);
+    } else {
+      // Restore single pane (default Dashboard for new teams)
+      setSplitView(false);
+      setOpenFiles(session.openFiles || []);
+      setActiveTab(session.activeTab || 'special://dashboard');
+      setLeftPaneFiles([]);
+      setRightPaneFiles([]);
+      // Restore showGraphTab state (default to true if not saved)
+      if (session.showGraphTab !== undefined) setShowGraphTab(session.showGraphTab);
+      // Restore graph tab index
+      if (session.graphTabIndex !== undefined) setGraphTabIndex(session.graphTabIndex);
+    }
 
-        if (session.splitView) {
-          // Restore split view
-          setSplitView(true);
-          setLeftPaneFiles(session.leftPaneFiles || []);
-          setRightPaneFiles(session.rightPaneFiles || []);
-          setLeftPaneTab(session.leftPaneTab || 'graph');
-          setRightPaneTab(session.rightPaneTab || 'graph');
-          setActivePane(session.activePane || 'left');
-          // Restore graph visibility for split view
-          if (session.leftPaneShowGraph !== undefined) setLeftPaneShowGraph(session.leftPaneShowGraph);
-          if (session.rightPaneShowGraph !== undefined) setRightPaneShowGraph(session.rightPaneShowGraph);
-          // Restore graph tab indices for split view
-          if (session.leftPaneGraphIndex !== undefined) setLeftPaneGraphIndex(session.leftPaneGraphIndex);
-          if (session.rightPaneGraphIndex !== undefined) setRightPaneGraphIndex(session.rightPaneGraphIndex);
-        } else {
-          // Restore single pane
-          setOpenFiles(session.openFiles || []);
-          setActiveTab(session.activeTab || 'graph');
-          // Restore showGraphTab state (default to true if not saved)
-          if (session.showGraphTab !== undefined) setShowGraphTab(session.showGraphTab);
-          // Restore graph tab index
-          if (session.graphTabIndex !== undefined) setGraphTabIndex(session.graphTabIndex);
-        }
-
-        // Restore sidebar width if saved
-        if (session.sidebarWidth) {
-          setSidebarWidth(session.sidebarWidth);
-        }
-
-        setSessionLoaded(true);
-      } else {
-        setSessionLoaded(true);
-      }
-    } catch (error) {
-      console.error('Failed to restore team session:', error);
-      setSessionLoaded(true);
+    // Restore sidebar width if saved
+    if (session.sidebarWidth) {
+      setSidebarWidth(session.sidebarWidth);
     }
   }, []);
 
-  // Save session to localStorage whenever tabs change (debounced for performance)
+  // Helper to get current session state
+  const getCurrentSessionState = useCallback(() => {
+    return {
+      splitView,
+      openFiles,
+      activeTab,
+      showGraphTab,
+      graphTabIndex,
+      leftPaneFiles,
+      rightPaneFiles,
+      leftPaneTab,
+      rightPaneTab,
+      activePane,
+      sidebarWidth,
+      leftPaneShowGraph,
+      rightPaneShowGraph,
+      leftPaneGraphIndex,
+      rightPaneGraphIndex
+    };
+  }, [splitView, openFiles, activeTab, showGraphTab, graphTabIndex, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab, activePane, sidebarWidth, leftPaneShowGraph, rightPaneShowGraph, leftPaneGraphIndex, rightPaneGraphIndex]);
+
+  // Handle team switching - save previous team's session and load new team's session
   useEffect(() => {
-    // Don't save until we've loaded the session
-    if (!sessionLoaded) return;
+    if (!selectedTeam) return;
+
+    const currentTeamId = selectedTeam.id;
+    const previousTeamId = previousTeamIdRef.current;
+
+    // If this is the initial team selection or team has changed
+    if (previousTeamId !== currentTeamId) {
+      // Save session for the previous team (if there was one and session was already loaded)
+      if (previousTeamId && sessionLoaded) {
+        const sessionToSave = getCurrentSessionState();
+        if (isDev) console.log(`💾 Saving session for team ${previousTeamId}:`, sessionToSave);
+        localStorage.setItem(`teamEditorSession_${previousTeamId}`, JSON.stringify(sessionToSave));
+      }
+
+      // Load session for the new team
+      try {
+        const savedSession = localStorage.getItem(`teamEditorSession_${currentTeamId}`);
+        if (savedSession) {
+          const session = JSON.parse(savedSession);
+          if (isDev) console.log(`📂 Restoring session for team ${currentTeamId}:`, session);
+          applySessionState(session);
+        } else {
+          // No saved session for this team - use default (Dashboard only)
+          if (isDev) console.log(`📂 No session for team ${currentTeamId}, using default (Dashboard)`);
+          applySessionState({
+            splitView: false,
+            openFiles: [],
+            activeTab: 'special://dashboard',
+            showGraphTab: true,
+            graphTabIndex: 0
+          });
+        }
+      } catch (error) {
+        console.error('Failed to restore team session:', error);
+        // Use default on error
+        applySessionState({
+          splitView: false,
+          openFiles: [],
+          activeTab: 'special://dashboard',
+          showGraphTab: true,
+          graphTabIndex: 0
+        });
+      }
+
+      // Update the previous team ref
+      previousTeamIdRef.current = currentTeamId;
+
+      // Mark session as loaded (allows saving to start)
+      if (!sessionLoaded) {
+        setSessionLoaded(true);
+      }
+    }
+  }, [selectedTeam, sessionLoaded, applySessionState, getCurrentSessionState]);
+
+  // Save session to localStorage whenever tabs change (debounced for performance)
+  // Uses team-specific key so each team remembers its own window state
+  useEffect(() => {
+    // Don't save until we've loaded the session and have a selected team
+    if (!sessionLoaded || !selectedTeam) return;
 
     const timeoutId = setTimeout(() => {
       const session = {
@@ -506,15 +598,16 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         rightPaneGraphIndex
       };
 
-      if (isDev) console.log('💾 Saving team session:', session);
-      localStorage.setItem('teamEditorSession', JSON.stringify(session));
+      if (isDev) console.log(`💾 Saving session for team ${selectedTeam.id}:`, session);
+      localStorage.setItem(`teamEditorSession_${selectedTeam.id}`, JSON.stringify(session));
     }, 500); // Debounce: wait 500ms after last change before saving
 
     return () => clearTimeout(timeoutId);
-  }, [sessionLoaded, splitView, openFiles, activeTab, showGraphTab, graphTabIndex, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab, activePane, sidebarWidth, leftPaneShowGraph, rightPaneShowGraph, leftPaneGraphIndex, rightPaneGraphIndex]);
+  }, [sessionLoaded, selectedTeam, splitView, openFiles, activeTab, showGraphTab, graphTabIndex, leftPaneFiles, rightPaneFiles, leftPaneTab, rightPaneTab, activePane, sidebarWidth, leftPaneShowGraph, rightPaneShowGraph, leftPaneGraphIndex, rightPaneGraphIndex]);
 
   // Load user's teams on mount
   useEffect(() => {
+    console.log('[TeamMainUI] useEffect triggered - user.email:', user.email);
     loadTeams();
   }, [user.email]);
 
@@ -563,32 +656,37 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      if (isDev) console.log('🔄 Loading teams for user:', user.email);
+      console.log('[loadTeams] START - user.email:', user.email);
+      console.log('[loadTeams] timestamp:', new Date().toISOString());
 
       // First, check for pending invitations and auto-accept them
       try {
+        console.log('[loadTeams] calling getPendingInvites...');
         const pendingInvites = await getPendingInvites(user.email);
+        console.log('[loadTeams] getPendingInvites returned:', pendingInvites.length, 'invites');
         if (pendingInvites.length > 0) {
-          if (isDev) console.log(`📨 Found ${pendingInvites.length} pending invitation(s) for ${user.email}`);
+          console.log(`[loadTeams] Found ${pendingInvites.length} pending invitation(s)`);
 
           // Auto-accept all pending invitations
           for (const invite of pendingInvites) {
             try {
-              if (isDev) console.log(`✅ Auto-accepting invite to team "${invite.teamName}" as ${invite.role || 'member'}...`);
+              console.log(`[loadTeams] Auto-accepting invite to team "${invite.teamName}"...`);
               await acceptTeamInvite(invite.teamId, user.email, user.displayName || user.email, user.photoURL);
-              if (isDev) console.log(`🎉 Successfully joined team "${invite.teamName}" as ${invite.role || 'member'}`);
+              console.log(`[loadTeams] Accepted invite to "${invite.teamName}"`);
             } catch (acceptError) {
-              console.error(`❌ Failed to accept invite to team ${invite.teamName}:`, acceptError);
+              console.error(`[loadTeams] Failed to accept invite:`, acceptError);
             }
           }
         }
       } catch (inviteError) {
-        console.error('⚠️ Error checking pending invites:', inviteError);
+        console.error('[loadTeams] getPendingInvites FAILED:', inviteError);
         // Continue loading teams even if invite check fails
       }
 
+      console.log('[loadTeams] calling getUserTeams...');
       const userTeams = await getUserTeams(user.email);
-      if (isDev) console.log('✅ Loaded teams:', userTeams);
+      console.log('[loadTeams] getUserTeams returned:', userTeams.length, 'teams');
+      console.log('[loadTeams] team names:', userTeams.map(t => t.name));
       const userEmailLower = user.email.toLowerCase();
       if (isDev) console.log('📋 Team details:', userTeams.map(t => ({
         name: t.name,
@@ -599,20 +697,16 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         yourRole: t.members[userEmailLower]?.role,
         yourJoinedAt: t.members[userEmailLower]?.joinedAt
       })));
-      // Sync user's current profile (photoURL, displayName, customAvatar) to all their teams
-      // This ensures profile info is shown even for existing members
-      // Also update the local state immediately so we don't wait for Firestore
+      // Profile sync is handled by the dedicated useEffect (syncs on displayName/photoURL/customAvatar changes)
+      // No need to duplicate writes here — just update local state
       const userEmailLowerForSync = user.email.toLowerCase();
       if (user.photoURL || user.displayName || user.customAvatar) {
         userTeams.forEach(team => {
-          // Update Firestore
-          updateMemberProfile(team.id, user.email, user.displayName, user.photoURL, user.customAvatar);
-          // Also update local state immediately
-          if (team.members[userEmailLowerForSync]) {
-            if (user.displayName) team.members[userEmailLowerForSync].displayName = user.displayName;
-            if (user.photoURL) team.members[userEmailLowerForSync].photoURL = user.photoURL;
-            if (user.customAvatar) team.members[userEmailLowerForSync].customAvatar = user.customAvatar;
-          }
+          const member = team.members[userEmailLowerForSync];
+          if (!member) return;
+          if (user.displayName) member.displayName = user.displayName;
+          if (user.photoURL) member.photoURL = user.photoURL;
+          if (user.customAvatar) member.customAvatar = user.customAvatar;
         });
       }
       setTeams(userTeams);
@@ -731,8 +825,10 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
         setShowCreateTeamModal(true);
       }
     } catch (error) {
-      console.error('❌ Failed to load teams:', error);
+      console.error('[loadTeams] CAUGHT ERROR:', error);
+      console.error('[loadTeams] error type:', typeof error, 'message:', (error as any)?.message, 'code:', (error as any)?.code);
     } finally {
+      console.log('[loadTeams] FINALLY - setting loading=false');
       setLoading(false);
     }
   };
@@ -1033,6 +1129,66 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
 
     return () => unsubscribe();
   }, [selectedTeam?.id]);
+
+  // Subscribe to CRM boards and auto-create if none exist
+  // In team mode, we subscribe to BOTH personal and team boards
+  useEffect(() => {
+    if (!user?.uid || !user?.email) {
+      setCRMBoards([]);
+      setActiveCRMBoardId(null);
+      return;
+    }
+
+    let hasAutoCreated = false;
+    let personalBoards: CRMBoard[] = [];
+    let teamBoards: CRMBoard[] = [];
+
+    const updateBoards = async () => {
+      const allBoards = [...personalBoards, ...teamBoards];
+      setCRMBoards(allBoards);
+
+      // Auto-create a board if none exist
+      if (allBoards.length === 0 && !hasAutoCreated) {
+        hasAutoCreated = true;
+        try {
+          // In team mode, create a team board by default
+          const newBoard = await createCRMBoard(
+            'Untitled',
+            selectedTeam ? 'team' : 'personal',
+            user.uid,
+            user.email!,
+            selectedTeam?.id
+          );
+          setActiveCRMBoardId(newBoard.id);
+        } catch (err) {
+          console.error('Failed to auto-create CRM board:', err);
+        }
+      } else if (!activeCRMBoardId && allBoards.length > 0) {
+        // Auto-select first board if none selected
+        setActiveCRMBoardId(allBoards[0].id);
+      }
+    };
+
+    // Subscribe to personal boards
+    const unsubscribePersonal = subscribeToCRMBoards(user.uid, undefined, (boards: CRMBoard[]) => {
+      personalBoards = boards;
+      updateBoards();
+    });
+
+    // Subscribe to team boards (if in team mode)
+    let unsubscribeTeam: (() => void) | null = null;
+    if (selectedTeam?.id) {
+      unsubscribeTeam = subscribeToCRMBoards(user.uid, selectedTeam.id, (boards: CRMBoard[]) => {
+        teamBoards = boards;
+        updateBoards();
+      });
+    }
+
+    return () => {
+      unsubscribePersonal();
+      if (unsubscribeTeam) unsubscribeTeam();
+    };
+  }, [user?.uid, user?.email, selectedTeam?.id]);
 
   // Subscribe to team member profile changes in real-time
   useEffect(() => {
@@ -1597,8 +1753,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     const handleMouseMove = (e: MouseEvent) => {
       if (isResizingSidebar) {
         const newWidth = e.clientX;
-        // Clamp between 100px and 500px
-        const clampedWidth = Math.min(Math.max(newWidth, 100), 500);
+        // Clamp between 180px and 500px (180px min to keep action buttons visible)
+        const clampedWidth = Math.min(Math.max(newWidth, 180), 500);
         setSidebarWidth(clampedWidth);
       }
     };
@@ -1702,6 +1858,10 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
       setOpenFiles(prevFiles => {
         const existingFile = prevFiles.find(f => f.path === filePath);
         if (existingFile) {
+          // Update name for whiteboard tabs to sync with sidebar
+          if (filePath.startsWith('special://whiteboard') && existingFile.name !== fileName) {
+            return prevFiles.map(f => f.path === filePath ? { ...f, name: fileName } : f);
+          }
           return prevFiles; // File already open, just return current state
         }
         return [...prevFiles, { path: filePath, name: fileName, id: fileId }];
@@ -1717,6 +1877,10 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
       setTargetFiles(prevFiles => {
         const existingFile = prevFiles.find(f => f.path === filePath);
         if (existingFile) {
+          // Update name for whiteboard tabs to sync with sidebar
+          if (filePath.startsWith('special://whiteboard') && existingFile.name !== fileName) {
+            return prevFiles.map(f => f.path === filePath ? { ...f, name: fileName } : f);
+          }
           return prevFiles; // File already open
         }
         return [...prevFiles, { path: filePath, name: fileName, id: fileId }];
@@ -1973,8 +2137,20 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     const startWidth = sidebarWidth;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(100, Math.min(500, startWidth + (e.clientX - startX)));
-      setSidebarWidth(newWidth);
+      const newWidth = startWidth + (e.clientX - startX);
+      // If dragged below collapse threshold, collapse the sidebar
+      if (newWidth < 150) {
+        setIsSidebarCollapsed(true);
+        setSidebarWidth(0);
+      } else {
+        // Normal resize: clamp between 180px and 500px
+        const clampedWidth = Math.min(Math.max(newWidth, 180), 500);
+        setSidebarWidth(clampedWidth);
+        setLastSidebarWidth(clampedWidth); // Remember for re-expand
+        if (isSidebarCollapsed) {
+          setIsSidebarCollapsed(false);
+        }
+      }
     };
 
     const handleMouseUp = () => {
@@ -1984,6 +2160,28 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Toggle sidebar collapsed state
+  const handleSidebarToggle = () => {
+    if (isSidebarCollapsed) {
+      // Expand: restore previous width
+      setSidebarWidth(lastSidebarWidth || 250);
+      setIsSidebarCollapsed(false);
+    } else {
+      // Collapse: save current width and hide
+      setLastSidebarWidth(sidebarWidth);
+      setSidebarWidth(0);
+      setIsSidebarCollapsed(true);
+    }
+  };
+
+  // Handle team selection from account switcher
+  const handleTeamSelectFromSwitcher = (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (team) {
+      setSelectedTeam(team);
+    }
   };
 
   const handleMoveItem = async (sourcePath: string, destinationPath: string) => {
@@ -2297,6 +2495,20 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     if (!selectedTeam || !newName.trim()) return;
     try {
       await renameWhiteboard(selectedTeam.id, whiteboardId, newName.trim());
+      // Also update tab name if this whiteboard is currently open
+      if (activeWhiteboardId === whiteboardId) {
+        const trimmedName = newName.trim()
+        const whiteboardPath = `special://whiteboard/${whiteboardId}`
+        setOpenFiles(prev => prev.map(f =>
+          f.path === whiteboardPath ? { ...f, name: trimmedName } : f
+        ))
+        setLeftPaneFiles(prev => prev.map(f =>
+          f.path === whiteboardPath ? { ...f, name: trimmedName } : f
+        ))
+        setRightPaneFiles(prev => prev.map(f =>
+          f.path === whiteboardPath ? { ...f, name: trimmedName } : f
+        ))
+      }
       setWhiteboardRenaming(null);
     } catch (error) {
       console.error('Failed to rename whiteboard:', error);
@@ -2329,6 +2541,77 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
       console.error('Failed to delete whiteboard:', error);
     }
   };
+
+  // CRM Board handlers
+  const handleCreateCRMBoard = useCallback(() => {
+    // Show modal to choose board type (personal or team)
+    setShowCRMBoardTypeModal(true);
+  }, []);
+
+  const handleCreateCRMBoardWithType = useCallback(async (type: 'personal' | 'team') => {
+    if (!user?.uid || !user?.email) return;
+    setShowCRMBoardTypeModal(false);
+    try {
+      const newBoard = await createCRMBoard(
+        'Untitled',
+        type,
+        user.uid,
+        user.email,
+        type === 'team' ? selectedTeam?.id : undefined
+      );
+      setActiveCRMBoardId(newBoard.id);
+    } catch (error) {
+      console.error('Failed to create CRM board:', error);
+    }
+  }, [user?.uid, user?.email, selectedTeam]);
+
+  const handleSelectCRMBoard = useCallback((boardId: string) => {
+    setActiveCRMBoardId(boardId);
+  }, []);
+
+  const handleCRMBoardContextMenu = useCallback((e: React.MouseEvent, board: { id: string; name: string }) => {
+    e.preventDefault();
+    const fullBoard = crmBoards.find(b => b.id === board.id);
+    if (fullBoard) {
+      setCRMBoardContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        board: fullBoard
+      });
+    }
+  }, [crmBoards]);
+
+  const handleCRMBoardRename = useCallback(async (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    try {
+      await renameCRMBoard(id, newName.trim());
+      setRenamingCRMBoardId(null);
+    } catch (error) {
+      console.error('Failed to rename CRM board:', error);
+    }
+  }, []);
+
+  const handleCRMBoardDelete = useCallback(async (id: string) => {
+    try {
+      await deleteCRMBoard(id);
+      if (activeCRMBoardId === id) {
+        const remaining = crmBoards.filter(b => b.id !== id);
+        setActiveCRMBoardId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      setCRMBoardContextMenu(null);
+    } catch (error) {
+      console.error('Failed to delete CRM board:', error);
+    }
+  }, [activeCRMBoardId, crmBoards]);
+
+  // Convert CRM boards for sidebar - include type for display
+  const crmBoardsForSidebar = useMemo(() => {
+    return crmBoards.map(b => ({
+      id: b.id,
+      name: b.name,
+      type: b.type as 'personal' | 'team'
+    }));
+  }, [crmBoards]);
 
   // Open whiteboard in a new tab (each whiteboard gets unique tab path)
   const handleWhiteboardOpenInTab = (whiteboard: WhiteboardMeta) => {
@@ -3171,6 +3454,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
     return items;
   }, [fileTree]);
 
+  console.log('[TeamMainUI] render - loading:', loading, 'teams:', teams.length, 'selectedTeam:', selectedTeam?.name);
+
   if (loading) {
     return (
       <div className="team-main-ui">
@@ -3320,6 +3605,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                 localStorage.setItem('lastViewedRecordingsTimestamp', now.toString());
                 setNewRecordingsCount(0);
               }}
+              // CRM feature hidden for now
+              // onCRMClick={() => handleSelectFile('special://crm', 'CRM')}
               onNotificationsClick={() => {
                 handleSelectFile('special://notifications', 'Notifications');
               }}
@@ -3343,17 +3630,21 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                   if (currentTab === 'special://chat') return 'chat';
                   if (currentTab.startsWith('special://whiteboard')) return 'whiteboard';
                   if (currentTab === 'special://recordings') return 'recordings';
+                  if (currentTab === 'special://crm') return 'crm';
                   if (currentTab === 'special://notifications') return 'notifications';
                   if (currentTab === 'special://settings') return 'settings';
                   return null;
                 })()
               }
               hasUpdate={hasUpdate}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onSidebarToggle={handleSidebarToggle}
             />
 
             {/* Left Sidebar - File Tree */}
-            <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
-              <UnifiedSidebar
+            {!isSidebarCollapsed && (
+              <div className="explorer-sidebar" style={{ width: `${sidebarWidth}px` }}>
+                <UnifiedSidebar
                 ref={sidebarRef}
                 fileTree={fileTree}
                 onSelectFile={handleSelectFile}
@@ -3369,6 +3660,8 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                 onChangeFolderPath={() => {}}
                 filesWithIncomingLinks={filesWithIncomingLinks}
                 teamName={selectedTeam.name}
+                teamId={selectedTeam.id}
+                onTeamSelect={handleTeamSelectFromSwitcher}
                 // Whiteboard section props - only show when on whiteboard tab
                 showWhiteboardSection={
                   splitView
@@ -3384,6 +3677,20 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                 renamingWhiteboardId={whiteboardRenaming}
                 onWhiteboardRenameSubmit={handleWhiteboardRename}
                 onWhiteboardRenameCancel={() => setWhiteboardRenaming(null)}
+                // CRM section props
+                showCRMSection={
+                  splitView
+                    ? (leftPaneTab === 'special://crm' || rightPaneTab === 'special://crm')
+                    : activeTab === 'special://crm'
+                }
+                crmBoards={crmBoardsForSidebar}
+                activeCRMBoardId={activeCRMBoardId}
+                onSelectCRMBoard={handleSelectCRMBoard}
+                onCreateCRMBoard={handleCreateCRMBoard}
+                onCRMBoardContextMenu={handleCRMBoardContextMenu}
+                renamingCRMBoardId={renamingCRMBoardId}
+                onCRMBoardRenameSubmit={handleCRMBoardRename}
+                onCRMBoardRenameCancel={() => setRenamingCRMBoardId(null)}
               />
 
               {/* Folder Access Status */}
@@ -3458,10 +3765,13 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                   />
                 </div>
               )}
-            </div>
+              </div>
+            )}
 
-            {/* Sidebar Divider */}
-            <div className="sidebar-divider" onMouseDown={handleSidebarDividerMouseDown}></div>
+            {/* Sidebar Divider - only show when sidebar is not collapsed */}
+            {!isSidebarCollapsed && (
+              <div className="sidebar-divider" onMouseDown={handleSidebarDividerMouseDown}></div>
+            )}
 
             {/* Main Content Area */}
             <div className="main-content" ref={mainContentRef}>
@@ -3752,6 +4062,18 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
                         hasPaidAccess={subscriptionStatus === 'active' || activePromo !== null}
                         onUpgradeClick={isTeamOwner ? () => setShowUpgradeModal(true) : undefined}
                       />
+                    )}
+                    {activeTab === 'special://crm' && selectedTeam && (
+                      <Suspense fallback={<div className="crm-loading">Loading CRM...</div>}>
+                        <CRMPanel
+                          userId={user.uid}
+                          userEmail={user.email || ''}
+                          teamId={selectedTeam.id}
+                          teamName={selectedTeam.name}
+                          boardId={activeCRMBoardId}
+                          boardName={crmBoards.find(b => b.id === activeCRMBoardId)?.name}
+                        />
+                      </Suspense>
                     )}
                     {openFiles.filter(file => !file.path.startsWith('special://')).map((file) => {
                       const isEditable = file.name.toLowerCase().endsWith('.md') || file.name.toLowerCase().endsWith('.txt');
@@ -4409,6 +4731,68 @@ function TeamMainUIInner({ user }: TeamMainUIProps) {
               >
                 <TrashIcon className="menu-icon" />
                 Delete
+              </div>
+            </div>
+          )}
+
+          {/* CRM Board Context Menu */}
+          {crmBoardContextMenu && (
+            <div
+              className="context-menu"
+              style={{ left: `${crmBoardContextMenu.x}px`, top: `${crmBoardContextMenu.y}px` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className="context-menu-item"
+                onClick={() => {
+                  setRenamingCRMBoardId(crmBoardContextMenu.board.id);
+                  setCRMBoardContextMenu(null);
+                }}
+              >
+                <PencilIcon className="menu-icon" />
+                Rename
+              </div>
+              <div className="context-menu-separator" />
+              <div
+                className="context-menu-item danger"
+                onClick={() => handleCRMBoardDelete(crmBoardContextMenu.board.id)}
+              >
+                <TrashIcon className="menu-icon" />
+                Delete
+              </div>
+            </div>
+          )}
+
+          {/* CRM Board Type Selection Modal */}
+          {showCRMBoardTypeModal && (
+            <div className="modal-overlay" onClick={() => setShowCRMBoardTypeModal(false)}>
+              <div className="crm-board-type-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h3>Create New CRM Board</h3>
+                  <button className="close-btn" onClick={() => setShowCRMBoardTypeModal(false)}>
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="board-type-options">
+                  <button
+                    className="board-type-option"
+                    onClick={() => handleCreateCRMBoardWithType('personal')}
+                  >
+                    <UserIcon size={24} />
+                    <span className="option-title">For Me</span>
+                    <span className="option-desc">Personal CRM board, only you can see</span>
+                  </button>
+                  {selectedTeam && (
+                    <button
+                      className="board-type-option team"
+                      onClick={() => handleCreateCRMBoardWithType('team')}
+                    >
+                      <Users size={24} />
+                      <span className="option-title">For Team</span>
+                      <span className="option-desc">Shared with {selectedTeam.name}</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}

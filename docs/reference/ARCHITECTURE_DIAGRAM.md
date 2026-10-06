@@ -114,7 +114,7 @@
 ### Example: User A creates a note
 
 ```
-1. User A (iamjunson@gmail.com) creates "Sprint Planning.md"
+1. User A (user-a@example.com) creates "Sprint Planning.md"
    ↓
 2. Frontend: DriveStorageBackendV2.writeFile()
    ↓
@@ -230,7 +230,7 @@
 Firebase Auth → Firestore
 {
   uid: "user-abc-123",
-  email: "iamjunson@gmail.com",
+  email: "user-a@example.com",
   displayName: "Love Jsson",
   role: "employee"
 }
@@ -244,7 +244,7 @@ Firestore: teams/team123
   name: "Engineering Team",
   driveFolderId: "1A2B3C4D5E6F...",
   members: [
-    { uid: "user-abc-123", email: "iamjunson@gmail.com", role: "member" },
+    { uid: "user-abc-123", email: "user-a@example.com", role: "member" },
     { uid: "user-def-456", email: "alice@company.com", role: "member" }
   ],
   createdBy: "user-abc-123",

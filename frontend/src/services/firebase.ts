@@ -5,6 +5,7 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  memoryLocalCache,
   CACHE_SIZE_UNLIMITED
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -22,7 +23,9 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
+console.log('[firebase] Initializing Firebase app...');
 const app = initializeApp(firebaseConfig);
+console.log('[firebase] App initialized');
 
 // Initialize Firebase services
 export const auth = getAuth(app);
@@ -30,12 +33,13 @@ export const auth = getAuth(app);
 // Initialize Firestore with offline persistence
 // This caches all Firestore data locally in IndexedDB
 // Data loads instantly from cache, then syncs with server in background
+// TEMPORARY: Use memory cache to bypass corrupted IndexedDB persistent cache
+// TODO: Switch back to persistentLocalCache after clearing IndexedDB
+console.log('[firebase] Initializing Firestore with memory cache (bypassing corrupted persistent cache)...');
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-    cacheSizeBytes: CACHE_SIZE_UNLIMITED
-  })
+  localCache: memoryLocalCache()
 });
+console.log('[firebase] Firestore initialized with memory cache');
 
 export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1'); // Specify region for callable functions

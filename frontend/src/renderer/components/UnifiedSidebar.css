@@ -21,6 +21,8 @@
   padding: 12px 16px;
   border-bottom: 1px solid #333;
   background-color: #252525;
+  gap: 8px;
+  min-width: 0; /* Allow shrinking */
 }
 
 .sidebar-title {
@@ -31,6 +33,14 @@
   margin: 0;
   cursor: pointer;
   transition: color 0.15s ease;
+}
+
+/* Team name - responsive truncation */
+.sidebar-title.team-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
 }
 
 .sidebar-title:hover {
@@ -51,6 +61,51 @@
 
 .team-header-info .sidebar-title:hover {
   text-decoration: none;
+}
+
+/* Clickable team header for account switcher */
+.team-header-info.clickable {
+  flex: 1;
+  min-width: 0; /* Allow shrinking below content size */
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 12px;
+  margin: -8px -12px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+  overflow: hidden;
+}
+
+.team-header-info.clickable:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.team-header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.team-header-email {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-header-chevron {
+  color: #888;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.team-header-chevron.open {
+  transform: rotate(180deg);
 }
 
 /* Role badge styles */
@@ -92,6 +147,7 @@
 .sidebar-actions {
   display: flex;
   gap: 4px;
+  flex-shrink: 0; /* Never shrink action buttons */
 }
 
 .action-button {
@@ -731,5 +787,99 @@
 
 .whiteboard-rename-input:focus {
   border-color: var(--accent-color, #1177bb);
+}
+
+/* CRM Board Items */
+.crm-board-list {
+  padding: 4px 0;
+}
+
+.crm-board-item {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 4px 0 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0;
+  transition: background-color 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.crm-board-item:hover {
+  background-color: #2d2d2d;
+}
+
+.crm-board-item.active {
+  background-color: #37373d;
+}
+
+.crm-board-item.active:hover {
+  background-color: #3d3d42;
+}
+
+.crm-board-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #cccccc;
+}
+
+.crm-board-item.active .crm-board-name {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* CRM Board rename input */
+.crm-board-rename-input {
+  flex: 1;
+  height: 18px;
+  padding: 0 4px;
+  margin: 0;
+  background: #1e1e1e;
+  border: 1px solid #64c8ca;
+  border-radius: 2px;
+  color: #cccccc;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.crm-board-rename-input:focus {
+  border-color: #7dd3d5;
+}
+
+/* CRM Board Type Badge */
+.crm-board-type-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+.crm-board-type-badge.personal {
+  background: rgba(100, 200, 202, 0.2);
+  color: #64c8ca;
+}
+
+.crm-board-type-badge.team {
+  background: rgba(167, 139, 250, 0.2);
+  color: #a78bfa;
+}
+
+.crm-board-item.active .crm-board-type-badge.personal {
+  background: rgba(100, 200, 202, 0.25);
+  color: #7dd3d5;
+}
+
+.crm-board-item.active .crm-board-type-badge.team {
+  background: rgba(167, 139, 250, 0.25);
+  color: #c4b5fd;
 }
 

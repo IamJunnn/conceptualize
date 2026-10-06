@@ -7,6 +7,8 @@ import {
   Bell,
   MonitorPlay,
   PenTool,
+  TableProperties,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import './IconRail.css';
@@ -27,16 +29,19 @@ interface IconRailProps {
   onGraphClick: () => void;
   onTodosClick: () => void;
   onTimelineClick: () => void;
+  onCRMClick?: () => void; // CRM - available in both modes
   onChatClick?: () => void; // Optional - only shown in team mode
   onWhiteboardClick?: () => void; // Optional - only shown in team mode
   onRecordingsClick?: () => void; // Optional - only shown in team mode
   onNotificationsClick?: () => void;
   onSettingsClick: () => void;
-  activeItem?: 'dashboard' | 'graph' | 'todos' | 'timeline' | 'chat' | 'whiteboard' | 'recordings' | 'notifications' | 'settings' | null;
+  activeItem?: 'dashboard' | 'graph' | 'todos' | 'timeline' | 'crm' | 'chat' | 'whiteboard' | 'recordings' | 'notifications' | 'settings' | null;
   notificationCount?: number; // Badge count for unread notifications
   unreadMessageCount?: number; // Badge count for unread chat messages
   newRecordingsCount?: number; // Badge count for new recordings
   hasUpdate?: boolean; // Show update indicator on settings
+  isSidebarCollapsed?: boolean; // Whether sidebar is collapsed
+  onSidebarToggle?: () => void; // Toggle sidebar collapsed state
 }
 
 const IconRail: React.FC<IconRailProps> = ({
@@ -44,6 +49,7 @@ const IconRail: React.FC<IconRailProps> = ({
   onGraphClick,
   onTodosClick,
   onTimelineClick,
+  onCRMClick,
   onChatClick,
   onWhiteboardClick,
   onRecordingsClick,
@@ -53,88 +59,114 @@ const IconRail: React.FC<IconRailProps> = ({
   notificationCount = 0,
   unreadMessageCount = 0,
   newRecordingsCount = 0,
-  hasUpdate = false
+  hasUpdate = false,
+  isSidebarCollapsed = false,
+  onSidebarToggle
 }) => {
   return (
     <div className="icon-rail">
       <div className="icon-rail-top">
+        {/* Sidebar Toggle - only show when collapsed */}
+        {onSidebarToggle && isSidebarCollapsed && (
+          <button
+            className="icon-rail-btn sidebar-toggle icon-only"
+            onClick={onSidebarToggle}
+            title="Open sidebar"
+          >
+            <PanelLeftOpen size={22} />
+          </button>
+        )}
         {/* 1. Dashboard */}
         <button
-          className={`icon-rail-btn ${activeItem === 'dashboard' ? 'active' : ''}`}
+          className={`icon-rail-btn with-label ${activeItem === 'dashboard' ? 'active' : ''}`}
           onClick={onDashboardClick}
-          title="Dashboard"
         >
           <LayoutDashboard size={22} />
+          <span className="icon-rail-label">Dashboard</span>
         </button>
         {/* 2. Graph */}
         <button
-          className={`icon-rail-btn ${activeItem === 'graph' ? 'active' : ''}`}
+          className={`icon-rail-btn with-label ${activeItem === 'graph' ? 'active' : ''}`}
           onClick={onGraphClick}
-          title="Graph"
         >
           <GraphIcon size={22} />
+          <span className="icon-rail-label">Graph</span>
         </button>
         {/* 3. Whiteboard (team mode only) */}
         {onWhiteboardClick && (
           <button
-            className={`icon-rail-btn ${activeItem === 'whiteboard' ? 'active' : ''}`}
+            className={`icon-rail-btn with-label ${activeItem === 'whiteboard' ? 'active' : ''}`}
             onClick={onWhiteboardClick}
-            title="Whiteboard"
           >
             <PenTool size={22} />
+            <span className="icon-rail-label">Whiteboard</span>
           </button>
         )}
         {/* 4. Todos */}
         <button
-          className={`icon-rail-btn ${activeItem === 'todos' ? 'active' : ''}`}
+          className={`icon-rail-btn with-label ${activeItem === 'todos' ? 'active' : ''}`}
           onClick={onTodosClick}
-          title="Todos"
         >
           <CheckSquare size={22} />
+          <span className="icon-rail-label">Todos</span>
         </button>
         {/* 5. Timeline */}
         <button
-          className={`icon-rail-btn ${activeItem === 'timeline' ? 'active' : ''}`}
+          className={`icon-rail-btn with-label ${activeItem === 'timeline' ? 'active' : ''}`}
           onClick={onTimelineClick}
-          title="Timeline"
         >
           <Calendar size={22} />
+          <span className="icon-rail-label">Timeline</span>
         </button>
-        {/* 6. Messages (team mode only) */}
-        {onChatClick && (
+        {/* 6. CRM */}
+        {onCRMClick && (
           <button
-            className={`icon-rail-btn ${activeItem === 'chat' ? 'active' : ''}`}
-            onClick={onChatClick}
-            title="Messages"
+            className={`icon-rail-btn with-label ${activeItem === 'crm' ? 'active' : ''}`}
+            onClick={onCRMClick}
           >
-            <ChatBubbleLeftRightIcon style={{ width: '22px', height: '22px' }} />
-            {unreadMessageCount > 0 && (
-              <span className="notification-badge">
-                {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
-              </span>
-            )}
+            <TableProperties size={22} />
+            <span className="icon-rail-label">CRM</span>
           </button>
         )}
-        {/* 7. Recordings (team mode only) */}
+        {/* 7. Messages (team mode only) */}
+        {onChatClick && (
+          <button
+            className={`icon-rail-btn with-label ${activeItem === 'chat' ? 'active' : ''}`}
+            onClick={onChatClick}
+          >
+            <div className="icon-wrapper">
+              <ChatBubbleLeftRightIcon style={{ width: '22px', height: '22px' }} />
+              {unreadMessageCount > 0 && (
+                <span className="notification-badge">
+                  {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                </span>
+              )}
+            </div>
+            <span className="icon-rail-label">Chat</span>
+          </button>
+        )}
+        {/* 8. Recordings (team mode only) */}
         {onRecordingsClick && (
           <button
-            className={`icon-rail-btn ${activeItem === 'recordings' ? 'active' : ''}`}
+            className={`icon-rail-btn with-label ${activeItem === 'recordings' ? 'active' : ''}`}
             onClick={onRecordingsClick}
-            title="Recordings"
           >
-            <MonitorPlay size={22} />
-            {newRecordingsCount > 0 && (
-              <span className="notification-badge">
-                {newRecordingsCount > 99 ? '99+' : newRecordingsCount}
-              </span>
-            )}
+            <div className="icon-wrapper">
+              <MonitorPlay size={22} />
+              {newRecordingsCount > 0 && (
+                <span className="notification-badge">
+                  {newRecordingsCount > 99 ? '99+' : newRecordingsCount}
+                </span>
+              )}
+            </div>
+            <span className="icon-rail-label">Recordings</span>
           </button>
         )}
       </div>
       <div className="icon-rail-bottom">
         {onNotificationsClick && (
           <button
-            className={`icon-rail-btn ${activeItem === 'notifications' ? 'active' : ''}`}
+            className={`icon-rail-btn icon-only ${activeItem === 'notifications' ? 'active' : ''}`}
             onClick={onNotificationsClick}
             title="Notifications"
           >
@@ -147,7 +179,7 @@ const IconRail: React.FC<IconRailProps> = ({
           </button>
         )}
         <button
-          className={`icon-rail-btn ${activeItem === 'settings' ? 'active' : ''}`}
+          className={`icon-rail-btn icon-only ${activeItem === 'settings' ? 'active' : ''}`}
           onClick={onSettingsClick}
           title={hasUpdate ? "Settings (Update available)" : "Settings"}
         >

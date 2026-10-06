@@ -8,7 +8,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { open } from '@tauri-apps/plugin-shell';
-import { Team, getUserTeams, isInternalProEmail } from '../../services/teamService';
+import { Team, getUserTeams, getAllTeamsForUser, isInternalProEmail } from '../../services/teamService';
 import { getPromoStatusFromBilling } from '../../services/promoService';
 import { getTeamStorageUsage } from '../../services/storageTrackingService';
 import type { ActivePromoInfo } from '../../services/promoTypes';
@@ -33,7 +33,8 @@ import {
   Check,
   RefreshCw,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, setDoc, onSnapshot, Timestamp } from 'firebase/firestore';
@@ -69,6 +70,65 @@ interface SettingsPanelProps {
   onUpdateAvailable?: (available: boolean) => void; // Notify parent when update is available
 }
 
+// Cache key for storing teams per account
+const TEAMS_CACHE_KEY = 'accountTeamsCache';
+
+interface CachedTeam {
+  id: string;
+  name: string;
+}
+
+interface TeamsCache {
+  [email: string]: {
+    teams: CachedTeam[];
+    updatedAt: number;
+  };
+}
+
+// Save teams to local cache
+function cacheTeamsForAccount(email: string, teams: Team[]) {
+  try {
+    const cacheStr = localStorage.getItem(TEAMS_CACHE_KEY);
+    const cache: TeamsCache = cacheStr ? JSON.parse(cacheStr) : {};
+    cache[email.toLowerCase()] = {
+      teams: teams.map(t => ({ id: t.id, name: t.name })),
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem(TEAMS_CACHE_KEY, JSON.stringify(cache));
+  } catch (e) {
+    console.warn('Failed to cache teams:', e);
+  }
+}
+
+// Load cached teams for an account
+function getCachedTeams(email: string): CachedTeam[] {
+  try {
+    const cacheStr = localStorage.getItem(TEAMS_CACHE_KEY);
+    if (!cacheStr) return [];
+    const cache: TeamsCache = JSON.parse(cacheStr);
+    const cached = cache[email.toLowerCase()];
+    if (!cached) return [];
+    // Cache expires after 7 days
+    const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - cached.updatedAt > CACHE_EXPIRY) return [];
+    return cached.teams;
+  } catch (e) {
+    console.warn('Failed to load cached teams:', e);
+    return [];
+  }
+}
+
+// Type for account with teams display
+interface AccountWithTeams {
+  accountId: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  customAvatar?: string;
+  teams: Team[];
+  isCurrentAccount: boolean;
+}
+
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   onModeSwitch,
@@ -80,10 +140,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onCreateTeam,
   onUpdateAvailable
 }) => {
-  const { user, signOut, refreshUser } = useAuth();
+  const { user, signOut, refreshUser, savedAccounts, switchAccount } = useAuth();
 
   // Persist active tab in localStorage
-  const [activeTab, setActiveTab] = useLocalStorage<'general' | 'account' | 'subscription'>('settings-active-tab', 'general');
+  const [activeTab, setActiveTab] = useLocalStorage<'general' | 'account' | 'subscription' | 'teams'>('settings-active-tab', 'general');
+
+  // Teams tab - accounts with teams (like sidebar)
+  const [accountsWithTeams, setAccountsWithTeams] = useState<AccountWithTeams[]>([]);
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false);
+  const [isSwitchingAccount, setIsSwitchingAccount] = useState(false);
 
   const [appMode, setAppModeState] = useState<'local' | 'team' | null>(null);
   const [currentFolder, setCurrentFolder] = useState<string>('');
@@ -325,6 +390,130 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
     loadSubscriptionData();
   }, [activeTab, user?.email]);
+
+  // Load teams for all accounts when Teams tab is opened
+  useEffect(() => {
+    if (activeTab !== 'teams') return;
+
+    const fetchTeamsForAccounts = async () => {
+      setIsLoadingTeams(true);
+      try {
+        // Get all unique accounts from saved accounts and current user
+        const allAccounts = [...(savedAccounts || [])];
+        if (user && !allAccounts.find(a => a.id === user.uid)) {
+          allAccounts.unshift({
+            id: user.uid,
+            email: user.email || '',
+            displayName: user.displayName || '',
+            photoURL: user.photoURL,
+            customAvatar: user.customAvatar,
+            lastUsed: Date.now(),
+            authMethod: 'google' as const,
+          });
+        }
+
+        const accountsData: AccountWithTeams[] = await Promise.all(
+          allAccounts.map(async (account) => {
+            const isCurrentAccount = account.id === user?.uid;
+
+            // Only fetch teams for the current account (Firestore rules prevent cross-account queries)
+            if (isCurrentAccount) {
+              try {
+                const teams = await getAllTeamsForUser(account.email);
+                // Cache teams for this account
+                cacheTeamsForAccount(account.email, teams);
+
+                return {
+                  accountId: account.id,
+                  email: account.email,
+                  displayName: account.displayName,
+                  photoURL: account.photoURL,
+                  customAvatar: account.customAvatar,
+                  teams,
+                  isCurrentAccount: true,
+                };
+              } catch (error) {
+                console.error(`Failed to fetch teams for ${account.email}:`, error);
+                return {
+                  accountId: account.id,
+                  email: account.email,
+                  displayName: account.displayName,
+                  photoURL: account.photoURL,
+                  customAvatar: account.customAvatar,
+                  teams: [],
+                  isCurrentAccount: true,
+                };
+              }
+            } else {
+              // For other accounts, load from cache
+              const cachedTeams = getCachedTeams(account.email);
+
+              return {
+                accountId: account.id,
+                email: account.email,
+                displayName: account.displayName,
+                photoURL: account.photoURL,
+                customAvatar: account.customAvatar,
+                teams: cachedTeams.map(ct => ({
+                  id: ct.id,
+                  name: ct.name,
+                  // Minimal Team object for display
+                  description: '',
+                  createdBy: '',
+                  createdAt: new Date(),
+                  driveFolderId: '',
+                  memberEmails: [],
+                  members: {},
+                } as Team)),
+                isCurrentAccount: false,
+              };
+            }
+          })
+        );
+
+        // Sort: current account first, then by email
+        accountsData.sort((a, b) => {
+          if (a.isCurrentAccount) return -1;
+          if (b.isCurrentAccount) return 1;
+          return a.email.localeCompare(b.email);
+        });
+
+        setAccountsWithTeams(accountsData);
+      } catch (error) {
+        console.error('Failed to fetch teams:', error);
+      } finally {
+        setIsLoadingTeams(false);
+      }
+    };
+
+    fetchTeamsForAccounts();
+  }, [activeTab, savedAccounts, user]);
+
+  // Handle team selection (switch account if needed)
+  const handleTeamSelect = async (teamId: string, accountId: string) => {
+    if (isSwitchingAccount) return;
+
+    // If selecting a team from a different account, switch account first
+    if (accountId !== user?.uid) {
+      setIsSwitchingAccount(true);
+      try {
+        await switchAccount(accountId);
+        // After switching, the app will reload
+      } catch (error: any) {
+        console.error('Failed to switch account:', error);
+      } finally {
+        setIsSwitchingAccount(false);
+      }
+      return;
+    }
+
+    // Same account - just switch team
+    const account = accountsWithTeams.find(a => a.accountId === accountId);
+    const team = account?.teams.find(t => t.id === teamId);
+    if (team && onSwitchTeam) {
+      onSwitchTeam(team);
+    }
+  };
 
   const handleChangeFolder = async () => {
     try {
@@ -613,670 +802,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               Subscription
             </button>
           )}
-        </div>
-
-        {/* Content */}
-        <div className="settings-content">
-          {activeTab === 'general' && (
-            <div className="settings-section">
-              {/* Workspace Info Section - Only for local mode */}
-              {appMode === 'local' && (
-                <>
-                  <h3>Workspace</h3>
-                  <div className="workspace-header">
-                    <div className="workspace-name-display">
-                      <FolderOpen size={24} className="workspace-icon" />
-                      <div>
-                        <h4>{workspaceName}</h4>
-                        <span className="workspace-path">{currentFolder}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="quick-actions-row">
-                    <button className="action-btn" onClick={handleChangeFolder}>
-                      <Folder size={16} />
-                      Change Folder
-                    </button>
-                    <button className="action-btn" onClick={handleOpenInExplorer}>
-                      <ExternalLink size={16} />
-                      Open in Explorer
-                    </button>
-                    <button className="action-btn" onClick={handleExportNotes} disabled={isExporting}>
-                      <Download size={16} />
-                      {isExporting ? 'Exporting...' : 'Export Backup'}
-                    </button>
-                  </div>
-
-                  <div className="section-divider" />
-                </>
-              )}
-
-              <h3>General Settings</h3>
-
-              {/* Current Mode */}
-              <div className="setting-item">
-                <div className="setting-label">
-                  <span className="setting-title">Current Mode</span>
-                  <span className="setting-description">
-                    {appMode === 'local' ? 'Using locally on your device' : 'Working as a team in the cloud'}
-                  </span>
-                </div>
-                <span className="mode-badge">
-                  {appMode === 'local' ? (
-                    <>
-                      <Folder size={16} /> Local
-                    </>
-                  ) : (
-                    <>
-                      <Users size={16} /> Team
-                    </>
-                  )}
-                </span>
-              </div>
-
-              {/* Current Team - Only show in team mode */}
-              {currentTeam && (
-                <div className="setting-item">
-                  <div className="setting-label">
-                    <span className="setting-title">Current Team</span>
-                    <span className="setting-description">{currentTeam.name}</span>
-                  </div>
-                  {availableTeams && availableTeams.length > 1 && (
-                    <select
-                      className="team-selector"
-                      value={currentTeam.id}
-                      onChange={(e) => {
-                        const selectedTeam = availableTeams.find(t => t.id === e.target.value);
-                        if (selectedTeam && onSwitchTeam) {
-                          onSwitchTeam(selectedTeam);
-                        }
-                      }}
-                    >
-                      {availableTeams.map(team => (
-                        <option key={team.id} value={team.id}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-
-              {/* Switch Mode */}
-              <div className="setting-item">
-                <div className="setting-label">
-                  <span className="setting-title">Switch Mode</span>
-                  <span className="setting-description">
-                    {appMode === 'local'
-                      ? 'Switch to team mode to collaborate with others'
-                      : 'Switch to local mode to work offline'}
-                  </span>
-                </div>
-                <button
-                  className="primary-button"
-                  onClick={appMode === 'local' ? handleSwitchToTeam : handleSwitchToLocal}
-                >
-                  {appMode === 'local' ? 'Switch to Team' : 'Switch to Local'}
-                </button>
-              </div>
-
-              {/* App Version */}
-              <div className="section-divider" />
-              <div className="setting-item app-version-item">
-                <div className="setting-label">
-                  <span className="setting-title">App Version</span>
-                  <span className="setting-description">Conceptualize Desktop</span>
-                </div>
-                <span className="version-badge">v{appVersion}</span>
-              </div>
-              {/* Update Available Notification */}
-              {updateAvailable && (
-                <div className="update-available-card">
-                  <div className="update-available-content">
-                    <Sparkles size={18} className="update-sparkle" />
-                    <div className="update-available-text">
-                      <span className="update-available-title">
-                        Conceptualize v{latestVersion} is available!
-                      </span>
-                      {updateNotes && (
-                        <span className="update-available-notes">{updateNotes.split('\n')[0]}</span>
-                      )}
-                    </div>
-                  </div>
-                  {isUpdating ? (
-                    <div className="update-progress-container">
-                      <div className="update-progress-bar">
-                        <div className="update-progress-fill" style={{ width: `${updateProgress}%` }} />
-                      </div>
-                      <span className="update-progress-text">
-                        {updateProgress < 100 ? `${updateProgress}%` : 'Installing...'}
-                      </span>
-                    </div>
-                  ) : (
-                    <button className="update-now-button" onClick={handleUpdate}>
-                      {manualUpdateRequired ? (
-                        <>
-                          <Download size={14} />
-                          Download
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw size={14} />
-                          Update
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              )}
-
-            </div>
-          )}
-
-          {activeTab === 'account' && (
-            <div className="settings-section">
-              <h3>Account Settings</h3>
-
-              {user ? (
-                <>
-                  {/* User Info */}
-                  <div className="user-info-card">
-                    <div
-                      className={`user-avatar clickable ${isUpdatingAvatar ? 'updating' : ''}`}
-                      onClick={() => setShowAvatarPicker(true)}
-                      title="Click to change avatar"
-                    >
-                      {user.customAvatar ? (
-                        <img src={user.customAvatar} alt="Avatar" className="avatar-image" />
-                      ) : (
-                        user.displayName?.charAt(0).toUpperCase() || 'U'
-                      )}
-                      <div className="avatar-edit-overlay">
-                        <Pencil size={16} />
-                      </div>
-                    </div>
-                    <div className="user-details">
-                      {isEditingName ? (
-                        <div className="name-edit-container">
-                          <input
-                            type="text"
-                            className="name-edit-input"
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveName();
-                              if (e.key === 'Escape') handleCancelEditName();
-                            }}
-                            autoFocus
-                            disabled={isUpdatingName}
-                          />
-                          <div className="name-edit-actions">
-                            <button
-                              className="name-edit-btn save"
-                              onClick={handleSaveName}
-                              disabled={isUpdatingName || !editingName.trim()}
-                              title="Save"
-                            >
-                              <Check size={16} />
-                            </button>
-                            <button
-                              className="name-edit-btn cancel"
-                              onClick={handleCancelEditName}
-                              disabled={isUpdatingName}
-                              title="Cancel"
-                            >
-                              <X size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="name-display-container">
-                          <h4>{user.displayName}</h4>
-                          <button
-                            className="name-edit-trigger"
-                            onClick={handleStartEditName}
-                            title="Edit name"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                        </div>
-                      )}
-                      <p>{user.email}</p>
-                      <span className="role-badge">
-                        {displayRole === 'owner' && (
-                          <>
-                            <Crown size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                            OWNER
-                          </>
-                        )}
-                        {displayRole === 'admin' && (
-                          <>
-                            <Crown size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                            ADMIN
-                          </>
-                        )}
-                        {displayRole === 'leader' && (
-                          <>
-                            <Star size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                            LEADER
-                          </>
-                        )}
-                        {displayRole === 'member' && (
-                          <>
-                            <User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                            MEMBER
-                          </>
-                        )}
-                        {/* Fallback for any other role or undefined */}
-                        {!displayRole || !['owner', 'admin', 'leader', 'member'].includes(displayRole) && (
-                          <>
-                            <User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-                            {displayRole?.toUpperCase() || 'USER'}
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Start New Team */}
-                  {onCreateTeam && (
-                    <div className="setting-item">
-                      <div className="setting-label">
-                        <span className="setting-title">Start New Team</span>
-                        <span className="setting-description">
-                          Create a new team and invite members to collaborate
-                        </span>
-                      </div>
-                      <button className="new-team-button" onClick={onCreateTeam} title="Create New Team">
-                        <Plus size={18} className="new-team-icon" />
-                        <span className="new-team-text">New Team</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Sign Out */}
-                  <div className="setting-item">
-                    <button className="danger-button" onClick={handleSignOut}>
-                      Sign Out
-                    </button>
-                  </div>
-
-                  {/* Delete Account */}
-                  <div className="section-divider" />
-                  <div className="delete-account-section">
-                    <h4>
-                      <Trash2 size={18} />
-                      Danger Zone
-                    </h4>
-                    <p className="delete-account-warning">
-                      Permanently delete your account and all associated data. This action cannot be undone.
-                    </p>
-                    <button
-                      className="delete-account-button"
-                      onClick={() => setShowDeleteConfirm(true)}
-                    >
-                      <Trash2 size={16} />
-                      Delete My Account
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="no-account-message">
-                  <p>You are using Conceptualize in local mode.</p>
-                  <p>Switch to team mode to sign in and collaborate with your team.</p>
-                  <button className="primary-button" onClick={handleSwitchToTeam}>
-                    Switch to Team Mode
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'subscription' && (
-            <div className="settings-section subscription-section">
-              <h3>
-                <CreditCard size={20} />
-                Your Subscriptions
-              </h3>
-
-              {isLoadingSubscriptions ? (
-                <div className="subscription-loading">
-                  <div className="loading-spinner" />
-                  <p>Loading subscriptions...</p>
-                </div>
-              ) : teamSubscriptions.length === 0 ? (
-                <div className="no-subscriptions">
-                  <p>You don't own any teams. Only team owners can view and manage subscriptions.</p>
-                </div>
-              ) : (
-                <div className="subscription-list">
-                  {teamSubscriptions.map((sub) => (
-                    <div key={sub.team.id} className={`subscription-card ${sub.subscriptionStatus}`}>
-                      <div className="subscription-header">
-                        <div className="subscription-team-info">
-                          <h4>{sub.team.name}</h4>
-                          <div className="subscription-meta">
-                            <span className="member-count">
-                              <Users size={14} />
-                              {sub.memberCount} member{sub.memberCount !== 1 ? 's' : ''}
-                            </span>
-                            {sub.isOwner && (
-                              <span className="owner-badge">
-                                <Crown size={12} />
-                                Owner
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className={`subscription-status-badge ${sub.subscriptionStatus}`}>
-                          {sub.subscriptionStatus === 'promo' && (
-                            <>
-                              <Sparkles size={14} />
-                              Pro Trial
-                            </>
-                          )}
-                          {sub.subscriptionStatus === 'subscribed' && (
-                            <>
-                              <CreditCard size={14} />
-                              Pro
-                            </>
-                          )}
-                          {sub.subscriptionStatus === 'free' && (
-                            <>
-                              <AlertCircle size={14} />
-                              Free
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="subscription-details">
-                        {/* Status Info */}
-                        {sub.subscriptionStatus === 'promo' && sub.promoInfo && (
-                          <div className="subscription-promo-info">
-                            <Clock size={14} />
-                            <span>
-                              {sub.promoInfo.daysRemaining} day{sub.promoInfo.daysRemaining !== 1 ? 's' : ''} remaining
-                              {sub.promoInfo.daysRemaining <= 3 && (
-                                <span className="expiring-warning"> - Expiring soon!</span>
-                              )}
-                            </span>
-                          </div>
-                        )}
-                        {sub.subscriptionStatus === 'subscribed' && (
-                          <>
-                            <div className="subscription-price-info">
-                              <CreditCard size={14} />
-                              <span>$3/user/month</span>
-                            </div>
-                            {sub.cancelAtPeriodEnd && sub.currentPeriodEnd && (
-                              <div className="subscription-cancel-pending">
-                                <Clock size={14} />
-                                <span>
-                                  Cancels on {sub.currentPeriodEnd.toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })}
-                                </span>
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Storage */}
-                        <div className="subscription-storage">
-                          <div className="storage-label">
-                            <HardDrive size={14} />
-                            <span>Storage: {formatBytes(sub.storageUsed)} / {formatBytes(sub.storageLimit)}</span>
-                          </div>
-                          <div className="storage-bar">
-                            <div
-                              className="storage-fill"
-                              style={{ width: `${Math.min(100, (sub.storageUsed / sub.storageLimit) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Actions - Only show for owners */}
-                      {sub.isOwner && (
-                        <div className="subscription-actions">
-                          {sub.subscriptionStatus === 'promo' && (
-                            <button
-                              className="subscription-upgrade-btn"
-                              onClick={() => setUpgradeModalTeam(sub)}
-                            >
-                              <Sparkles size={14} />
-                              Upgrade to Pro
-                            </button>
-                          )}
-                          {sub.subscriptionStatus === 'subscribed' && (
-                            <>
-                              {sub.cancelAtPeriodEnd ? (
-                                <button
-                                  className="subscription-reactivate-btn"
-                                  onClick={() => handleReactivateSubscription(sub.team.id)}
-                                  disabled={isReactivating === sub.team.id}
-                                >
-                                  <RefreshCw size={14} className={isReactivating === sub.team.id ? 'spinning' : ''} />
-                                  {isReactivating === sub.team.id ? 'Reactivating...' : 'Undo Cancellation'}
-                                </button>
-                              ) : (
-                                <button
-                                  className="subscription-cancel-btn"
-                                  onClick={() => setShowCancelConfirm(sub)}
-                                >
-                                  Cancel Subscription
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {sub.subscriptionStatus === 'free' && (
-                            <button
-                              className="subscription-upgrade-btn"
-                              onClick={() => setUpgradeModalTeam(sub)}
-                            >
-                              <Sparkles size={14} />
-                              Upgrade to Pro
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Avatar Picker Modal */}
-        {showAvatarPicker && (
-          <AvatarPicker
-            currentAvatar={user?.customAvatar}
-            onSelect={handleAvatarSelect}
-            onClose={() => setShowAvatarPicker(false)}
-          />
-        )}
-
-        {/* Upgrade Modal */}
-        {upgradeModalTeam && (
-          <UpgradeModal
-            isOpen={true}
-            onClose={() => setUpgradeModalTeam(null)}
-            teamId={upgradeModalTeam.team.id}
-            teamName={upgradeModalTeam.team.name}
-            usage={{
-              usedBytes: upgradeModalTeam.storageUsed,
-              limitBytes: upgradeModalTeam.storageLimit,
-              percentUsed: Math.round((upgradeModalTeam.storageUsed / upgradeModalTeam.storageLimit) * 100),
-              status: 'ok',
-              permissions: {
-                canCreateNotes: true,
-                canUploadFiles: true,
-                canEditNotes: true,
-                canDeleteFiles: true,
-                canInviteMembers: true,
-              },
-              usedFormatted: formatBytes(upgradeModalTeam.storageUsed),
-              limitFormatted: formatBytes(upgradeModalTeam.storageLimit),
-              requiresUpgrade: true,
-              monthlyPrice: upgradeModalTeam.memberCount * 3,
-              memberCount: upgradeModalTeam.memberCount,
-            } as StorageUsage}
-            onPromoSuccess={() => {
-              setUpgradeModalTeam(null);
-              // Refresh subscriptions to show updated status
-              setIsLoadingSubscriptions(true);
-              setTimeout(() => window.location.reload(), 500);
-            }}
-          />
-        )}
-
-        {/* Delete Account Confirmation Modal */}
-        {showDeleteConfirm && (
-          <div className="delete-confirm-overlay" onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
-            <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="delete-confirm-header">
-                <AlertTriangle size={24} className="delete-warning-icon" />
-                <h3>Delete Account</h3>
-              </div>
-              <div className="delete-confirm-content">
-                <p className="delete-confirm-warning">
-                  This will permanently delete your account and all associated data including:
-                </p>
-                <ul className="delete-confirm-list">
-                  <li>All teams you own and their data</li>
-                  <li>Your membership in other teams</li>
-                  <li>All uploaded files and avatars</li>
-                  <li>Your profile and settings</li>
-                </ul>
-                <p className="delete-confirm-final">
-                  <strong>This action cannot be undone.</strong>
-                </p>
-                <div className="delete-confirm-input">
-                  <label>Type <strong>DELETE</strong> to confirm:</label>
-                  <input
-                    type="text"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    placeholder="DELETE"
-                    disabled={isDeleting}
-                    autoFocus
-                  />
-                </div>
-                {deleteError && (
-                  <p className="delete-error">{deleteError}</p>
-                )}
-              </div>
-              <div className="delete-confirm-actions">
-                <button
-                  className="delete-cancel-btn"
-                  onClick={() => {
-                    setShowDeleteConfirm(false);
-                    setDeleteConfirmText('');
-                    setDeleteError(null);
-                  }}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="delete-confirm-btn"
-                  onClick={handleDeleteAccount}
-                  disabled={deleteConfirmText !== 'DELETE' || isDeleting}
-                >
-                  {isDeleting ? 'Deleting...' : 'Delete My Account'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Cancel Subscription Confirmation Modal */}
-        {showCancelConfirm && (
-          <div className="cancel-confirm-overlay" onClick={() => !isCancelling && setShowCancelConfirm(null)}>
-            <div className="cancel-confirm-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="cancel-confirm-header">
-                <AlertTriangle size={24} className="cancel-warning-icon" />
-                <h3>Cancel Subscription</h3>
-              </div>
-              <div className="cancel-confirm-content">
-                <p className="cancel-confirm-team">
-                  Cancel Pro subscription for <strong>{showCancelConfirm.team.name}</strong>?
-                </p>
-                <p className="cancel-confirm-warning">
-                  Your subscription will remain active until the end of your current billing period. After that:
-                </p>
-                <ul className="cancel-confirm-list">
-                  <li>Team chat will be disabled</li>
-                  <li>Voice/video calls will be disabled</li>
-                  <li>Recordings will be inaccessible</li>
-                  <li>Storage will be limited to 2GB</li>
-                </ul>
-                <p className="cancel-confirm-note">
-                  You can reactivate your subscription at any time before the period ends.
-                </p>
-              </div>
-              <div className="cancel-confirm-actions">
-                <button
-                  className="cancel-keep-btn"
-                  onClick={() => setShowCancelConfirm(null)}
-                  disabled={isCancelling}
-                >
-                  Keep Subscription
-                </button>
-                <button
-                  className="cancel-confirm-btn"
-                  onClick={handleCancelSubscription}
-                  disabled={isCancelling}
-                >
-                  {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Modal mode - original overlay rendering
-  return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="settings-header">
-          <h2>Settings</h2>
-          <button className="close-button" onClick={onClose} aria-label="Close">
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="settings-tabs">
-          <button
-            className={`settings-tab ${activeTab === 'general' ? 'active' : ''}`}
-            onClick={() => setActiveTab('general')}
-          >
-            General
-            {updateAvailable && <span className="tab-update-dot" />}
-          </button>
-          <button
-            className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
-            onClick={() => setActiveTab('account')}
-          >
-            Account
-          </button>
           {appMode === 'team' && (
             <button
-              className={`settings-tab ${activeTab === 'subscription' ? 'active' : ''}`}
-              onClick={() => setActiveTab('subscription')}
+              className={`settings-tab ${activeTab === 'teams' ? 'active' : ''}`}
+              onClick={() => setActiveTab('teams')}
             >
-              Subscription
+              Teams
             </button>
           )}
         </div>
@@ -1754,6 +1285,868 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Teams Tab Content */}
+          {activeTab === 'teams' && (
+            <div className="settings-section">
+              <h3>Your Teams</h3>
+              <p className="section-description">Switch between accounts and teams</p>
+
+              {/* Loading State */}
+              {(isLoadingTeams || isSwitchingAccount) && (
+                <div className="settings-teams-loading">
+                  <Loader2 className="spinner" size={24} />
+                  <span>{isSwitchingAccount ? 'Switching account...' : 'Loading teams...'}</span>
+                </div>
+              )}
+
+              {/* Accounts with Teams */}
+              {!isLoadingTeams && accountsWithTeams.map((account, index) => (
+                <div key={account.accountId} className="settings-account-section">
+                  {/* Account Header */}
+                  <div className={`settings-account-header ${account.isCurrentAccount ? 'current' : ''}`}>
+                    <div className="settings-account-avatar">
+                      {account.customAvatar || account.photoURL ? (
+                        <img src={account.customAvatar || account.photoURL} alt={account.displayName} />
+                      ) : (
+                        <div className="avatar-fallback">
+                          {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="settings-account-info">
+                      <span className="settings-account-email">{account.email}</span>
+                      {account.isCurrentAccount && (
+                        <span className="settings-account-badge">Current</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Teams under this account */}
+                  <div className="settings-teams-list">
+                    {account.teams.length > 0 ? (
+                      account.teams.map(team => {
+                        const isCurrentTeam = currentTeam?.id === team.id && account.isCurrentAccount;
+
+                        return (
+                          <button
+                            key={team.id}
+                            className={`settings-team-item ${isCurrentTeam ? 'active' : ''}`}
+                            onClick={() => handleTeamSelect(team.id, account.accountId)}
+                            disabled={isSwitchingAccount || isCurrentTeam}
+                          >
+                            <span className="settings-team-name">{team.name}</span>
+                            {isCurrentTeam && (
+                              <Check size={16} className="settings-team-check" />
+                            )}
+                          </button>
+                        );
+                      })
+                    ) : account.isCurrentAccount ? (
+                      <div className="settings-no-teams">No teams</div>
+                    ) : (
+                      <button
+                        className="settings-switch-to-view"
+                        onClick={() => handleTeamSelect('', account.accountId)}
+                        disabled={isSwitchingAccount}
+                      >
+                        Switch to view teams
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Divider between accounts */}
+                  {index < accountsWithTeams.length - 1 && (
+                    <div className="settings-account-divider" />
+                  )}
+                </div>
+              ))}
+
+              {/* No accounts state */}
+              {!isLoadingTeams && accountsWithTeams.length === 0 && (
+                <div className="no-teams-message">
+                  <Users size={24} />
+                  <span>No accounts found. Please sign in.</span>
+                </div>
+              )}
+
+              {/* Create New Team */}
+              {onCreateTeam && (
+                <button className="settings-create-team-btn" onClick={onCreateTeam}>
+                  <Plus size={16} />
+                  Create New Team
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Avatar Picker Modal */}
+        {showAvatarPicker && (
+          <AvatarPicker
+            currentAvatar={user?.customAvatar}
+            onSelect={handleAvatarSelect}
+            onClose={() => setShowAvatarPicker(false)}
+          />
+        )}
+
+        {/* Upgrade Modal */}
+        {upgradeModalTeam && (
+          <UpgradeModal
+            isOpen={true}
+            onClose={() => setUpgradeModalTeam(null)}
+            teamId={upgradeModalTeam.team.id}
+            teamName={upgradeModalTeam.team.name}
+            usage={{
+              usedBytes: upgradeModalTeam.storageUsed,
+              limitBytes: upgradeModalTeam.storageLimit,
+              percentUsed: Math.round((upgradeModalTeam.storageUsed / upgradeModalTeam.storageLimit) * 100),
+              status: 'ok',
+              permissions: {
+                canCreateNotes: true,
+                canUploadFiles: true,
+                canEditNotes: true,
+                canDeleteFiles: true,
+                canInviteMembers: true,
+              },
+              usedFormatted: formatBytes(upgradeModalTeam.storageUsed),
+              limitFormatted: formatBytes(upgradeModalTeam.storageLimit),
+              requiresUpgrade: true,
+              monthlyPrice: upgradeModalTeam.memberCount * 3,
+              memberCount: upgradeModalTeam.memberCount,
+            } as StorageUsage}
+            onPromoSuccess={() => {
+              setUpgradeModalTeam(null);
+              // Refresh subscriptions to show updated status
+              setIsLoadingSubscriptions(true);
+              setTimeout(() => window.location.reload(), 500);
+            }}
+          />
+        )}
+
+        {/* Delete Account Confirmation Modal */}
+        {showDeleteConfirm && (
+          <div className="delete-confirm-overlay" onClick={() => !isDeleting && setShowDeleteConfirm(false)}>
+            <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="delete-confirm-header">
+                <AlertTriangle size={24} className="delete-warning-icon" />
+                <h3>Delete Account</h3>
+              </div>
+              <div className="delete-confirm-content">
+                <p className="delete-confirm-warning">
+                  This will permanently delete your account and all associated data including:
+                </p>
+                <ul className="delete-confirm-list">
+                  <li>All teams you own and their data</li>
+                  <li>Your membership in other teams</li>
+                  <li>All uploaded files and avatars</li>
+                  <li>Your profile and settings</li>
+                </ul>
+                <p className="delete-confirm-final">
+                  <strong>This action cannot be undone.</strong>
+                </p>
+                <div className="delete-confirm-input">
+                  <label>Type <strong>DELETE</strong> to confirm:</label>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    disabled={isDeleting}
+                    autoFocus
+                  />
+                </div>
+                {deleteError && (
+                  <p className="delete-error">{deleteError}</p>
+                )}
+              </div>
+              <div className="delete-confirm-actions">
+                <button
+                  className="delete-cancel-btn"
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDeleteConfirmText('');
+                    setDeleteError(null);
+                  }}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="delete-confirm-btn"
+                  onClick={handleDeleteAccount}
+                  disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete My Account'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cancel Subscription Confirmation Modal */}
+        {showCancelConfirm && (
+          <div className="cancel-confirm-overlay" onClick={() => !isCancelling && setShowCancelConfirm(null)}>
+            <div className="cancel-confirm-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cancel-confirm-header">
+                <AlertTriangle size={24} className="cancel-warning-icon" />
+                <h3>Cancel Subscription</h3>
+              </div>
+              <div className="cancel-confirm-content">
+                <p className="cancel-confirm-team">
+                  Cancel Pro subscription for <strong>{showCancelConfirm.team.name}</strong>?
+                </p>
+                <p className="cancel-confirm-warning">
+                  Your subscription will remain active until the end of your current billing period. After that:
+                </p>
+                <ul className="cancel-confirm-list">
+                  <li>Team chat will be disabled</li>
+                  <li>Voice/video calls will be disabled</li>
+                  <li>Recordings will be inaccessible</li>
+                  <li>Storage will be limited to 2GB</li>
+                </ul>
+                <p className="cancel-confirm-note">
+                  You can reactivate your subscription at any time before the period ends.
+                </p>
+              </div>
+              <div className="cancel-confirm-actions">
+                <button
+                  className="cancel-keep-btn"
+                  onClick={() => setShowCancelConfirm(null)}
+                  disabled={isCancelling}
+                >
+                  Keep Subscription
+                </button>
+                <button
+                  className="cancel-confirm-btn"
+                  onClick={handleCancelSubscription}
+                  disabled={isCancelling}
+                >
+                  {isCancelling ? 'Cancelling...' : 'Yes, Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Modal mode - original overlay rendering
+  return (
+    <div className="settings-overlay" onClick={onClose}>
+      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="settings-header">
+          <h2>Settings</h2>
+          <button className="close-button" onClick={onClose} aria-label="Close">
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="settings-tabs">
+          <button
+            className={`settings-tab ${activeTab === 'general' ? 'active' : ''}`}
+            onClick={() => setActiveTab('general')}
+          >
+            General
+            {updateAvailable && <span className="tab-update-dot" />}
+          </button>
+          <button
+            className={`settings-tab ${activeTab === 'account' ? 'active' : ''}`}
+            onClick={() => setActiveTab('account')}
+          >
+            Account
+          </button>
+          {appMode === 'team' && (
+            <button
+              className={`settings-tab ${activeTab === 'subscription' ? 'active' : ''}`}
+              onClick={() => setActiveTab('subscription')}
+            >
+              Subscription
+            </button>
+          )}
+          {appMode === 'team' && (
+            <button
+              className={`settings-tab ${activeTab === 'teams' ? 'active' : ''}`}
+              onClick={() => setActiveTab('teams')}
+            >
+              Teams
+            </button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="settings-content">
+          {activeTab === 'general' && (
+            <div className="settings-section">
+              {/* Workspace Info Section - Only for local mode */}
+              {appMode === 'local' && (
+                <>
+                  <h3>Workspace</h3>
+                  <div className="workspace-header">
+                    <div className="workspace-name-display">
+                      <FolderOpen size={24} className="workspace-icon" />
+                      <div>
+                        <h4>{workspaceName}</h4>
+                        <span className="workspace-path">{currentFolder}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="quick-actions-row">
+                    <button className="action-btn" onClick={handleChangeFolder}>
+                      <Folder size={16} />
+                      Change Folder
+                    </button>
+                    <button className="action-btn" onClick={handleOpenInExplorer}>
+                      <ExternalLink size={16} />
+                      Open in Explorer
+                    </button>
+                    <button className="action-btn" onClick={handleExportNotes} disabled={isExporting}>
+                      <Download size={16} />
+                      {isExporting ? 'Exporting...' : 'Export Backup'}
+                    </button>
+                  </div>
+
+                  <div className="section-divider" />
+                </>
+              )}
+
+              <h3>General Settings</h3>
+
+              {/* Current Mode */}
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">Current Mode</span>
+                  <span className="setting-description">
+                    {appMode === 'local' ? 'Using locally on your device' : 'Working as a team in the cloud'}
+                  </span>
+                </div>
+                <span className="mode-badge">
+                  {appMode === 'local' ? (
+                    <>
+                      <Folder size={16} /> Local
+                    </>
+                  ) : (
+                    <>
+                      <Users size={16} /> Team
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Current Team - Only show in team mode */}
+              {currentTeam && (
+                <div className="setting-item">
+                  <div className="setting-label">
+                    <span className="setting-title">Current Team</span>
+                    <span className="setting-description">{currentTeam.name}</span>
+                  </div>
+                  {availableTeams && availableTeams.length > 1 && (
+                    <select
+                      className="team-selector"
+                      value={currentTeam.id}
+                      onChange={(e) => {
+                        const selectedTeam = availableTeams.find(t => t.id === e.target.value);
+                        if (selectedTeam && onSwitchTeam) {
+                          onSwitchTeam(selectedTeam);
+                        }
+                      }}
+                    >
+                      {availableTeams.map(team => (
+                        <option key={team.id} value={team.id}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Switch Mode */}
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">Switch Mode</span>
+                  <span className="setting-description">
+                    {appMode === 'local'
+                      ? 'Switch to team mode to collaborate with others'
+                      : 'Switch to local mode to work offline'}
+                  </span>
+                </div>
+                <button
+                  className="primary-button"
+                  onClick={appMode === 'local' ? handleSwitchToTeam : handleSwitchToLocal}
+                >
+                  {appMode === 'local' ? 'Switch to Team' : 'Switch to Local'}
+                </button>
+              </div>
+
+              {/* App Version */}
+              <div className="section-divider" />
+              <div className="setting-item app-version-item">
+                <div className="setting-label">
+                  <span className="setting-title">App Version</span>
+                  <span className="setting-description">Conceptualize Desktop</span>
+                </div>
+                <span className="version-badge">v{appVersion}</span>
+              </div>
+              {/* Update Available Notification */}
+              {updateAvailable && (
+                <div className="update-available-card">
+                  <div className="update-available-content">
+                    <Sparkles size={18} className="update-sparkle" />
+                    <div className="update-available-text">
+                      <span className="update-available-title">
+                        Conceptualize v{latestVersion} is available!
+                      </span>
+                      {updateNotes && (
+                        <span className="update-available-notes">{updateNotes.split('\n')[0]}</span>
+                      )}
+                    </div>
+                  </div>
+                  {isUpdating ? (
+                    <div className="update-progress-container">
+                      <div className="update-progress-bar">
+                        <div className="update-progress-fill" style={{ width: `${updateProgress}%` }} />
+                      </div>
+                      <span className="update-progress-text">
+                        {updateProgress < 100 ? `${updateProgress}%` : 'Installing...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <button className="update-now-button" onClick={handleUpdate}>
+                      {manualUpdateRequired ? (
+                        <>
+                          <Download size={14} />
+                          Download
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={14} />
+                          Update
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {activeTab === 'account' && (
+            <div className="settings-section">
+              <h3>Account Settings</h3>
+
+              {user ? (
+                <>
+                  {/* User Info */}
+                  <div className="user-info-card">
+                    <div
+                      className={`user-avatar clickable ${isUpdatingAvatar ? 'updating' : ''}`}
+                      onClick={() => setShowAvatarPicker(true)}
+                      title="Click to change avatar"
+                    >
+                      {user.customAvatar ? (
+                        <img src={user.customAvatar} alt="Avatar" className="avatar-image" />
+                      ) : (
+                        user.displayName?.charAt(0).toUpperCase() || 'U'
+                      )}
+                      <div className="avatar-edit-overlay">
+                        <Pencil size={16} />
+                      </div>
+                    </div>
+                    <div className="user-details">
+                      {isEditingName ? (
+                        <div className="name-edit-container">
+                          <input
+                            type="text"
+                            className="name-edit-input"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveName();
+                              if (e.key === 'Escape') handleCancelEditName();
+                            }}
+                            autoFocus
+                            disabled={isUpdatingName}
+                          />
+                          <div className="name-edit-actions">
+                            <button
+                              className="name-edit-btn save"
+                              onClick={handleSaveName}
+                              disabled={isUpdatingName || !editingName.trim()}
+                              title="Save"
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              className="name-edit-btn cancel"
+                              onClick={handleCancelEditName}
+                              disabled={isUpdatingName}
+                              title="Cancel"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="name-display-container">
+                          <h4>{user.displayName}</h4>
+                          <button
+                            className="name-edit-trigger"
+                            onClick={handleStartEditName}
+                            title="Edit name"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      )}
+                      <p>{user.email}</p>
+                      <span className="role-badge">
+                        {displayRole === 'owner' && (
+                          <>
+                            <Crown size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                            OWNER
+                          </>
+                        )}
+                        {displayRole === 'admin' && (
+                          <>
+                            <Crown size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                            ADMIN
+                          </>
+                        )}
+                        {displayRole === 'leader' && (
+                          <>
+                            <Star size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                            LEADER
+                          </>
+                        )}
+                        {displayRole === 'member' && (
+                          <>
+                            <User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                            MEMBER
+                          </>
+                        )}
+                        {/* Fallback for any other role or undefined */}
+                        {!displayRole || !['owner', 'admin', 'leader', 'member'].includes(displayRole) && (
+                          <>
+                            <User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                            {displayRole?.toUpperCase() || 'USER'}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Start New Team */}
+                  {onCreateTeam && (
+                    <div className="setting-item">
+                      <div className="setting-label">
+                        <span className="setting-title">Start New Team</span>
+                        <span className="setting-description">
+                          Create a new team and invite members to collaborate
+                        </span>
+                      </div>
+                      <button className="new-team-button" onClick={onCreateTeam} title="Create New Team">
+                        <Plus size={18} className="new-team-icon" />
+                        <span className="new-team-text">New Team</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Sign Out */}
+                  <div className="setting-item">
+                    <button className="danger-button" onClick={handleSignOut}>
+                      Sign Out
+                    </button>
+                  </div>
+
+                  {/* Delete Account */}
+                  <div className="section-divider" />
+                  <div className="delete-account-section">
+                    <h4>
+                      <Trash2 size={18} />
+                      Danger Zone
+                    </h4>
+                    <p className="delete-account-warning">
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                    <button
+                      className="delete-account-button"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <Trash2 size={16} />
+                      Delete My Account
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="no-account-message">
+                  <p>You are using Conceptualize in local mode.</p>
+                  <p>Switch to team mode to sign in and collaborate with your team.</p>
+                  <button className="primary-button" onClick={handleSwitchToTeam}>
+                    Switch to Team Mode
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'subscription' && (
+            <div className="settings-section subscription-section">
+              <h3>
+                <CreditCard size={20} />
+                Your Subscriptions
+              </h3>
+
+              {isLoadingSubscriptions ? (
+                <div className="subscription-loading">
+                  <div className="loading-spinner" />
+                  <p>Loading subscriptions...</p>
+                </div>
+              ) : teamSubscriptions.length === 0 ? (
+                <div className="no-subscriptions">
+                  <p>You don't own any teams. Only team owners can view and manage subscriptions.</p>
+                </div>
+              ) : (
+                <div className="subscription-list">
+                  {teamSubscriptions.map((sub) => (
+                    <div key={sub.team.id} className={`subscription-card ${sub.subscriptionStatus}`}>
+                      <div className="subscription-header">
+                        <div className="subscription-team-info">
+                          <h4>{sub.team.name}</h4>
+                          <div className="subscription-meta">
+                            <span className="member-count">
+                              <Users size={14} />
+                              {sub.memberCount} member{sub.memberCount !== 1 ? 's' : ''}
+                            </span>
+                            {sub.isOwner && (
+                              <span className="owner-badge">
+                                <Crown size={12} />
+                                Owner
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`subscription-status-badge ${sub.subscriptionStatus}`}>
+                          {sub.subscriptionStatus === 'promo' && (
+                            <>
+                              <Sparkles size={14} />
+                              Pro Trial
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'subscribed' && (
+                            <>
+                              <CreditCard size={14} />
+                              Pro
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'free' && (
+                            <>
+                              <AlertCircle size={14} />
+                              Free
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="subscription-details">
+                        {/* Status Info */}
+                        {sub.subscriptionStatus === 'promo' && sub.promoInfo && (
+                          <div className="subscription-promo-info">
+                            <Clock size={14} />
+                            <span>
+                              {sub.promoInfo.daysRemaining} day{sub.promoInfo.daysRemaining !== 1 ? 's' : ''} remaining
+                              {sub.promoInfo.daysRemaining <= 3 && (
+                                <span className="expiring-warning"> - Expiring soon!</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {sub.subscriptionStatus === 'subscribed' && (
+                          <>
+                            <div className="subscription-price-info">
+                              <CreditCard size={14} />
+                              <span>$3/user/month</span>
+                            </div>
+                            {sub.cancelAtPeriodEnd && sub.currentPeriodEnd && (
+                              <div className="subscription-cancel-pending">
+                                <Clock size={14} />
+                                <span>
+                                  Cancels on {sub.currentPeriodEnd.toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Storage */}
+                        <div className="subscription-storage">
+                          <div className="storage-label">
+                            <HardDrive size={14} />
+                            <span>Storage: {formatBytes(sub.storageUsed)} / {formatBytes(sub.storageLimit)}</span>
+                          </div>
+                          <div className="storage-bar">
+                            <div
+                              className="storage-fill"
+                              style={{ width: `${Math.min(100, (sub.storageUsed / sub.storageLimit) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions - Only show for owners */}
+                      {sub.isOwner && (
+                        <div className="subscription-actions">
+                          {sub.subscriptionStatus === 'promo' && (
+                            <button
+                              className="subscription-upgrade-btn"
+                              onClick={() => setUpgradeModalTeam(sub)}
+                            >
+                              <Sparkles size={14} />
+                              Upgrade to Pro
+                            </button>
+                          )}
+                          {sub.subscriptionStatus === 'subscribed' && (
+                            <>
+                              {sub.cancelAtPeriodEnd ? (
+                                <button
+                                  className="subscription-reactivate-btn"
+                                  onClick={() => handleReactivateSubscription(sub.team.id)}
+                                  disabled={isReactivating === sub.team.id}
+                                >
+                                  <RefreshCw size={14} className={isReactivating === sub.team.id ? 'spinning' : ''} />
+                                  {isReactivating === sub.team.id ? 'Reactivating...' : 'Undo Cancellation'}
+                                </button>
+                              ) : (
+                                <button
+                                  className="subscription-cancel-btn"
+                                  onClick={() => setShowCancelConfirm(sub)}
+                                >
+                                  Cancel Subscription
+                                </button>
+                              )}
+                            </>
+                          )}
+                          {sub.subscriptionStatus === 'free' && (
+                            <button
+                              className="subscription-upgrade-btn"
+                              onClick={() => setUpgradeModalTeam(sub)}
+                            >
+                              <Sparkles size={14} />
+                              Upgrade to Pro
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Teams Tab Content */}
+          {activeTab === 'teams' && (
+            <div className="settings-section">
+              <h3>Your Teams</h3>
+              <p className="section-description">Switch between accounts and teams</p>
+
+              {/* Loading State */}
+              {(isLoadingTeams || isSwitchingAccount) && (
+                <div className="settings-teams-loading">
+                  <Loader2 className="spinner" size={24} />
+                  <span>{isSwitchingAccount ? 'Switching account...' : 'Loading teams...'}</span>
+                </div>
+              )}
+
+              {/* Accounts with Teams */}
+              {!isLoadingTeams && accountsWithTeams.map((account, index) => (
+                <div key={account.accountId} className="settings-account-section">
+                  {/* Account Header */}
+                  <div className={`settings-account-header ${account.isCurrentAccount ? 'current' : ''}`}>
+                    <div className="settings-account-avatar">
+                      {account.customAvatar || account.photoURL ? (
+                        <img src={account.customAvatar || account.photoURL} alt={account.displayName} />
+                      ) : (
+                        <div className="avatar-fallback">
+                          {account.displayName?.[0]?.toUpperCase() || account.email[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="settings-account-info">
+                      <span className="settings-account-email">{account.email}</span>
+                      {account.isCurrentAccount && (
+                        <span className="settings-account-badge">Current</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Teams under this account */}
+                  <div className="settings-teams-list">
+                    {account.teams.length > 0 ? (
+                      account.teams.map(team => {
+                        const isCurrentTeam = currentTeam?.id === team.id && account.isCurrentAccount;
+
+                        return (
+                          <button
+                            key={team.id}
+                            className={`settings-team-item ${isCurrentTeam ? 'active' : ''}`}
+                            onClick={() => handleTeamSelect(team.id, account.accountId)}
+                            disabled={isSwitchingAccount || isCurrentTeam}
+                          >
+                            <span className="settings-team-name">{team.name}</span>
+                            {isCurrentTeam && (
+                              <Check size={16} className="settings-team-check" />
+                            )}
+                          </button>
+                        );
+                      })
+                    ) : account.isCurrentAccount ? (
+                      <div className="settings-no-teams">No teams</div>
+                    ) : (
+                      <button
+                        className="settings-switch-to-view"
+                        onClick={() => handleTeamSelect('', account.accountId)}
+                        disabled={isSwitchingAccount}
+                      >
+                        Switch to view teams
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Divider between accounts */}
+                  {index < accountsWithTeams.length - 1 && (
+                    <div className="settings-account-divider" />
+                  )}
+                </div>
+              ))}
+
+              {/* No accounts state */}
+              {!isLoadingTeams && accountsWithTeams.length === 0 && (
+                <div className="no-teams-message">
+                  <Users size={24} />
+                  <span>No accounts found. Please sign in.</span>
+                </div>
+              )}
+
+              {/* Create New Team */}
+              {onCreateTeam && (
+                <button className="settings-create-team-btn" onClick={onCreateTeam}>
+                  <Plus size={16} />
+                  Create New Team
+                </button>
               )}
             </div>
           )}

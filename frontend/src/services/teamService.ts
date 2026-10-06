@@ -531,12 +531,18 @@ export function getGracePeriodDaysRemaining(member: TeamMember | undefined): num
  */
 export async function getUserTeams(userEmail: string): Promise<Team[]> {
   try {
+    console.log('[getUserTeams] START - querying for:', userEmail);
     const q = query(
       collection(db, 'teams'),
       where('memberEmails', 'array-contains', userEmail)
     );
 
-    const snapshot = await getDocs(q);
+    console.log('[getUserTeams] query built, calling getDocs...');
+    const snapshot = await Promise.race([
+      getDocs(q),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('getUserTeams query timed out')), 15000))
+    ]);
+    console.log('[getUserTeams] getDocs returned');
     console.log(`🔍 Query returned ${snapshot.docs.length} teams for ${userEmail}`);
 
     const teams = snapshot.docs.map(docSnap => {
@@ -586,21 +592,95 @@ export async function getUserTeams(userEmail: string): Promise<Team[]> {
 }
 
 /**
+ * Get all teams for a user (includes teams where user is owner via createdBy)
+ * This handles cases where memberEmails might not include the owner
+ */
+export async function getAllTeamsForUser(userEmail: string): Promise<Team[]> {
+  const normalizedEmail = userEmail.toLowerCase();
+  const teamsMap = new Map<string, Team>();
+
+  const processDoc = (docSnap: any) => {
+    if (teamsMap.has(docSnap.id)) return;
+
+    const data = docSnap.data();
+    const members: { [email: string]: TeamMember } = {};
+    if (data.members) {
+      Object.entries(data.members).forEach(([encodedEmail, member]: [string, any]) => {
+        const email = decodeEmailKey(encodedEmail).toLowerCase();
+        members[email] = {
+          ...member,
+          joinedAt: member.joinedAt?.toDate(),
+        };
+      });
+    }
+
+    teamsMap.set(docSnap.id, {
+      id: docSnap.id,
+      name: data.name,
+      description: data.description || '',
+      createdBy: data.createdBy,
+      createdAt: data.createdAt?.toDate(),
+      driveFolderId: data.driveFolderId || docSnap.id,
+      memberEmails: (data.memberEmails || []).map((e: string) => e.toLowerCase()),
+      members,
+    } as Team);
+  };
+
+  // Query 1: Teams where user is a member (this should always work)
+  try {
+    const memberQuery = query(
+      collection(db, 'teams'),
+      where('memberEmails', 'array-contains', normalizedEmail)
+    );
+    const memberSnapshot = await getDocs(memberQuery);
+    memberSnapshot.docs.forEach(processDoc);
+    console.log(`✅ Found ${memberSnapshot.docs.length} teams via memberEmails for ${userEmail}`);
+  } catch (error) {
+    console.error('Failed memberEmails query:', error);
+  }
+
+  // Query 2: Teams where user is owner (createdBy) - may fail due to Firestore rules
+  try {
+    const ownerQuery = query(
+      collection(db, 'teams'),
+      where('createdBy', '==', normalizedEmail)
+    );
+    const ownerSnapshot = await getDocs(ownerQuery);
+    ownerSnapshot.docs.forEach(processDoc);
+    console.log(`✅ Found ${ownerSnapshot.docs.length} teams via createdBy for ${userEmail}`);
+  } catch (error) {
+    // This query may fail due to Firestore rules - that's ok, memberEmails should cover most cases
+    console.log('createdBy query not permitted (this is expected)');
+  }
+
+  const teams = Array.from(teamsMap.values());
+  console.log(`✅ Found ${teams.length} total teams for ${userEmail}`);
+  return teams;
+}
+
+/**
  * Get pending invites for a user
  * Handles backwards compatibility with invites created before lowercase normalization
  */
 export async function getPendingInvites(userEmail: string): Promise<TeamInvitation[]> {
   try {
+    console.log('[getPendingInvites] START - email:', userEmail);
     const normalizedEmail = userEmail.toLowerCase();
     const invitesMap = new Map<string, TeamInvitation>();
 
     // Query 1: Try lowercase (new format)
+    console.log('[getPendingInvites] building query 1 for:', normalizedEmail);
     const q1 = query(
       collection(db, 'team_invites'),
       where('memberEmail', '==', normalizedEmail),
       where('status', '==', 'pending')
     );
-    const snapshot1 = await getDocs(q1);
+    console.log('[getPendingInvites] calling getDocs for query 1...');
+    const snapshot1 = await Promise.race([
+      getDocs(q1),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('getPendingInvites query timed out')), 10000))
+    ]);
+    console.log('[getPendingInvites] query 1 returned:', snapshot1.docs.length, 'docs');
     snapshot1.docs.forEach(doc => {
       const data = doc.data();
       invitesMap.set(doc.id, {
@@ -617,7 +697,10 @@ export async function getPendingInvites(userEmail: string): Promise<TeamInvitati
         where('memberEmail', '==', userEmail),
         where('status', '==', 'pending')
       );
-      const snapshot2 = await getDocs(q2);
+      const snapshot2 = await Promise.race([
+        getDocs(q2),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('getPendingInvites query 2 timed out')), 10000))
+      ]);
       snapshot2.docs.forEach(doc => {
         if (!invitesMap.has(doc.id)) {
           const data = doc.data();
