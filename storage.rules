@@ -1,9 +1,19 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow authenticated users to read/write team files
+    // Team files: only members of that team (as listed on the team document in Firestore).
+    function isTeamMember(teamId) {
+      let team = firestore.get(/databases/(default)/documents/teams/$(teamId));
+      return team != null && request.auth.token.email in team.data.memberEmails;
+    }
+
     match /teams/{teamId}/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null && isTeamMember(teamId);
+    }
+
+    // Everything else is closed.
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }
